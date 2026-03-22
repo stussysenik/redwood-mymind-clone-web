@@ -20,18 +20,15 @@ RUN yarn install --immutable || yarn install
 # Copy source
 COPY redwood.toml .
 COPY graphql.config.js .
+COPY .env.production .
 COPY api api
 COPY web web
 
 # Generate Prisma client + GraphQL types
 RUN yarn rw prisma generate
 
-# Build args for client-side env vars (Redwood inlines these at build time)
-ARG REDWOOD_ENV_SUPABASE_URL
-ARG REDWOOD_ENV_SUPABASE_ANON_KEY
-ENV REDWOOD_ENV_SUPABASE_URL=$REDWOOD_ENV_SUPABASE_URL
-ENV REDWOOD_ENV_SUPABASE_ANON_KEY=$REDWOOD_ENV_SUPABASE_ANON_KEY
-
+# RedwoodJS reads .env.production for REDWOOD_ENV_* vars during build
+ENV NODE_ENV=production
 RUN yarn rw build
 
 # Production stage
