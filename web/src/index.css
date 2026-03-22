@@ -14,6 +14,11 @@
 /**
  * END --- SETUP TAILWINDCSS EDIT
  */
+
+/* Theme engine generated themes */
+@import './lib/themes/generated/themes.css';
+@import './lib/themes/daisyui-bridge.css';
+
 /**
  * MyMind Clone - Global Styles (RedwoodJS)
  *
@@ -406,10 +411,10 @@ h1, h2, h3 {
 .card-base {
   position: relative;
   overflow: hidden;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   background-color: var(--surface-card);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   transition: box-shadow var(--duration-normal) ease,
               transform var(--duration-normal) var(--ease-snappy),
               border-color var(--duration-normal) ease;
@@ -418,44 +423,28 @@ h1, h2, h3 {
 .card-base:hover {
   border-color: var(--border-default);
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  transform: scale(1.01);
 }
 
 /* =============================================================================
-   MOBILE-FIRST RESPONSIVE MASONRY
+   MASONRY LAYOUT (CSS Columns, mobile-first)
    ============================================================================= */
 
-/* Mobile: single column */
-:root {
-  --masonry-columns: 1;
+.masonry-grid {
+  columns: 2;
+  column-gap: 12px;
 }
 
-/* Tablet: 2 columns */
-@media (min-width: 640px) {
-  :root {
-    --masonry-columns: 2;
+/* Desktop: 3 columns */
+@media (min-width: 768px) {
+  .masonry-grid {
+    columns: 3;
   }
 }
 
-/* Small desktop: 3 columns */
-@media (min-width: 1024px) {
-  :root {
-    --masonry-columns: 3;
-  }
-}
-
-/* Desktop: 4 columns */
-@media (min-width: 1280px) {
-  :root {
-    --masonry-columns: 4;
-  }
-}
-
-/* Wide desktop: 5 columns */
-@media (min-width: 1536px) {
-  :root {
-    --masonry-columns: 5;
-  }
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 12px;
 }
 
 /* =============================================================================

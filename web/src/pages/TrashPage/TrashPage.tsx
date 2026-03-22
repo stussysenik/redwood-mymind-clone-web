@@ -1,15 +1,18 @@
 import { Metadata } from '@redwoodjs/web'
 
+import CardsCell from 'src/components/CardsCell'
+import { TrashBulkActions } from 'src/components/TrashBulkActions/TrashBulkActions'
+
 const TrashPage = () => {
   return (
     <>
       <Metadata title="Trash" />
       <div className="px-4 sm:px-6 py-6">
-        <h2 className="font-serif text-xl mb-4" style={{ color: 'var(--foreground)' }}>Trash</h2>
-        {/* CardsCell with mode: TRASH will go here */}
-        <div className="text-center py-20" style={{ color: 'var(--foreground-muted)' }}>
-          <p className="text-sm">Deleted cards will appear here</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <h2 className="font-serif text-xl" style={{ color: 'var(--foreground)' }}>Trash</h2>
+          <TrashBulkActions itemCount={0} />
         </div>
+        <CardsCell page={1} pageSize={25} mode="TRASH" />
       </div>
     </>
   )

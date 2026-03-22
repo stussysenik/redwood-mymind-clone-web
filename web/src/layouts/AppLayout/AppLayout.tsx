@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
+
+import AddModal from 'src/components/AddModal'
 
 interface AppLayoutProps {
   children: ReactNode
 }
 
 const AppLayout = ({ children }: AppLayoutProps) => {
+  const [showAddModal, setShowAddModal] = useState(false)
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
       {/* Header */}
@@ -90,6 +94,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           boxShadow: 'var(--shadow-lg)',
           transition: 'transform var(--duration-fast) var(--ease-spring)',
         }}
+        onClick={() => setShowAddModal(true)}
         title="Add new card"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -97,6 +102,13 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </button>
+
+      {showAddModal && (
+        <AddModal
+          isOpen={true}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   )
 }

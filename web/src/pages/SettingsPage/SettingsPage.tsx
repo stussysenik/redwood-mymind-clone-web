@@ -1,3 +1,4 @@
+import { navigate, routes } from '@redwoodjs/router'
 import { Metadata } from '@redwoodjs/web'
 import { useAuth } from 'src/auth'
 
@@ -36,7 +37,10 @@ const SettingsPage = () => {
 
         {/* Sign out */}
         <button
-          onClick={logOut}
+          onClick={async () => {
+            await logOut()
+            navigate(routes.login())
+          }}
           className="w-full py-3 rounded-lg text-sm font-medium"
           style={{
             backgroundColor: 'var(--surface-danger)',

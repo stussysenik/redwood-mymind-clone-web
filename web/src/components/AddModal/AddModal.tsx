@@ -10,8 +10,28 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp } from 'lucide-react';
+import { useMutation } from '@redwoodjs/web';
 import { getPlatformInfo } from 'src/lib/platforms';
 import { useLocalAI } from 'src/lib/local-ai';
+
+const SAVE_CARD_MUTATION = gql`
+  mutation SaveCard($input: SaveCardInput!) {
+    saveCard(input: $input) {
+      id
+      title
+      type
+      tags
+    }
+  }
+`
+
+const ENRICH_CARD_MUTATION = gql`
+  mutation EnrichCard($cardId: String!) {
+    enrichCard(cardId: $cardId) {
+      success
+    }
+  }
+`
 
 // =============================================================================
 // TYPES
@@ -30,6 +50,8 @@ interface AddModalProps {
 
 export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const localAI = useLocalAI();
+	const [saveCard] = useMutation(SAVE_CARD_MUTATION);
+	const [enrichCard] = useMutation(ENRICH_CARD_MUTATION);
 
 	type SavePayload = {
 		type?: string;
@@ -182,15 +204,17 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 				for (let i = 0; i < links.length; i++) {
 					setBatchProgress({ current: i + 1, total: links.length });
 					try {
-						// TODO: Replace with GraphQL mutation for batch saving
-						const response = await fetch('/api/save', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ url: links[i], type: 'auto' }),
+						const result = await saveCard({
+							variables: { input: { url: links[i], type: 'auto' } },
 						});
-						const data = await response.json();
-						if (response.ok && data.card?.id) {
+						if (result.data?.saveCard?.id) {
 							successCount++;
+							// Trigger enrichment in background (non-blocking)
+							enrichCard({
+								variables: { cardId: result.data.saveCard.id },
+							}).catch((err) =>
+								console.error(`[AddModal] Enrichment failed for ${links[i]}:`, err)
+							);
 						}
 					} catch (err) {
 						console.error(`[AddModal] Failed to save ${links[i]}:`, err);
@@ -231,7 +255,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			}
 
 			// Race local AI classification against 3s timeout (non-blocking)
-			let clientClassification: typeof payload & { clientClassification?: unknown } = payload;
+			let clientClassification: unknown = undefined;
 			if (localAI.isReady && payload.url) {
 				try {
 					const classification = await Promise.race([
@@ -239,26 +263,36 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 						new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
 					]);
 					if (classification) {
-						clientClassification = { ...payload, clientClassification: classification };
+						clientClassification = classification;
 					}
 				} catch {
 					// Graceful degradation: proceed without client classification
 				}
 			}
 
-			// TODO: Replace with GraphQL mutation for saving a card
-			const response = await fetch('/api/save', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(clientClassification),
+			const result = await saveCard({
+				variables: {
+					input: {
+						url: payload.url,
+						type: payload.type,
+						title: payload.title,
+						content: payload.content,
+						imageUrl: payload.imageUrl,
+						...(clientClassification ? { clientClassification } : {}),
+					},
+				},
 			});
 
-			const data = await response.json();
+			const savedCard = result.data?.saveCard;
+			if (!savedCard?.id) throw new Error('Failed to save');
 
-			if (!response.ok) throw new Error(data.error || 'Failed to save');
+			// Trigger enrichment in background (non-blocking)
+			enrichCard({ variables: { cardId: savedCard.id } }).catch((err) =>
+				console.error('[AddModal] Enrichment failed:', err)
+			);
 
 			onClose();
-			window.dispatchEvent(new CustomEvent('card-saved', { detail: data.card }));
+			window.dispatchEvent(new CustomEvent('card-saved', { detail: savedCard }));
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Something went wrong');
 		} finally {

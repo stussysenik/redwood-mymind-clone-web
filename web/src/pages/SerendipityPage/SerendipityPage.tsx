@@ -1,5 +1,7 @@
 import { Metadata } from '@redwoodjs/web'
 
+import SerendipityCell from 'src/components/SerendipityCell'
+
 const SerendipityPage = () => {
   return (
     <>
@@ -9,10 +11,7 @@ const SerendipityPage = () => {
           <h2 className="font-serif text-2xl mb-2" style={{ color: 'var(--foreground)' }}>Serendipity</h2>
           <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Rediscover something from your mind</p>
         </div>
-        {/* SerendipityCell will go here */}
-        <div className="text-center py-20" style={{ color: 'var(--foreground-muted)' }}>
-          <p className="text-sm">Random cards will appear here</p>
-        </div>
+        <SerendipityCell limit={5} />
       </div>
     </>
   )
