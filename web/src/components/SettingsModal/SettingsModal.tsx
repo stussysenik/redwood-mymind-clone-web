@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { X, Moon, Sun, Monitor, Check } from 'lucide-react'
 
 import { useTheme, type Theme } from 'src/lib/theme/ThemeProvider'
+import type { ThemeInfo } from 'src/lib/themes'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -32,8 +33,58 @@ const PRESET_ACCENTS = [
   { name: 'Amber Gold', value: '#F59E0B' },
 ]
 
+// Inline theme card component — no separate file needed
+const ThemeCard = ({
+  t,
+  isActive,
+  onSelect,
+}: {
+  t: ThemeInfo
+  isActive: boolean
+  onSelect: (name: string) => void
+}) => (
+  <button
+    onClick={() => onSelect(t.name)}
+    className={`relative flex items-center gap-3 p-3 rounded-xl border transition-all ${
+      isActive
+        ? 'border-[var(--accent-primary)] bg-[var(--surface-accent)]'
+        : 'border-[var(--border-default)] hover:border-[var(--border-emphasis)]'
+    }`}
+    style={{ minHeight: '48px' }}
+  >
+    {/* Color swatch */}
+    <div
+      className="w-8 h-8 rounded-lg flex-shrink-0 border border-black/10"
+      style={{ backgroundColor: t.preview }}
+    />
+    {/* Label + badge */}
+    <div className="flex-1 min-w-0 text-left">
+      <div
+        className="text-sm font-medium truncate"
+        style={{ color: 'var(--foreground)' }}
+      >
+        {t.label}
+      </div>
+      <div
+        className="text-[10px]"
+        style={{ color: 'var(--foreground-muted)' }}
+      >
+        {t.category === 'daisyui' ? 'DaisyUI' : 'Custom'}
+      </div>
+    </div>
+    {/* Active checkmark */}
+    {isActive && (
+      <Check
+        className="w-4 h-4 flex-shrink-0"
+        style={{ color: 'var(--accent-primary)' }}
+      />
+    )}
+  </button>
+)
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { theme, setTheme, themePack, setThemePack, availableThemes } =
+    useTheme()
   const [activeTab, setActiveTab] = useState<TabId>('theme')
 
   const handleThemeChange = useCallback(
@@ -56,6 +107,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     { id: 'colors', label: 'Colors' },
     { id: 'typography', label: 'Typography' },
   ]
+
+  const customThemes = availableThemes.filter((t) => t.category === 'custom')
+  const daisyThemes = availableThemes.filter((t) => t.category === 'daisyui')
+
+  // Colors section is de-emphasized when a non-default theme pack is active
+  const colorsOpacity = themePack !== 'default' ? 0.45 : 1
 
   const modal = (
     <div
@@ -128,57 +185,213 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         {/* Content */}
         <div className="p-4 space-y-6">
           {activeTab === 'theme' && (
-            <div>
-              <h3
-                className="text-sm font-medium mb-3"
-                style={{ color: 'var(--foreground-muted)' }}
-              >
-                Appearance
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {themeOptions.map((option) => {
-                  const Icon = option.icon
-                  const isActive = theme === option.id
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() => handleThemeChange(option.id)}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all"
-                      style={{
-                        backgroundColor: isActive
-                          ? 'var(--surface-accent)'
-                          : 'var(--surface-soft)',
-                        border: `2px solid ${isActive ? 'var(--accent-primary)' : 'transparent'}`,
-                        minHeight: 'var(--touch-target-comfortable)',
-                      }}
-                    >
-                      <Icon
-                        className="w-5 h-5"
-                        style={{
-                          color: isActive
-                            ? 'var(--accent-primary)'
-                            : 'var(--foreground-muted)',
-                        }}
+            <div className="space-y-6">
+              {/* ── Theme Packs ── */}
+              <div>
+                <h3
+                  className="text-sm font-medium mb-3"
+                  style={{ color: 'var(--foreground-muted)' }}
+                >
+                  Theme Pack
+                </h3>
+
+                {/* Custom themes */}
+                {customThemes.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                    {customThemes.map((t) => (
+                      <ThemeCard
+                        key={t.name}
+                        t={t}
+                        isActive={themePack === t.name}
+                        onSelect={setThemePack}
                       />
-                      <span
-                        className="text-xs font-medium"
+                    ))}
+                  </div>
+                )}
+
+                {/* Separator between custom and DaisyUI */}
+                {customThemes.length > 0 && daisyThemes.length > 0 && (
+                  <div
+                    className="flex items-center gap-2 my-3"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    <div
+                      className="flex-1 h-px"
+                      style={{ backgroundColor: 'var(--border-default)' }}
+                    />
+                    <span className="text-[10px] font-medium uppercase tracking-wider">
+                      DaisyUI
+                    </span>
+                    <div
+                      className="flex-1 h-px"
+                      style={{ backgroundColor: 'var(--border-default)' }}
+                    />
+                  </div>
+                )}
+
+                {/* DaisyUI themes */}
+                {daisyThemes.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {daisyThemes.map((t) => (
+                      <ThemeCard
+                        key={t.name}
+                        t={t}
+                        isActive={themePack === t.name}
+                        onSelect={setThemePack}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {availableThemes.length === 0 && (
+                  <p
+                    className="text-sm"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    No theme packs available.
+                  </p>
+                )}
+              </div>
+
+              {/* ── Base Mode ── */}
+              <div>
+                <div className="flex items-baseline justify-between mb-3">
+                  <h3
+                    className="text-sm font-medium"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    Base Mode
+                  </h3>
+                  {themePack !== 'default' && (
+                    <span
+                      className="text-[10px]"
+                      style={{ color: 'var(--foreground-muted)' }}
+                    >
+                      Only applies with Default pack
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {themeOptions.map((option) => {
+                    const Icon = option.icon
+                    const isActive = theme === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => handleThemeChange(option.id)}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all"
                         style={{
-                          color: isActive
-                            ? 'var(--accent-primary)'
-                            : 'var(--foreground)',
+                          backgroundColor: isActive
+                            ? 'var(--surface-accent)'
+                            : 'var(--surface-soft)',
+                          border: `2px solid ${isActive ? 'var(--accent-primary)' : 'transparent'}`,
+                          minHeight: 'var(--touch-target-comfortable)',
                         }}
                       >
-                        {option.label}
-                      </span>
-                      {isActive && (
-                        <Check
-                          className="w-3.5 h-3.5"
-                          style={{ color: 'var(--accent-primary)' }}
+                        <Icon
+                          className="w-5 h-5"
+                          style={{
+                            color: isActive
+                              ? 'var(--accent-primary)'
+                              : 'var(--foreground-muted)',
+                          }}
                         />
-                      )}
-                    </button>
-                  )
-                })}
+                        <span
+                          className="text-xs font-medium"
+                          style={{
+                            color: isActive
+                              ? 'var(--accent-primary)'
+                              : 'var(--foreground)',
+                          }}
+                        >
+                          {option.label}
+                        </span>
+                        {isActive && (
+                          <Check
+                            className="w-3.5 h-3.5"
+                            style={{ color: 'var(--accent-primary)' }}
+                          />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* ── Colors (de-emphasized when a theme pack is active) ── */}
+              <div
+                className="space-y-6 transition-opacity"
+                style={{ opacity: colorsOpacity }}
+              >
+                {/* Accent Color */}
+                <div>
+                  <h3
+                    className="text-sm font-medium mb-3"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    Accent Color
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRESET_ACCENTS.map((accent) => (
+                      <button
+                        key={accent.value}
+                        className="flex items-center gap-2 p-3 rounded-xl transition-all"
+                        style={{
+                          backgroundColor: 'var(--surface-soft)',
+                          border: '1px solid var(--border-default)',
+                        }}
+                      >
+                        <div
+                          className="w-5 h-5 rounded-full"
+                          style={{ backgroundColor: accent.value }}
+                        />
+                        <span
+                          className="text-xs"
+                          style={{ color: 'var(--foreground)' }}
+                        >
+                          {accent.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Background Color */}
+                <div>
+                  <h3
+                    className="text-sm font-medium mb-3"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    Background
+                  </h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    {PRESET_BACKGROUNDS.map((bg) => (
+                      <button
+                        key={bg.value}
+                        className="flex flex-col items-center gap-1.5 p-2 rounded-xl"
+                        style={{
+                          border: '1px solid var(--border-default)',
+                        }}
+                        title={bg.name}
+                      >
+                        <div
+                          className="w-full h-8 rounded-lg"
+                          style={{
+                            backgroundColor: bg.value,
+                            border: '1px solid var(--border-default)',
+                          }}
+                        />
+                        <span
+                          className="text-[10px]"
+                          style={{ color: 'var(--foreground-muted)' }}
+                        >
+                          {bg.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

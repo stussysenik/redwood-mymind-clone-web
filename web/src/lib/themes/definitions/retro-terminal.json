@@ -1,0 +1,42 @@
+{
+  "name": "retro-terminal",
+  "label": "Retro Terminal / CRT Hacker",
+  "colorMode": "dark",
+  "category": "custom",
+  "preview": "#00FF00",
+  "fonts": [
+    "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap"
+  ],
+  "tokens": {
+    "background": "#0A0A0A",
+    "background-secondary": "#0F0F0F",
+    "foreground": "#00FF00",
+    "foreground-muted": "#00AA00",
+    "card-bg": "#0D0D0D",
+    "border": "1px solid rgba(0, 255, 0, 0.2)",
+    "border-hover": "1px solid rgba(0, 255, 0, 0.4)",
+    "accent-primary": "#FFB000",
+    "accent-hover": "#E09A00",
+    "accent-light": "rgba(255, 176, 0, 0.12)",
+    "tag-green": "#00FF00",
+    "tag-red": "#FF3333",
+    "tag-blue": "#0080FF",
+    "tag-orange": "#FF8800",
+    "tag-purple": "#FF00FF",
+    "tag-pink": "#FF44AA",
+    "tag-cyan": "#00FFFF",
+    "tag-amber": "#FFB000",
+    "font-serif": "'Fira Code', 'Consolas', monospace",
+    "font-sans": "'Fira Code', 'Consolas', monospace",
+    "radius-sm": "0px",
+    "radius-md": "0px",
+    "radius-lg": "0px",
+    "radius-xl": "0px",
+    "shadow-sm": "0 0 10px rgba(0, 255, 0, 0.15), 0 0 30px rgba(0, 255, 0, 0.05)",
+    "shadow-md": "0 0 15px rgba(0, 255, 0, 0.2), 0 0 40px rgba(0, 255, 0, 0.08)",
+    "shadow-lg": "0 0 25px rgba(0, 255, 0, 0.25), 0 0 60px rgba(0, 255, 0, 0.1)"
+  },
+  "extras": {
+    "customCSS": "body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,0,0.03) 2px, rgba(0,255,0,0.03) 4px); } * { text-shadow: 0 0 8px rgba(0, 255, 0, 0.4); }"
+  }
+}

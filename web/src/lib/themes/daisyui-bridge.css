@@ -1,0 +1,57 @@
+/* DaisyUI Bridge: maps DaisyUI theme tokens to app CSS variables */
+
+[data-theme^="daisy-"] {
+  /* Core colors */
+  --background: oklch(var(--b1));
+  --background-secondary: oklch(var(--b2));
+  --foreground: oklch(var(--bc));
+  --foreground-muted: oklch(var(--bc) / 0.6);
+  --card-bg: oklch(var(--b2));
+  --border: oklch(var(--bc) / 0.08);
+  --border-hover: oklch(var(--bc) / 0.15);
+
+  /* Accent */
+  --accent-primary: oklch(var(--p));
+  --accent-hover: oklch(var(--pf));
+  --accent-light: oklch(var(--p) / 0.12);
+
+  /* Tags — use DaisyUI's semantic colors */
+  --tag-green: oklch(var(--su, 0.72 0.19 163));
+  --tag-red: oklch(var(--er, 0.63 0.24 29));
+  --tag-blue: oklch(var(--in, 0.72 0.12 240));
+  --tag-orange: oklch(var(--wa, 0.80 0.15 85));
+  --tag-purple: oklch(var(--s));
+  --tag-pink: oklch(var(--a));
+  --tag-cyan: oklch(var(--in, 0.72 0.12 240));
+  --tag-amber: oklch(var(--wa, 0.80 0.15 85));
+
+  /* Surfaces */
+  --surface-primary: oklch(var(--b1));
+  --surface-secondary: oklch(var(--b2));
+  --surface-card: oklch(var(--b2));
+  --surface-elevated: oklch(var(--b3));
+  --surface-floating: oklch(var(--b2) / 0.88);
+  --surface-soft: oklch(var(--bc) / 0.04);
+  --surface-hover: oklch(var(--bc) / 0.06);
+  --surface-active: oklch(var(--bc) / 0.1);
+  --surface-accent: oklch(var(--p) / 0.12);
+  --surface-accent-strong: oklch(var(--p) / 0.18);
+  --surface-success: oklch(var(--su, 0.72 0.19 163) / 0.12);
+  --surface-warning: oklch(var(--wa, 0.80 0.15 85) / 0.14);
+  --surface-danger: oklch(var(--er, 0.63 0.24 29) / 0.14);
+  --surface-overlay: oklch(var(--b1) / 0.7);
+  --header-backdrop: oklch(var(--b1) / 0.78);
+  --card-action-bg: oklch(var(--b2) / 0.92);
+  --glow-accent: oklch(var(--p) / 0.14);
+
+  /* Borders */
+  --border-subtle: oklch(var(--bc) / 0.04);
+  --border-default: oklch(var(--bc) / 0.08);
+  --border-emphasis: oklch(var(--bc) / 0.16);
+
+  /* Effects */
+  --scrollbar-thumb: oklch(var(--bc) / 0.15);
+  --scrollbar-thumb-hover: oklch(var(--bc) / 0.24);
+  --shimmer-base: oklch(var(--bc) / 0.05);
+  --shimmer-highlight: oklch(var(--b1) / 0.72);
+}

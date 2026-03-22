@@ -1,0 +1,288 @@
+[
+  {
+    "name": "brutalist",
+    "label": "Brutalist / Raw Anti-Design",
+    "colorMode": "light",
+    "category": "custom",
+    "preview": "#FF0000",
+    "fonts": [
+      "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
+    ]
+  },
+  {
+    "name": "default",
+    "label": "MyMind (Default)",
+    "colorMode": "light",
+    "category": "custom",
+    "preview": "#FF6B4A"
+  },
+  {
+    "name": "glassmorphism",
+    "label": "Glassmorphism / Frosted Glass",
+    "colorMode": "dark",
+    "category": "custom",
+    "preview": "#7C3AED"
+  },
+  {
+    "name": "muji",
+    "label": "Muji / Japanese Minimal",
+    "colorMode": "light",
+    "category": "custom",
+    "preview": "#C84B31"
+  },
+  {
+    "name": "nasa",
+    "label": "NASA Graphics Standards",
+    "colorMode": "dark",
+    "category": "custom",
+    "preview": "#FC3D21"
+  },
+  {
+    "name": "neubrutalism",
+    "label": "Neubrutalism / Bold Figma-style",
+    "colorMode": "light",
+    "category": "custom",
+    "preview": "#000000"
+  },
+  {
+    "name": "nord",
+    "label": "Nord / Arctic Palette",
+    "colorMode": "dark",
+    "category": "custom",
+    "preview": "#88C0D0"
+  },
+  {
+    "name": "retro-terminal",
+    "label": "Retro Terminal / CRT Hacker",
+    "colorMode": "dark",
+    "category": "custom",
+    "preview": "#00FF00",
+    "fonts": [
+      "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap"
+    ]
+  },
+  {
+    "name": "daisy-light",
+    "label": "DaisyUI: Light",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#570DF8"
+  },
+  {
+    "name": "daisy-dark",
+    "label": "DaisyUI: Dark",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#661AE6"
+  },
+  {
+    "name": "daisy-cupcake",
+    "label": "DaisyUI: Cupcake",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#65C3C8"
+  },
+  {
+    "name": "daisy-bumblebee",
+    "label": "DaisyUI: Bumblebee",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#E0A82E"
+  },
+  {
+    "name": "daisy-emerald",
+    "label": "DaisyUI: Emerald",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#66CC8A"
+  },
+  {
+    "name": "daisy-corporate",
+    "label": "DaisyUI: Corporate",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#4B6BFB"
+  },
+  {
+    "name": "daisy-synthwave",
+    "label": "DaisyUI: Synthwave",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#E779C1"
+  },
+  {
+    "name": "daisy-retro",
+    "label": "DaisyUI: Retro",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#EF9995"
+  },
+  {
+    "name": "daisy-cyberpunk",
+    "label": "DaisyUI: Cyberpunk",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#FF7598"
+  },
+  {
+    "name": "daisy-valentine",
+    "label": "DaisyUI: Valentine",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#E96D7B"
+  },
+  {
+    "name": "daisy-halloween",
+    "label": "DaisyUI: Halloween",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#F28C18"
+  },
+  {
+    "name": "daisy-garden",
+    "label": "DaisyUI: Garden",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#5C7F67"
+  },
+  {
+    "name": "daisy-forest",
+    "label": "DaisyUI: Forest",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#1EB854"
+  },
+  {
+    "name": "daisy-aqua",
+    "label": "DaisyUI: Aqua",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#09ECDF"
+  },
+  {
+    "name": "daisy-lofi",
+    "label": "DaisyUI: Lofi",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#808080"
+  },
+  {
+    "name": "daisy-pastel",
+    "label": "DaisyUI: Pastel",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#D1C1D7"
+  },
+  {
+    "name": "daisy-fantasy",
+    "label": "DaisyUI: Fantasy",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#6E0B75"
+  },
+  {
+    "name": "daisy-wireframe",
+    "label": "DaisyUI: Wireframe",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#B8B8B8"
+  },
+  {
+    "name": "daisy-black",
+    "label": "DaisyUI: Black",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#343232"
+  },
+  {
+    "name": "daisy-luxury",
+    "label": "DaisyUI: Luxury",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#DCA54C"
+  },
+  {
+    "name": "daisy-dracula",
+    "label": "DaisyUI: Dracula",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#FF79C6"
+  },
+  {
+    "name": "daisy-cmyk",
+    "label": "DaisyUI: Cmyk",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#45AEEE"
+  },
+  {
+    "name": "daisy-autumn",
+    "label": "DaisyUI: Autumn",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#8C0327"
+  },
+  {
+    "name": "daisy-business",
+    "label": "DaisyUI: Business",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#1C4E80"
+  },
+  {
+    "name": "daisy-acid",
+    "label": "DaisyUI: Acid",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#FF00F5"
+  },
+  {
+    "name": "daisy-lemonade",
+    "label": "DaisyUI: Lemonade",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#519903"
+  },
+  {
+    "name": "daisy-night",
+    "label": "DaisyUI: Night",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#38BDF8"
+  },
+  {
+    "name": "daisy-coffee",
+    "label": "DaisyUI: Coffee",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#DB924B"
+  },
+  {
+    "name": "daisy-winter",
+    "label": "DaisyUI: Winter",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#047AFF"
+  },
+  {
+    "name": "daisy-dim",
+    "label": "DaisyUI: Dim",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#9FE88D"
+  },
+  {
+    "name": "daisy-nord",
+    "label": "DaisyUI: Nord",
+    "colorMode": "light",
+    "category": "daisyui",
+    "preview": "#5E81AC"
+  },
+  {
+    "name": "daisy-sunset",
+    "label": "DaisyUI: Sunset",
+    "colorMode": "dark",
+    "category": "daisyui",
+    "preview": "#FF865B"
+  }
+]

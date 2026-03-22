@@ -209,3 +209,41 @@ export interface SaveCardRequest {
     source: 'local-ai'
   }
 }
+
+// =============================================================================
+// DATABASE ROW TYPES (Supabase realtime)
+// =============================================================================
+
+export interface CardRow {
+  id: string
+  user_id: string
+  type: string
+  title: string | null
+  content: string | null
+  url: string | null
+  image_url: string | null
+  metadata: Record<string, unknown>
+  tags: string[]
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  archived_at: string | null
+}
+
+export function rowToCard(row: CardRow): Card {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    type: row.type as CardType,
+    title: row.title,
+    content: row.content,
+    url: row.url,
+    imageUrl: row.image_url,
+    metadata: row.metadata as CardMetadata,
+    tags: row.tags || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    archivedAt: row.archived_at,
+  }
+}

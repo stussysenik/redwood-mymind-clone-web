@@ -1,5 +1,6 @@
 /**
  * Theme Provider - Light/Dark mode with localStorage persistence
+ * and theme pack (custom CSS variable sets) support.
  */
 
 import {
@@ -10,17 +11,28 @@ import {
   useCallback,
 } from 'react'
 
+import { getThemes, getTheme } from 'src/lib/themes'
+import type { ThemeInfo } from 'src/lib/themes'
+
 export type Theme = 'light' | 'dark' | 'system'
 
 interface ThemeContextValue {
+  // Existing
   theme: Theme
   resolvedTheme: 'light' | 'dark'
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  // New
+  themePack: string
+  setThemePack: (pack: string) => void
+  availableThemes: ThemeInfo[]
 }
 
 const STORAGE_KEY = 'mymind-theme'
 const DEFAULT_THEME: Theme = 'light'
+
+const PACK_STORAGE_KEY = 'mymind-theme-pack'
+const DEFAULT_PACK = 'default'
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
@@ -35,6 +47,7 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(defaultTheme)
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
+  const [themePack, setThemePackState] = useState<string>(DEFAULT_PACK)
 
   const getSystemTheme = useCallback((): 'light' | 'dark' => {
     if (typeof window === 'undefined') return 'light'
@@ -65,6 +78,44 @@ export function ThemeProvider({
     root.style.colorScheme = resolved
   }, [])
 
+  const setThemePack = useCallback(
+    (pack: string) => {
+      setThemePackState(pack)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(PACK_STORAGE_KEY, pack)
+      }
+
+      const root = document.documentElement
+      if (pack === DEFAULT_PACK) {
+        // Remove theme pack — fall back to light/dark system
+        const resolved = computeResolvedTheme(theme)
+        root.setAttribute('data-theme', resolved)
+        root.style.colorScheme = resolved
+      } else {
+        // Apply the theme pack
+        root.setAttribute('data-theme', pack)
+        const themeInfo = getTheme(pack)
+        if (themeInfo) {
+          root.style.colorScheme = themeInfo.colorMode
+        }
+      }
+
+      // Load fonts if needed
+      const themeInfo = getTheme(pack)
+      if (themeInfo?.fonts) {
+        themeInfo.fonts.forEach((url) => {
+          if (!document.querySelector(`link[href="${url}"]`)) {
+            const link = document.createElement('link')
+            link.rel = 'stylesheet'
+            link.href = url
+            document.head.appendChild(link)
+          }
+        })
+      }
+    },
+    [theme, computeResolvedTheme]
+  )
+
   const setTheme = useCallback(
     (newTheme: Theme) => {
       setThemeState(newTheme)
@@ -75,9 +126,13 @@ export function ThemeProvider({
 
       const resolved = computeResolvedTheme(newTheme)
       setResolvedTheme(resolved)
-      applyTheme(resolved)
+
+      // Only apply light/dark to DOM when no custom pack is active
+      if (themePack === DEFAULT_PACK) {
+        applyTheme(resolved)
+      }
     },
-    [computeResolvedTheme, applyTheme]
+    [computeResolvedTheme, applyTheme, themePack]
   )
 
   const toggleTheme = useCallback(() => {
@@ -93,7 +148,32 @@ export function ThemeProvider({
     setThemeState(initial)
     const resolved = computeResolvedTheme(initial)
     setResolvedTheme(resolved)
-    applyTheme(resolved)
+
+    // Read and apply stored theme pack
+    const storedPack = localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK
+    setThemePackState(storedPack)
+
+    const root = document.documentElement
+    if (storedPack !== DEFAULT_PACK) {
+      root.setAttribute('data-theme', storedPack)
+      const themeInfo = getTheme(storedPack)
+      if (themeInfo) {
+        root.style.colorScheme = themeInfo.colorMode
+      }
+      // Load fonts for the stored pack
+      if (themeInfo?.fonts) {
+        themeInfo.fonts.forEach((url) => {
+          if (!document.querySelector(`link[href="${url}"]`)) {
+            const link = document.createElement('link')
+            link.rel = 'stylesheet'
+            link.href = url
+            document.head.appendChild(link)
+          }
+        })
+      }
+    } else {
+      applyTheme(resolved)
+    }
   }, [defaultTheme, computeResolvedTheme, applyTheme])
 
   // Listen for system preference changes
@@ -106,19 +186,27 @@ export function ThemeProvider({
       if (theme === 'system') {
         const resolved = getSystemTheme()
         setResolvedTheme(resolved)
-        applyTheme(resolved)
+        // Only update DOM when no custom pack is active
+        if (themePack === DEFAULT_PACK) {
+          applyTheme(resolved)
+        }
       }
     }
 
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [theme, getSystemTheme, applyTheme])
+  }, [theme, themePack, getSystemTheme, applyTheme])
+
+  const availableThemes = getThemes()
 
   const value: ThemeContextValue = {
     theme,
     resolvedTheme,
     setTheme,
     toggleTheme,
+    themePack,
+    setThemePack,
+    availableThemes,
   }
 
   return (
@@ -137,12 +225,17 @@ export function useTheme() {
 export const themeScript = `
 (function() {
   try {
-    var theme = localStorage.getItem('${STORAGE_KEY}');
-    var resolved = theme === 'dark' ? 'dark' :
-                   theme === 'light' ? 'light' :
-                   window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', resolved);
-    document.documentElement.style.colorScheme = resolved;
+    var pack = localStorage.getItem('${PACK_STORAGE_KEY}');
+    if (pack && pack !== '${DEFAULT_PACK}') {
+      document.documentElement.setAttribute('data-theme', pack);
+    } else {
+      var theme = localStorage.getItem('${STORAGE_KEY}');
+      var resolved = theme === 'dark' ? 'dark' :
+                     theme === 'light' ? 'light' :
+                     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', resolved);
+      document.documentElement.style.colorScheme = resolved;
+    }
   } catch (e) {}
 })();
 `

@@ -1,0 +1,39 @@
+{
+  "name": "neubrutalism",
+  "label": "Neubrutalism / Bold Figma-style",
+  "colorMode": "light",
+  "category": "custom",
+  "preview": "#000000",
+  "tokens": {
+    "background": "#FFFDF7",
+    "background-secondary": "#F0ECFF",
+    "foreground": "#000000",
+    "foreground-muted": "#444444",
+    "card-bg": "#FFFFFF",
+    "border": "3px solid #000000",
+    "border-hover": "3px solid #000000",
+    "accent-primary": "#4361EE",
+    "accent-hover": "#2D4AD4",
+    "accent-light": "rgba(67, 97, 238, 0.1)",
+    "tag-green": "#2DC653",
+    "tag-red": "#F72585",
+    "tag-blue": "#4361EE",
+    "tag-orange": "#FF6D00",
+    "tag-purple": "#7B2FBE",
+    "tag-pink": "#FF0099",
+    "tag-cyan": "#00B4D8",
+    "tag-amber": "#FFE500",
+    "font-serif": "'Inter', system-ui, sans-serif",
+    "font-sans": "'Inter', system-ui, sans-serif",
+    "radius-sm": "8px",
+    "radius-md": "12px",
+    "radius-lg": "14px",
+    "radius-xl": "16px",
+    "shadow-sm": "3px 3px 0px #000000",
+    "shadow-md": "4px 4px 0px #000000",
+    "shadow-lg": "6px 6px 0px #000000"
+  },
+  "extras": {
+    "customCSS": ".card-base, [class*='surface-card'] { transition: transform 0.1s ease, box-shadow 0.1s ease; } .card-base:hover, [class*='surface-card']:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0px #000000; }"
+  }
+}

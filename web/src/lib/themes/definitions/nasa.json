@@ -1,0 +1,39 @@
+{
+  "name": "nasa",
+  "label": "NASA Graphics Standards",
+  "colorMode": "dark",
+  "category": "custom",
+  "preview": "#FC3D21",
+  "tokens": {
+    "background": "#0B1226",
+    "background-secondary": "#0F1A36",
+    "foreground": "#FFFFFF",
+    "foreground-muted": "#8A9BB8",
+    "card-bg": "#111D35",
+    "border": "rgba(138, 155, 184, 0.12)",
+    "border-hover": "rgba(138, 155, 184, 0.24)",
+    "accent-primary": "#FC3D21",
+    "accent-hover": "#E02E14",
+    "accent-light": "rgba(252, 61, 33, 0.12)",
+    "tag-green": "#2A8A8A",
+    "tag-red": "#D95B4A",
+    "tag-blue": "#4A7BAF",
+    "tag-orange": "#C97B3A",
+    "tag-purple": "#7A6A9A",
+    "tag-pink": "#A06070",
+    "tag-cyan": "#3A9AAA",
+    "tag-amber": "#B89A3A",
+    "font-serif": "'Helvetica Neue', 'Arial', sans-serif",
+    "font-sans": "'Helvetica Neue', 'Arial', sans-serif",
+    "radius-sm": "2px",
+    "radius-md": "3px",
+    "radius-lg": "4px",
+    "radius-xl": "4px",
+    "shadow-sm": "0 1px 4px rgba(11, 18, 38, 0.6), 0 2px 8px rgba(30, 60, 120, 0.15)",
+    "shadow-md": "0 2px 8px rgba(11, 18, 38, 0.7), 0 4px 16px rgba(30, 60, 120, 0.2)",
+    "shadow-lg": "0 4px 16px rgba(11, 18, 38, 0.8), 0 8px 32px rgba(30, 60, 120, 0.25)"
+  },
+  "extras": {
+    "customCSS": "background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 40px 40px;"
+  }
+}
