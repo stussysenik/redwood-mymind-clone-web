@@ -33,22 +33,42 @@ export const searchCards: QueryResolvers['searchCards'] = async ({
   if (query && query.trim()) {
     // Full-text search via raw SQL
     const searchQuery = query.trim()
-    cards = await db.$queryRaw<any[]>`
-      SELECT * FROM cards
-      WHERE user_id = ${userId}
-        AND deleted_at IS NULL
-        AND archived_at IS NULL
-        ${type ? db.$queryRaw`AND type = ${type}` : db.$queryRaw``}
-        AND (
-          to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, ''))
-          @@ plainto_tsquery('english', ${searchQuery})
-          OR title ILIKE ${'%' + searchQuery + '%'}
-          OR content ILIKE ${'%' + searchQuery + '%'}
-          OR ${searchQuery} = ANY(tags)
-        )
-      ORDER BY created_at DESC
-      LIMIT ${limit}
-    `
+    const likePattern = `%${searchQuery}%`
+
+    if (type) {
+      cards = await db.$queryRaw<any[]>`
+        SELECT * FROM cards
+        WHERE user_id = ${userId}
+          AND deleted_at IS NULL
+          AND archived_at IS NULL
+          AND type = ${type}
+          AND (
+            to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, ''))
+            @@ plainto_tsquery('english', ${searchQuery})
+            OR title ILIKE ${likePattern}
+            OR content ILIKE ${likePattern}
+            OR ${searchQuery} = ANY(tags)
+          )
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `
+    } else {
+      cards = await db.$queryRaw<any[]>`
+        SELECT * FROM cards
+        WHERE user_id = ${userId}
+          AND deleted_at IS NULL
+          AND archived_at IS NULL
+          AND (
+            to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, ''))
+            @@ plainto_tsquery('english', ${searchQuery})
+            OR title ILIKE ${likePattern}
+            OR content ILIKE ${likePattern}
+            OR ${searchQuery} = ANY(tags)
+          )
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `
+    }
 
     cards = cards.map((row) => ({
       id: row.id,
