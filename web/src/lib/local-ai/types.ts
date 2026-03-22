@@ -4,7 +4,7 @@
  * Types for in-browser classification via Transformers.js + WebGPU.
  */
 
-import type { CardType } from 'src/lib/types'
+import type { CardType } from '../types'
 
 /** Result from in-browser Gemma 3 1B classification */
 export interface ClientClassification {

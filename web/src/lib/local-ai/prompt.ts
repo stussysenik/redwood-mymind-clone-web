@@ -5,9 +5,9 @@
  * ~350 tokens with platform detection and vibe vocabulary enforcement.
  */
 
-import type { CardType } from 'src/lib/types'
+import type { CardType } from '../types'
 import type { ClientClassification } from './types'
-import { detectPlatformHint, BLOCKED_TAGS, validateTags } from 'src/lib/tag-vocabulary'
+import { detectPlatformHint, BLOCKED_TAGS, validateTags } from '../tag-vocabulary'
 
 const VALID_TYPES: CardType[] = [
   'article', 'image', 'note', 'product', 'book', 'video', 'audio', 'social', 'movie', 'website',

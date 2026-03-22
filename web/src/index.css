@@ -1,12 +1,14 @@
-/* Font imports — must be before @tailwind directives for Vite */
+/* All @import statements must come first (CSS spec) */
 @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+@import './lib/themes/generated/themes.css';
+@import './lib/themes/daisyui-bridge.css';
+@import './lib/themes/skins/shadcn.css';
+@import './lib/themes/skins/material.css';
+@import './lib/themes/skins/brutalist.css';
+@import './lib/themes/skins/glassmorphic.css';
 
 /**
  * START --- SETUP TAILWINDCSS EDIT
- *
- * `yarn rw setup ui tailwindcss` placed these directives here
- * to inject Tailwind's styles into your CSS.
- * For more information, see: https://tailwindcss.com/docs/installation
  */
 @tailwind base;
 @tailwind components;
@@ -14,16 +16,6 @@
 /**
  * END --- SETUP TAILWINDCSS EDIT
  */
-
-/* Theme engine generated themes */
-@import './lib/themes/generated/themes.css';
-@import './lib/themes/daisyui-bridge.css';
-
-/* Structural skins */
-@import './lib/themes/skins/shadcn.css';
-@import './lib/themes/skins/material.css';
-@import './lib/themes/skins/brutalist.css';
-@import './lib/themes/skins/glassmorphic.css';
 
 /**
  * MyMind Clone - Global Styles (RedwoodJS)

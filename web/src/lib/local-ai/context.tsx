@@ -19,7 +19,7 @@ import {
   type ReactNode,
 } from 'react'
 
-import { supabase } from 'src/lib/supabaseClient'
+import { supabase } from '../supabaseClient'
 import type { ClientClassification, WorkerOutMessage, LocalAIStatus } from './types'
 
 interface LocalAIContextValue {
