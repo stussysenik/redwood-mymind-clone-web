@@ -83,8 +83,16 @@ const ThemeCard = ({
 )
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme, themePack, setThemePack, availableThemes } =
-    useTheme()
+  const {
+    theme,
+    setTheme,
+    themePack,
+    setThemePack,
+    availableThemes,
+    skin,
+    setSkin,
+    availableSkins,
+  } = useTheme()
   const [activeTab, setActiveTab] = useState<TabId>('theme')
 
   const handleThemeChange = useCallback(
@@ -186,6 +194,41 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         <div className="p-4 space-y-6">
           {activeTab === 'theme' && (
             <div className="space-y-6">
+              {/* ── Skin ── */}
+              <div>
+                <h3
+                  className="text-sm font-medium mb-3"
+                  style={{ color: 'var(--foreground-muted)' }}
+                >
+                  Skin
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {availableSkins.map((s) => {
+                    const isActive = skin === s.name
+                    return (
+                      <button
+                        key={s.name}
+                        onClick={() => setSkin(s.name)}
+                        title={s.description}
+                        className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all"
+                        style={{
+                          backgroundColor: isActive
+                            ? 'var(--surface-accent)'
+                            : 'var(--surface-soft)',
+                          border: `2px solid ${isActive ? 'var(--accent-primary)' : 'transparent'}`,
+                          color: isActive
+                            ? 'var(--accent-primary)'
+                            : 'var(--foreground)',
+                          minHeight: 'var(--touch-target-min)',
+                        }}
+                      >
+                        <span className="text-xs font-medium">{s.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* ── Theme Packs ── */}
               <div>
                 <h3

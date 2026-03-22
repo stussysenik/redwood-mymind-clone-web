@@ -107,7 +107,7 @@ export const Card = memo(function Card({ card, index, onDelete, onArchive, onRes
 		}
 	})();
 
-	if (platform === 'generic' || !platform) {
+	if (platform === 'unknown' || !platform) {
 		return <GenericCard {...sharedProps} />;
 	}
 

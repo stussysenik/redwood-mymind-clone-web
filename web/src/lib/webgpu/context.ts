@@ -7,6 +7,6 @@
 
 export function useWebGPU() {
   return {
-    reportHover: () => {},
+    reportHover: (_rect?: { x: number; y: number; width: number; height: number } | null) => {},
   }
 }

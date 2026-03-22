@@ -1,0 +1,112 @@
+/**
+ * Skin: Brutalist
+ *
+ * Raw, anti-design. Sharp corners, thick borders, no shadow, no tricks.
+ * Structure is exposed. Monospace everywhere.
+ */
+
+[data-skin="brutalist"] {
+  /* ── Global font override ── */
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace !important;
+
+  & * {
+    font-family: inherit !important;
+  }
+
+  /* ── Cards ── */
+  & .card-base {
+    border-radius: 0;
+    border: 2px solid var(--foreground);
+    box-shadow: none;
+  }
+
+  & .card-base:hover {
+    transform: none;
+    border-color: var(--foreground);
+    box-shadow: 4px 4px 0 var(--foreground);
+  }
+
+  /* ── Masonry items ── */
+  & .masonry-item {
+    margin-bottom: 8px;
+  }
+
+  /* ── Surface chips / tags ── */
+  & .surface-chip {
+    border-radius: 0;
+    border: 1px solid var(--foreground);
+    background: transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  & .surface-chip:hover {
+    background: var(--foreground);
+    color: var(--surface-primary);
+  }
+
+  & .surface-chip-active {
+    border-radius: 0;
+    border: 2px solid var(--foreground);
+    background: var(--foreground);
+    color: var(--surface-primary);
+    box-shadow: none;
+  }
+
+  /* ── Inputs ── */
+  & .surface-input {
+    border-radius: 0;
+    border: 2px solid var(--foreground);
+  }
+
+  & .surface-input:hover {
+    border-color: var(--foreground);
+  }
+
+  & .surface-input:focus-within {
+    border-color: var(--foreground);
+    box-shadow: 3px 3px 0 var(--foreground);
+    outline: none;
+  }
+
+  /* ── Buttons ── */
+  & .tactile-btn {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  & .tactile-btn:hover {
+    transform: none;
+    box-shadow: 3px 3px 0 var(--foreground);
+  }
+
+  & .tactile-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--foreground);
+    transition-duration: 50ms;
+  }
+
+  & .hover-lift {
+    border-radius: 0;
+  }
+
+  & .hover-lift:hover {
+    transform: none;
+    box-shadow: 3px 3px 0 var(--foreground);
+  }
+
+  /* ── Shell / elevated surfaces ── */
+  & .surface-shell {
+    border-radius: 0;
+    border: 2px solid var(--foreground);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  & .surface-card-elevated {
+    border-radius: 0;
+    border: 2px solid var(--foreground);
+    box-shadow: 4px 4px 0 var(--foreground);
+  }
+}

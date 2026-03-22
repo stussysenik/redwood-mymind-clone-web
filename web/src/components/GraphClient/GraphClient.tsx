@@ -86,18 +86,36 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// -------------------------------------------------------------------------
 
 	useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+
 		function updateSize() {
 			if (containerRef.current) {
-				setDimensions({
-					width: containerRef.current.clientWidth,
-					height: containerRef.current.clientHeight,
-				});
+				const w = containerRef.current.clientWidth;
+				const h = containerRef.current.clientHeight;
+				// Only update if we have real dimensions (container is laid out)
+				if (w > 0 && h > 0) {
+					setDimensions({ width: w, height: h });
+				}
 			}
 		}
 
+		// Use ResizeObserver for reliable dimension tracking (handles layout
+		// shifts that window resize alone would miss).
+		let observer: ResizeObserver | null = null;
+		if (typeof ResizeObserver !== 'undefined') {
+			observer = new ResizeObserver(updateSize);
+			observer.observe(el);
+		}
+
+		// Initial measurement + window resize fallback
 		updateSize();
 		window.addEventListener('resize', updateSize);
-		return () => window.removeEventListener('resize', updateSize);
+
+		return () => {
+			observer?.disconnect();
+			window.removeEventListener('resize', updateSize);
+		};
 	}, []);
 
 	// -------------------------------------------------------------------------

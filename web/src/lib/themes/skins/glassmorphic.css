@@ -1,0 +1,135 @@
+/**
+ * Skin: Glassmorphic
+ *
+ * Frosted glass aesthetic. Translucent surfaces, backdrop blur,
+ * soft glow borders, and subtle scale lifts.
+ */
+
+[data-skin="glassmorphic"] {
+  /* ── Cards ── */
+  & .card-base {
+    border-radius: 20px;
+    background: rgb(255 255 255 / 0.12);
+    border: 1px solid rgb(255 255 255 / 0.25);
+    box-shadow:
+      0 4px 24px -4px rgb(0 0 0 / 0.15),
+      inset 0 1px 0 rgb(255 255 255 / 0.2);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  & .card-base:hover {
+    transform: scale(1.015);
+    border-color: rgb(255 255 255 / 0.45);
+    box-shadow:
+      0 8px 32px -4px rgb(0 0 0 / 0.2),
+      0 0 0 1px rgb(255 255 255 / 0.3),
+      inset 0 1px 0 rgb(255 255 255 / 0.3);
+  }
+
+  /* ── Masonry items ── */
+  & .masonry-item {
+    margin-bottom: 12px;
+  }
+
+  /* ── Surface chips / tags ── */
+  & .surface-chip {
+    border-radius: 99px;
+    background: rgb(255 255 255 / 0.1);
+    border: 1px solid rgb(255 255 255 / 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  & .surface-chip:hover {
+    background: rgb(255 255 255 / 0.18);
+    border-color: rgb(255 255 255 / 0.35);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15);
+  }
+
+  & .surface-chip-active {
+    border-radius: 99px;
+    background: rgb(255 255 255 / 0.2);
+    border: 1px solid rgb(255 255 255 / 0.4);
+    box-shadow:
+      0 2px 8px -2px rgb(0 0 0 / 0.12),
+      0 0 0 1px rgb(255 255 255 / 0.2);
+  }
+
+  /* ── Inputs ── */
+  & .surface-input {
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.1);
+    border: 1px solid rgb(255 255 255 / 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  & .surface-input:hover {
+    border-color: rgb(255 255 255 / 0.35);
+  }
+
+  & .surface-input:focus-within {
+    border-color: rgb(255 255 255 / 0.5);
+    box-shadow:
+      0 0 0 3px rgb(255 255 255 / 0.1),
+      0 4px 16px -4px rgb(0 0 0 / 0.15);
+  }
+
+  /* ── Buttons ── */
+  & .tactile-btn {
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  & .tactile-btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 8px 24px -4px rgb(0 0 0 / 0.18),
+      0 0 0 1px rgb(255 255 255 / 0.3);
+  }
+
+  & .tactile-btn:active {
+    transform: scale(0.97);
+    box-shadow:
+      0 2px 8px -2px rgb(0 0 0 / 0.12),
+      0 0 0 1px rgb(255 255 255 / 0.15);
+  }
+
+  & .hover-lift {
+    border-radius: 16px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  & .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 12px 32px -6px rgb(0 0 0 / 0.18),
+      0 0 0 1px rgb(255 255 255 / 0.25);
+  }
+
+  /* ── Shell / elevated surfaces ── */
+  & .surface-shell {
+    border-radius: 20px;
+    background: rgb(255 255 255 / 0.15);
+    border: 1px solid rgb(255 255 255 / 0.3);
+    box-shadow:
+      0 8px 32px -4px rgb(0 0 0 / 0.2),
+      inset 0 1px 0 rgb(255 255 255 / 0.25);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  & .surface-card-elevated {
+    border-radius: 20px;
+    background: rgb(255 255 255 / 0.18);
+    border: 1px solid rgb(255 255 255 / 0.35);
+    box-shadow:
+      0 12px 40px -6px rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.3);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+}

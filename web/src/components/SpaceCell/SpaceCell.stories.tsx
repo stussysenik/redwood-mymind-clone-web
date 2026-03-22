@@ -20,9 +20,9 @@ export const failure: StoryObj = {
 }
 
 export const success: StoryObj = {
-  render: () => <Success {...standard()} />,
+  render: () => <Success {...(standard() as any)} id="mock-space-1" />,
 }
 
 export const successSmartSpace: StoryObj = {
-  render: () => <Success {...smartSpace()} />,
+  render: () => <Success {...(smartSpace() as any)} id="mock-space-2" />,
 }

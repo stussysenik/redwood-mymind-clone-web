@@ -25,6 +25,7 @@ const Routes = () => {
         </Set>
       </Private>
 
+      <Route path="/editor" page={EditorPage} name="editor" />
       <Route notfound page={NotFoundPage} />
     </Router>
   )

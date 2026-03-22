@@ -20,9 +20,9 @@ export const failure: StoryObj = {
 }
 
 export const success: StoryObj = {
-  render: () => <Success {...standard()} />,
+  render: () => <Success {...(standard() as any)} limit={5} />,
 }
 
 export const successSingleCard: StoryObj = {
-  render: () => <Success {...singleCard()} />,
+  render: () => <Success {...(singleCard() as any)} limit={1} />,
 }

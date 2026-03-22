@@ -35,8 +35,15 @@ export const Empty = () => (
     >
       No spaces yet
     </p>
+    <p
+      className="text-sm mb-1"
+      style={{ color: 'var(--foreground-muted)' }}
+    >
+      Spaces let you organize cards into collections.
+    </p>
     <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
-      Create a space to organize your cards into collections
+      Create a space manually using the button above, or use a suggested space
+      generated from your most-used tags.
     </p>
   </div>
 )

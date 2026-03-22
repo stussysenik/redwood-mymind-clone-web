@@ -20,9 +20,18 @@ export const failure: StoryObj = {
 }
 
 export const success: StoryObj = {
-  render: () => <Success {...standard()} />,
+  render: () => (
+    <Success {...(standard() as any)} page={1} pageSize={25} mode={'DEFAULT' as any} />
+  ),
 }
 
 export const successWithPagination: StoryObj = {
-  render: () => <Success {...withPagination()} />,
+  render: () => (
+    <Success
+      {...(withPagination() as any)}
+      page={1}
+      pageSize={25}
+      mode={'DEFAULT' as any}
+    />
+  ),
 }

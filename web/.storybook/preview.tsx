@@ -16,6 +16,7 @@ const themeManifest = themeManifestRaw as Array<{
 const withThemeProvider: Decorator = (Story, context) => {
   const themePack = context.globals.themePack || 'default'
   const baseTheme = context.globals.theme || 'light'
+  const skin = context.globals.skin || 'default'
 
   // When a theme pack is selected, use it directly; otherwise fall back to light/dark base
   const effectiveTheme = themePack !== 'default' ? themePack : baseTheme
@@ -28,9 +29,21 @@ const withThemeProvider: Decorator = (Story, context) => {
       manifest?.colorMode || baseTheme
   }, [effectiveTheme, themePack, baseTheme])
 
+  React.useEffect(() => {
+    if (skin === 'default') {
+      document.documentElement.removeAttribute('data-skin')
+    } else {
+      document.documentElement.setAttribute('data-skin', skin)
+    }
+  }, [skin])
+
   return (
     <ThemeProvider defaultTheme={baseTheme}>
-      <div data-theme={effectiveTheme} style={{ padding: '1rem' }}>
+      <div
+        data-theme={effectiveTheme}
+        data-skin={skin !== 'default' ? skin : undefined}
+        style={{ padding: '1rem' }}
+      >
         <Story />
       </div>
     </ThemeProvider>
@@ -69,6 +82,22 @@ const preview: Preview = {
         items: [
           { value: 'light', title: 'Light', icon: 'sun' },
           { value: 'dark', title: 'Dark', icon: 'moon' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+    skin: {
+      description: 'Skin',
+      defaultValue: 'default',
+      toolbar: {
+        title: 'Skin',
+        icon: 'component',
+        items: [
+          { value: 'default', title: 'Default' },
+          { value: 'shadcn', title: 'shadcn/ui' },
+          { value: 'material', title: 'Material' },
+          { value: 'brutalist', title: 'Brutalist' },
+          { value: 'glassmorphic', title: 'Glass' },
         ],
         dynamicTitle: true,
       },

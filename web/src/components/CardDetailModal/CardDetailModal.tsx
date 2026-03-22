@@ -1566,6 +1566,19 @@ export function CardDetailModal({
 
           {/* Bottom Actions Bar - Sticky on mobile */}
           <div className="p-4 md:p-6 border-t border-[var(--border)] flex items-center justify-center gap-3 md:gap-4 bg-[var(--surface-elevated)] shrink-0">
+            {/* Re-enrich Button */}
+            <button
+              onClick={handleReAnalyze}
+              disabled={isReAnalyzing}
+              className="p-3 rounded-full hover:bg-orange-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Re-enrich with AI"
+            >
+              {isReAnalyzing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-primary)]" />
+              ) : (
+                <RefreshCw className="w-5 h-5" />
+              )}
+            </button>
             {/* Add to Space Button */}
             <div className="relative">
               <button

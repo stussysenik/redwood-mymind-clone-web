@@ -55,7 +55,7 @@ export function createMockCard(overrides: Partial<Card> = {}): Card {
     deletedAt: null,
     archivedAt: null,
   }
-  return deepMerge(base, overrides as Record<string, unknown>) as Card
+  return deepMerge(base as unknown as Record<string, unknown>, overrides as unknown as Record<string, unknown>) as unknown as Card
 }
 
 export function createTwitterCard(overrides: Partial<Card> = {}): Card {

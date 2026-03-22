@@ -20,9 +20,9 @@ export const failure: StoryObj = {
 }
 
 export const success: StoryObj = {
-  render: () => <Success {...standard()} />,
+  render: () => <Success {...(standard() as any)} />,
 }
 
 export const successSingleMatch: StoryObj = {
-  render: () => <Success {...singleMatch()} />,
+  render: () => <Success {...(singleMatch() as any)} />,
 }

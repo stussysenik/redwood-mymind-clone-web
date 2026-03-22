@@ -1,0 +1,115 @@
+/**
+ * Skin: Material Design
+ *
+ * Google Material Design 3 aesthetic — rounded corners, depth through shadows,
+ * no visible borders. Elevation communicates hierarchy.
+ */
+
+[data-skin="material"] {
+  /* ── Cards ── */
+  & .card-base {
+    border-radius: 12px;
+    border: none;
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.12),
+      0 2px 6px 2px rgb(0 0 0 / 0.08);
+  }
+
+  & .card-base:hover {
+    transform: translateY(-2px);
+    border: none;
+    box-shadow:
+      0 4px 8px 3px rgb(0 0 0 / 0.12),
+      0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
+
+  /* ── Masonry items ── */
+  & .masonry-item {
+    margin-bottom: 12px;
+  }
+
+  /* ── Surface chips / tags ── */
+  & .surface-chip {
+    border-radius: 99px;
+    border: none;
+    background: var(--surface-soft);
+  }
+
+  & .surface-chip:hover {
+    background: var(--surface-hover);
+  }
+
+  & .surface-chip-active {
+    border-radius: 99px;
+    border: none;
+    background: var(--surface-elevated);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.1);
+  }
+
+  /* ── Inputs — underline style ── */
+  & .surface-input {
+    border-radius: 4px 4px 0 0;
+    border: none;
+    border-bottom: 2px solid var(--border-default);
+    background: var(--surface-secondary);
+  }
+
+  & .surface-input:hover {
+    border-bottom-color: var(--border-emphasis);
+  }
+
+  & .surface-input:focus-within {
+    border-bottom-color: var(--border-emphasis);
+    box-shadow: none;
+  }
+
+  /* ── Buttons ── */
+  & .tactile-btn {
+    border-radius: 20px;
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.15),
+      0 2px 4px 0 rgb(0 0 0 / 0.1);
+  }
+
+  & .tactile-btn:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 2px 4px 0 rgb(0 0 0 / 0.18),
+      0 4px 8px 0 rgb(0 0 0 / 0.12);
+  }
+
+  & .tactile-btn:active {
+    transform: translateY(0);
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.1),
+      0 1px 3px 0 rgb(0 0 0 / 0.08);
+  }
+
+  & .hover-lift {
+    border-radius: 12px;
+  }
+
+  & .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 4px 8px 2px rgb(0 0 0 / 0.12),
+      0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
+
+  /* ── Shell / elevated surfaces ── */
+  & .surface-shell {
+    border-radius: 16px;
+    border: none;
+    box-shadow:
+      0 4px 8px 3px rgb(0 0 0 / 0.12),
+      0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
+
+  & .surface-card-elevated {
+    border-radius: 12px;
+    border: none;
+    box-shadow:
+      0 6px 12px 4px rgb(0 0 0 / 0.12),
+      0 2px 4px 0 rgb(0 0 0 / 0.1);
+  }
+}

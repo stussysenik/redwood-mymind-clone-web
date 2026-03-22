@@ -67,6 +67,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const [imageFile, setImageFile] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'enriching'>('idle');
 	const [error, setError] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 
@@ -121,6 +122,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setImagePreview(null);
 			setError(null);
 			setMode('auto');
+			setSaveStatus('idle');
 		}
 	}, [isOpen]);
 
@@ -192,6 +194,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		if (mode === 'auto' && !finalContent && !imagePreview) return; // Nothing to save
 
 		setIsSubmitting(true);
+		setSaveStatus('saving');
 		setError(null);
 
 		try {
@@ -225,6 +228,11 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 				if (successCount === 0) {
 					throw new Error('Failed to save any links');
 				}
+
+				// Show brief enriching status before closing
+				setSaveStatus('enriching');
+				await new Promise((resolve) => setTimeout(resolve, 1200));
+
 				onClose();
 				window.dispatchEvent(new CustomEvent('cards-changed'));
 				return;
@@ -286,10 +294,16 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			const savedCard = result.data?.saveCard;
 			if (!savedCard?.id) throw new Error('Failed to save');
 
+			// Show brief "Saved! Enriching..." status before closing
+			setSaveStatus('enriching');
+
 			// Trigger enrichment in background (non-blocking)
 			enrichCard({ variables: { cardId: savedCard.id } }).catch((err) =>
 				console.error('[AddModal] Enrichment failed:', err)
 			);
+
+			// Brief pause so user sees the enriching confirmation
+			await new Promise((resolve) => setTimeout(resolve, 1200));
 
 			onClose();
 			window.dispatchEvent(new CustomEvent('card-saved', { detail: savedCard }));
@@ -482,7 +496,12 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 									}
 								`}
 							>
-								{isSubmitting ? (
+								{saveStatus === 'enriching' ? (
+									<>
+										<Sparkles className="w-4 h-4 animate-pulse" />
+										<span>Saved! Enriching...</span>
+									</>
+								) : isSubmitting ? (
 									<>
 										<Loader2 className="w-4 h-4 animate-spin" />
 										<span>Saving...</span>

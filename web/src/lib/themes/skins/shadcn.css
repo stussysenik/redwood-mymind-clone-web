@@ -1,0 +1,97 @@
+/**
+ * Skin: shadcn/ui
+ *
+ * Clean, minimal, developer-tool aesthetic inspired by shadcn/ui.
+ * Restrained use of shadow; borders do the structural work.
+ * No scale transforms — just gentle shadow transitions on hover.
+ */
+
+[data-skin="shadcn"] {
+  /* ── Cards ── */
+  & .card-base {
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: none;
+  }
+
+  & .card-base:hover {
+    transform: none;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+    border-color: var(--border-default);
+  }
+
+  /* ── Masonry items ── */
+  & .masonry-item {
+    margin-bottom: 8px;
+  }
+
+  /* ── Surface chips / tags ── */
+  & .surface-chip {
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+  }
+
+  & .surface-chip:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-default);
+  }
+
+  & .surface-chip-active {
+    border-radius: 4px;
+    border: 1px solid var(--border-emphasis);
+    box-shadow: none;
+  }
+
+  /* ── Inputs ── */
+  & .surface-input {
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+  }
+
+  & .surface-input:hover {
+    border-color: var(--border-emphasis);
+  }
+
+  & .surface-input:focus-within {
+    border-color: var(--border-emphasis);
+    box-shadow: 0 0 0 3px rgb(0 0 0 / 0.06);
+  }
+
+  /* ── Buttons (tactile / hover-lift) ── */
+  & .tactile-btn {
+    border-radius: 6px;
+  }
+
+  & .tactile-btn:hover {
+    transform: none;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
+
+  & .tactile-btn:active {
+    transform: none;
+    box-shadow: none;
+  }
+
+  & .hover-lift {
+    border-radius: 6px;
+  }
+
+  & .hover-lift:hover {
+    transform: none;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  }
+
+  /* ── Shell / elevated surfaces ── */
+  & .surface-shell {
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  }
+
+  & .surface-card-elevated {
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    box-shadow: 0 2px 6px 0 rgb(0 0 0 / 0.08);
+  }
+}

@@ -2,14 +2,25 @@
  * MyMind Clone - Suggested Spaces Component
  *
  * Horizontal scroll of auto-detected space suggestions based on tag clusters.
- * Each suggestion has a "Create" action that creates a new auto-generated space.
+ * Each suggestion has a "Create" action that creates a new auto-generated space
+ * using the createSpace GraphQL mutation.
  *
  * @fileoverview Client component for space suggestions
  */
 
 import { useState } from 'react';
 import { navigate } from '@redwoodjs/router';
+import { useMutation } from '@redwoodjs/web';
 import { Sparkles, Plus, Loader2, Hash } from 'lucide-react';
+
+const CREATE_SPACE_MUTATION = gql`
+  mutation CreateSpaceFromSuggestion($input: CreateSpaceInput!) {
+    createSpace(input: $input) {
+      id
+      name
+    }
+  }
+`
 
 interface Suggestion {
 	name: string;
@@ -24,30 +35,30 @@ interface SuggestedSpacesProps {
 export function SuggestedSpaces({ suggestions }: SuggestedSpacesProps) {
 	const [creating, setCreating] = useState<string | null>(null);
 
+	const [createSpace] = useMutation(CREATE_SPACE_MUTATION, {
+		onCompleted: () => {
+			setCreating(null);
+			// Force a reload of the spaces list by navigating
+			navigate('/spaces');
+		},
+		onError: (err) => {
+			console.error('[SuggestedSpaces] Create error:', err);
+			setCreating(null);
+		},
+		refetchQueries: ['SpacesQuery'],
+	});
+
 	const handleCreate = async (suggestion: Suggestion) => {
 		setCreating(suggestion.name);
-		try {
-			// TODO: Replace with GraphQL mutation for creating a space
-			const response = await fetch('/api/spaces', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
+		await createSpace({
+			variables: {
+				input: {
 					name: suggestion.name,
-					tagFilter: suggestion.tagFilter,
-				}),
-			});
-
-			if (response.ok) {
-				navigate('/spaces');
-			} else {
-				const data = await response.json();
-				console.error('[SuggestedSpaces] Create failed:', data.error);
-			}
-		} catch (err) {
-			console.error('[SuggestedSpaces] Create error:', err);
-		} finally {
-			setCreating(null);
-		}
+					query: suggestion.tagFilter[0] || null,
+					isSmart: true,
+				},
+			},
+		});
 	};
 
 	if (suggestions.length === 0) return null;

@@ -14,6 +14,9 @@ import {
 import { getThemes, getTheme } from 'src/lib/themes'
 import type { ThemeInfo } from 'src/lib/themes'
 
+import { getSkins } from 'src/lib/themes/skins'
+import type { SkinInfo } from 'src/lib/themes/skins'
+
 export type Theme = 'light' | 'dark' | 'system'
 
 interface ThemeContextValue {
@@ -22,10 +25,14 @@ interface ThemeContextValue {
   resolvedTheme: 'light' | 'dark'
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
-  // New
+  // Theme packs
   themePack: string
   setThemePack: (pack: string) => void
   availableThemes: ThemeInfo[]
+  // Skins
+  skin: string
+  setSkin: (skin: string) => void
+  availableSkins: SkinInfo[]
 }
 
 const STORAGE_KEY = 'mymind-theme'
@@ -33,6 +40,9 @@ const DEFAULT_THEME: Theme = 'light'
 
 const PACK_STORAGE_KEY = 'mymind-theme-pack'
 const DEFAULT_PACK = 'default'
+
+const SKIN_STORAGE_KEY = 'mymind-skin'
+const DEFAULT_SKIN = 'default'
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
@@ -48,6 +58,7 @@ export function ThemeProvider({
   const [theme, setThemeState] = useState<Theme>(defaultTheme)
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
   const [themePack, setThemePackState] = useState<string>(DEFAULT_PACK)
+  const [skin, setSkinState] = useState<string>(DEFAULT_SKIN)
 
   const getSystemTheme = useCallback((): 'light' | 'dark' => {
     if (typeof window === 'undefined') return 'light'
@@ -116,6 +127,19 @@ export function ThemeProvider({
     [theme, computeResolvedTheme]
   )
 
+  const setSkin = useCallback((newSkin: string) => {
+    setSkinState(newSkin)
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SKIN_STORAGE_KEY, newSkin)
+    }
+    const root = document.documentElement
+    if (newSkin === DEFAULT_SKIN) {
+      root.removeAttribute('data-skin')
+    } else {
+      root.setAttribute('data-skin', newSkin)
+    }
+  }, [])
+
   const setTheme = useCallback(
     (newTheme: Theme) => {
       setThemeState(newTheme)
@@ -149,11 +173,20 @@ export function ThemeProvider({
     const resolved = computeResolvedTheme(initial)
     setResolvedTheme(resolved)
 
+    // Read and apply stored skin
+    const storedSkin = localStorage.getItem(SKIN_STORAGE_KEY) || DEFAULT_SKIN
+    setSkinState(storedSkin)
+    const root = document.documentElement
+    if (storedSkin !== DEFAULT_SKIN) {
+      root.setAttribute('data-skin', storedSkin)
+    } else {
+      root.removeAttribute('data-skin')
+    }
+
     // Read and apply stored theme pack
     const storedPack = localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK
     setThemePackState(storedPack)
 
-    const root = document.documentElement
     if (storedPack !== DEFAULT_PACK) {
       root.setAttribute('data-theme', storedPack)
       const themeInfo = getTheme(storedPack)
@@ -198,6 +231,7 @@ export function ThemeProvider({
   }, [theme, themePack, getSystemTheme, applyTheme])
 
   const availableThemes = getThemes()
+  const availableSkins = getSkins()
 
   const value: ThemeContextValue = {
     theme,
@@ -207,6 +241,9 @@ export function ThemeProvider({
     themePack,
     setThemePack,
     availableThemes,
+    skin,
+    setSkin,
+    availableSkins,
   }
 
   return (

@@ -19,6 +19,12 @@
 @import './lib/themes/generated/themes.css';
 @import './lib/themes/daisyui-bridge.css';
 
+/* Structural skins */
+@import './lib/themes/skins/shadcn.css';
+@import './lib/themes/skins/material.css';
+@import './lib/themes/skins/brutalist.css';
+@import './lib/themes/skins/glassmorphic.css';
+
 /**
  * MyMind Clone - Global Styles (RedwoodJS)
  *

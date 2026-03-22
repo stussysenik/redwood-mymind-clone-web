@@ -130,9 +130,15 @@ const NoteCardVisual = ({
 
 export const Success = ({
   cards: data,
-}: CellSuccessProps<CardsQuery, CardsQueryVariables>) => {
-  const { cards, total, page, hasMore } = data
+  onNextPage,
+  onPrevPage,
+}: CellSuccessProps<CardsQuery, CardsQueryVariables> & {
+  onNextPage?: () => void
+  onPrevPage?: () => void
+}) => {
+  const { cards, total, page, pageSize, hasMore } = data
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
+  const totalPages = Math.ceil(total / pageSize)
 
   /**
    * Convert a GraphQL card object to the Card type expected by CardDetailModal.
@@ -220,7 +226,7 @@ export const Success = ({
                   )}
 
                   {/* Summary: hidden on mobile, 2-line clamp on desktop */}
-                  {card.metadata?.summary && (
+                  {(card.metadata as any)?.summary && (
                     <p
                       className="hidden md:block"
                       style={{
@@ -280,12 +286,39 @@ export const Success = ({
         })}
       </div>
 
-      {/* Pagination */}
-      {hasMore && (
-        <div className="flex justify-center mt-8">
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex flex-col items-center gap-3 mt-8 pb-4">
           <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            Page {page} — showing {cards.length} of {total}
+            Page {page} of {totalPages} — showing {cards.length} of {total}
           </p>
+          <div className="flex items-center gap-2">
+            {page > 1 && onPrevPage && (
+              <button
+                onClick={onPrevPage}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: 'var(--surface-card)',
+                  color: 'var(--foreground)',
+                  border: '1px solid var(--border-default)',
+                }}
+              >
+                Previous
+              </button>
+            )}
+            {hasMore && onNextPage && (
+              <button
+                onClick={onNextPage}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: 'var(--foreground)',
+                  color: 'var(--background)',
+                }}
+              >
+                Next page
+              </button>
+            )}
+          </div>
         </div>
       )}
 

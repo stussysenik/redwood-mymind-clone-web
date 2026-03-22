@@ -1,3 +1,5 @@
+import { useState, useCallback } from 'react'
+
 import { Metadata } from '@redwoodjs/web'
 import { useLocation } from '@redwoodjs/router'
 
@@ -5,10 +7,22 @@ import { SearchBar } from 'src/components/SearchBar/SearchBar'
 import CardsCell from 'src/components/CardsCell'
 import SearchCell from 'src/components/SearchCell'
 
+const PAGE_SIZE = 25
+
 const HomePage = () => {
   const { search } = useLocation()
   const searchParams = new URLSearchParams(search)
   const query = searchParams.get('q') ?? ''
+
+  const [page, setPage] = useState(1)
+
+  const handleNextPage = useCallback(() => {
+    setPage((p) => p + 1)
+  }, [])
+
+  const handlePrevPage = useCallback(() => {
+    setPage((p) => Math.max(1, p - 1))
+  }, [])
 
   return (
     <>
@@ -19,7 +33,13 @@ const HomePage = () => {
       {query.trim() ? (
         <SearchCell query={query.trim()} />
       ) : (
-        <CardsCell page={1} pageSize={25} mode="DEFAULT" />
+        <CardsCell
+          page={page}
+          pageSize={PAGE_SIZE}
+          mode="DEFAULT"
+          onNextPage={handleNextPage}
+          onPrevPage={handlePrevPage}
+        />
       )}
     </>
   )
