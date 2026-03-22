@@ -45,6 +45,12 @@ function createSupabaseAuth() {
       await supabase.auth.signOut()
     },
 
+    restoreAuthState: async () => {
+      // Ensure Supabase client loads session from localStorage
+      // before RedwoodJS checks isAuthenticated
+      await supabase.auth.getSession()
+    },
+
     getToken: async () => {
       const { data } = await supabase.auth.getSession()
       return data.session?.access_token ?? null

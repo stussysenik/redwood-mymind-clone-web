@@ -21,9 +21,9 @@ export interface CurrentUser {
  */
 export const getCurrentUser = async (
   decoded: Decoded
-): Promise<CurrentUser> => {
+): Promise<CurrentUser | null> => {
   if (!decoded?.sub) {
-    throw new AuthenticationError('Invalid token: no sub claim')
+    return null
   }
 
   const supabase = getSupabaseAdmin()

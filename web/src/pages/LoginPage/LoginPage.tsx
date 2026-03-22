@@ -4,7 +4,7 @@ import { Metadata } from '@redwoodjs/web'
 import { useAuth } from 'src/auth'
 
 const LoginPage = () => {
-  const { logIn, isAuthenticated } = useAuth()
+  const { logIn, isAuthenticated, reauthenticate } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,8 +25,8 @@ const LoginPage = () => {
     setLoading(true)
     try {
       await logIn({ email, password })
-      // Full reload ensures auth state is properly initialized
-      window.location.href = redirectTo
+      await reauthenticate()
+      navigate(redirectTo)
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {

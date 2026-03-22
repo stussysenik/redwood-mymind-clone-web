@@ -16,12 +16,25 @@ import { logger } from 'src/lib/logger'
  */
 const authDecoder = async (
   token: string,
-  type: string
+  type: string,
+  { event }: { event: any }
 ): Promise<Decoded | null> => {
   if (!token) return null
 
+  // If a stale cookie from another project takes precedence over
+  // the Authorization header, extract the JWT from the header directly
+  let jwt = token
+  if (type !== 'custom') {
+    const authHeader =
+      event?.headers?.authorization || event?.headers?.Authorization
+    if (!authHeader) return null
+    const parts = authHeader.split(' ')
+    if (parts.length !== 2) return null
+    jwt = parts[1]
+  }
+
   try {
-    const [, payload] = token.split('.')
+    const [, payload] = jwt.split('.')
     if (!payload) return null
 
     const decoded = JSON.parse(
