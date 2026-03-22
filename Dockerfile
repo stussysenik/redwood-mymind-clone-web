@@ -25,6 +25,13 @@ COPY web web
 
 # Generate Prisma client + GraphQL types
 RUN yarn rw prisma generate
+
+# Build args for client-side env vars (Redwood inlines these at build time)
+ARG REDWOOD_ENV_SUPABASE_URL
+ARG REDWOOD_ENV_SUPABASE_ANON_KEY
+ENV REDWOOD_ENV_SUPABASE_URL=$REDWOOD_ENV_SUPABASE_URL
+ENV REDWOOD_ENV_SUPABASE_ANON_KEY=$REDWOOD_ENV_SUPABASE_ANON_KEY
+
 RUN yarn rw build
 
 # Production stage
