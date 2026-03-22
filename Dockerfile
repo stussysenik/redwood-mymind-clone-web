@@ -41,5 +41,7 @@ COPY --from=base /app /app
 ENV NODE_ENV=production
 EXPOSE ${PORT:-8910}
 
-# Default start — railway.toml overrides this with $PORT from env
-CMD ["yarn", "rw", "serve", "--webPort", "8910", "--webHost", "0.0.0.0", "--apiHost", "0.0.0.0"]
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
