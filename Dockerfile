@@ -41,6 +41,6 @@ COPY --from=base /app /app
 ENV NODE_ENV=production
 EXPOSE ${PORT:-8910}
 
-# RedwoodJS serve command (serves both API and Web)
+# RedwoodJS serve command (serves both API and Web on the same port)
 # Use shell form so $PORT expands from Railway's env
-CMD yarn rw serve --port ${PORT:-8910}
+CMD yarn rw serve --webPort ${PORT:-8910} --webHost 0.0.0.0 --apiHost 0.0.0.0
