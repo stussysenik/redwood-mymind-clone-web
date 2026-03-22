@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
+    "@pinecone-database/pinecone": "^7.1.0",
     "@redwoodjs/api": "8.9.0",
-    "@redwoodjs/graphql-server": "8.9.0"
+    "@redwoodjs/graphql-server": "8.9.0",
+    "@supabase/supabase-js": "^2.99.3",
+    "cheerio": "^1.2.0"
   }
 }

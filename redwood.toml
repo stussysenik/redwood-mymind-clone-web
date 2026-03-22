@@ -1,21 +1,19 @@
-# This file contains the configuration settings for your Redwood app.
-# This file is also what makes your Redwood app a Redwood app.
-# If you remove it and try to run `yarn rw dev`, you'll get an error.
-#
-# For the full list of options, see the "App Configuration: redwood.toml" doc:
-# https://redwoodjs.com/docs/app-configuration-redwood-toml
+# MyMind Clone - RedwoodJS Configuration
 
 [web]
-  title = "Redwood App"
-  port = 8910
-  apiUrl = "/.redwood/functions" # You can customize graphql and dbauth urls individually too: see https://redwoodjs.com/docs/app-configuration-redwood-toml#api-paths
+  title = "MyMind Clone"
+  port = 8913
+  apiUrl = "/.redwood/functions"
   includeEnvironmentVariables = [
-    # Add any ENV vars that should be available to the web side to this array
-    # See https://redwoodjs.com/docs/environment-variables#web
+    "REDWOOD_ENV_SUPABASE_URL",
+    "REDWOOD_ENV_SUPABASE_ANON_KEY",
   ]
+
 [api]
-  port = 8911
+  port = 8912
+
 [browser]
   open = true
+
 [notifications]
   versionUpdates = ["latest"]

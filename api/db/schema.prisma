@@ -1,24 +1,57 @@
-// Don't forget to tell Prisma about your edits to this file using
-// `yarn rw prisma migrate dev` or `yarn rw prisma db push`.
-// `migrate` is like committing while `push` is for prototyping.
-// Read more about both here:
-// https://www.prisma.io/docs/orm/prisma-migrate
+// MyMind Clone - Prisma Schema
+// Connects to existing Supabase PostgreSQL instance
+// Uses @map directives to bridge camelCase models to snake_case DB columns
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = "native"
+  provider        = "prisma-client-js"
+  binaryTargets   = "native"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
-// Define your own datamodels here and run `yarn redwood prisma migrate dev`
-// to create migrations for them and apply to your dev DB.
-// TODO: Please remove the following example:
-model UserExample {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+// ─── Cards ──────────────────────────────────────────────────────────────────
+// Core entity: every saved item becomes a Card
+model Card {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id")
+  type       String    // 'article'|'image'|'note'|'product'|'book'|'video'|'audio'|'social'|'movie'|'website'
+  title      String?
+  content    String?
+  url        String?
+  imageUrl   String?   @map("image_url")
+  embedding  Unsupported("vector(1536)")?
+  metadata   Json      @default("{}")
+  tags       String[]  @default([])
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
+
+  @@index([userId], map: "idx_cards_user")
+  @@index([type], map: "idx_cards_type")
+  @@index([tags], type: Gin, map: "idx_cards_tags")
+  @@index([metadata], type: Gin, map: "idx_cards_metadata")
+  @@index([createdAt(sort: Desc)], map: "idx_cards_created")
+  @@index([deletedAt], map: "idx_cards_deleted_at")
+  @@index([archivedAt], map: "idx_cards_archived_at")
+  @@map("cards")
+}
+
+// ─── Spaces ─────────────────────────────────────────────────────────────────
+// Smart collections — filter cards by query/tag matching
+model Space {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id")
+  name      String
+  query     String?
+  isSmart   Boolean  @default(false) @map("is_smart")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId], map: "idx_spaces_user_id")
+  @@map("spaces")
 }

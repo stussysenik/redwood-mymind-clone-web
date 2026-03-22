@@ -1,0 +1,182 @@
+/**
+ * MyMind Clone - Reddit Card Component
+ *
+ * Renders Reddit posts with subreddit and upvote styling.
+ *
+ * @fileoverview Reddit card with orange accent
+ */
+
+import { useState } from 'react';
+import { ArrowBigUp, MessageSquare, Globe } from 'lucide-react';
+import type { Card } from 'src/lib/types';
+import { MASONRY_IMAGE_SIZES, PRIORITY_CARD_COUNT } from 'src/lib/image-config';
+import { TagDisplay, TagShimmerPlaceholder } from '../TagDisplay';
+import { CardActions, ExternalLinkButton } from './CardActions';
+import { CardProcessingBadge, isCardProcessing } from './CardProcessingBadge';
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface RedditCardProps {
+	card: Card;
+	index?: number;
+	onDelete?: () => void;
+	onArchive?: () => void;
+	onRestore?: () => void;
+	onClick?: () => void;
+}
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
+
+/**
+ * Reddit style card for posts.
+ */
+export function RedditCard({ card, index, onDelete, onArchive, onRestore, onClick }: RedditCardProps) {
+	const [imageError, setImageError] = useState(false);
+	const [isHovered, setIsHovered] = useState(false);
+	const subreddit = card.metadata.subreddit || extractSubreddit(card.url);
+	// Use new author fields if available, fallback to legacy
+	const authorHandle = card.metadata.authorHandle || card.metadata.author?.replace('u/', '') || 'redditor';
+	const author = `u/${authorHandle}`;
+	const upvotes = card.metadata.upvotes;
+	const comments = card.metadata.comments;
+	const isPriority = (index ?? Infinity) < PRIORITY_CARD_COUNT;
+
+	return (
+		<article
+			className={`relative overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow border-l-[3px] border-[#FF4500] ${onClick ? 'cursor-pointer' : ''}`}
+			onClick={onClick}
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+		>
+			{/* Processing Indicator */}
+			<CardProcessingBadge
+				cardId={card.id}
+				metadata={card.metadata}
+				createdAt={card.createdAt}
+				accentColor="#FF4500"
+				variant="light"
+				className="absolute right-2 top-2 z-20"
+			/>
+
+			{/* Header */}
+			<div className="flex items-center gap-2 p-3 pb-2">
+				{/* Reddit Logo */}
+				<div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF4500]">
+					<svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
+					</svg>
+				</div>
+
+				{/* Subreddit & Author */}
+				<div className="flex flex-col">
+					<span className="text-xs font-semibold text-[#FF4500]">
+						{subreddit}
+					</span>
+					<span className="text-xs text-[var(--foreground-muted)]">
+						Posted by {author}
+					</span>
+				</div>
+			</div>
+
+			{/* Title */}
+			<div className="px-3 pb-2">
+				<h3 className="text-sm font-medium text-[var(--foreground)] line-clamp-3 leading-snug">
+					{card.title}
+				</h3>
+			</div>
+
+			{/* Image if exists */}
+			{card.imageUrl && !imageError && (
+				<div className="relative aspect-video w-full overflow-hidden border-t border-b border-[var(--border)]" style={{ backgroundColor: card.metadata?.colors?.[0] || 'rgb(243, 244, 246)' }}>
+					<img
+						src={card.imageUrl}
+						alt={card.title || 'Reddit post'}
+						className="object-cover w-full h-full"
+						loading={isPriority ? "eager" : "lazy"}
+						onError={() => setImageError(true)}
+					/>
+					{/* Domain Badge Overlay */}
+					{card.url && (
+						<div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
+							<Globe className="w-3 h-3 text-white/80" />
+							<span className="text-xs font-medium text-white truncate max-w-[120px]">
+								{new URL(card.url).hostname.replace('www.', '')}
+							</span>
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Content Preview */}
+			{card.content && !card.imageUrl && (
+				<div className="px-3 pb-2">
+					<p className="text-xs text-[var(--foreground-muted)] line-clamp-3">
+						{card.content}
+					</p>
+				</div>
+			)}
+
+			{/* Footer with Stats + Date */}
+			<div className="flex flex-col gap-1 px-3 py-2 border-t border-[var(--border)]">
+				<div className="flex items-center gap-4">
+					{/* Upvotes */}
+					<div className="flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
+						<ArrowBigUp className="h-4 w-4 text-[#FF4500]" />
+						<span>{upvotes || '•'}</span>
+					</div>
+
+					{/* Comments */}
+					<div className="flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
+						<MessageSquare className="h-3.5 w-3.5" />
+						<span>{comments || '•'} comments</span>
+					</div>
+				</div>
+				{/* Added Date */}
+				<div className="text-xs text-[var(--foreground-muted)]">
+					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+				</div>
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5">
+					<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+					<span className="text-xs text-[#FF4500] truncate">reddit.com</span>
+				</div>
+			</div>
+
+			{/* Tags */}
+			{card.tags && card.tags.length > 0 ? (
+				<TagDisplay tags={card.tags} className="px-3 pb-3" />
+			) : isCardProcessing(card.metadata) ? (
+				<TagShimmerPlaceholder className="px-3 pb-3" />
+			) : null}
+
+			{/* Hover Actions */}
+			<CardActions
+				isHovered={isHovered}
+				onArchive={onArchive}
+				onDelete={onDelete}
+				onRestore={onRestore}
+				variant="light"
+			/>
+
+			{/* Always-visible External Link */}
+			{card.url && (
+				<ExternalLinkButton url={card.url} variant="light" position="bottom-right" />
+			)}
+		</article>
+	);
+}
+
+/**
+ * Extracts subreddit from Reddit URL.
+ */
+function extractSubreddit(url: string | null): string {
+	if (!url) return 'r/reddit';
+	const match = url.match(/reddit\.com\/r\/([^\/]+)/);
+	return match ? `r/${match[1]}` : 'r/reddit';
+}
+
+export default RedditCard;

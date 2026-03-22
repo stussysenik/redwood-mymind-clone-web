@@ -1,0 +1,1067 @@
+/* Font imports — must be before @tailwind directives for Vite */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+
+/**
+ * START --- SETUP TAILWINDCSS EDIT
+ *
+ * `yarn rw setup ui tailwindcss` placed these directives here
+ * to inject Tailwind's styles into your CSS.
+ * For more information, see: https://tailwindcss.com/docs/installation
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/**
+ * END --- SETUP TAILWINDCSS EDIT
+ */
+/**
+ * MyMind Clone - Global Styles (RedwoodJS)
+ *
+ * Mobile-first design system with Golden Ratio spacing,
+ * Riso color palette, and physics-based animations.
+ */
+
+/* =============================================================================
+   DESIGN TOKENS (MyMind Palette)
+   ============================================================================= */
+
+:root {
+  /* Core Colors - Light Theme */
+  --background: #F7F6F3;
+  --background-secondary: #EFEEEB;
+  --foreground: #2D2D2D;
+  --foreground-muted: #6B6B6B;
+  --card-bg: #FFFFFF;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-hover: rgba(0, 0, 0, 0.12);
+
+  /* Accent Colors (Riso Orange/Pink Theme) */
+  --accent-primary: #FF6B4A;
+  --accent-hover: #E35332;
+  --accent-light: rgba(255, 107, 74, 0.1);
+
+  /* Tag Colors - Riso Palette */
+  --tag-green: #00A99D;
+  --tag-red: #FF48B0;
+  --tag-blue: #2B579A;
+  --tag-orange: #FF6B4A;
+  --tag-purple: #9D7AD2;
+  --tag-pink: #FD7BB9;
+  --tag-cyan: #00A99D;
+  --tag-amber: #FFE800;
+
+  /* Typography */
+  --font-serif: 'Libre Baskerville', 'Georgia', 'Charter', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Spacing */
+  --header-height: 56px;
+
+  /* Golden Ratio Design System */
+  --phi: 1.618;
+  --phi-inverse: 0.618;
+  --space-phi-xs: 4px;
+  --space-phi-sm: 6px;
+  --space-phi-md: 10px;
+  --space-phi-lg: 16px;
+  --space-phi-xl: 26px;
+  --space-phi-2xl: 42px;
+  --space-phi-3xl: 68px;
+
+  /* Golden ratio card widths */
+  --card-width-xs: 180px;
+  --card-width-sm: 220px;
+  --card-width-md: 280px;
+  --card-width-lg: 340px;
+  --card-width-xl: 420px;
+
+  /* Dynamic card size */
+  --card-size-factor: 1;
+  --masonry-gap: var(--space-phi-lg);
+  --masonry-columns: 4;
+
+  /* Transitions - Physics-based */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-gentle-spring: cubic-bezier(0.4, 0.8, 0.74, 1.0);
+  --ease-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+  --ease-anticipate: cubic-bezier(0.38, -0.4, 0.74, 1);
+
+  /* Duration scale */
+  --duration-instant: 75ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* Touch targets (mobile-first) */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+
+  /* 60/30/10 Surface System */
+  --surface-primary: var(--background);
+  --surface-secondary: #F1EFEA;
+  --surface-card: var(--card-bg);
+  --surface-elevated: #FFFCF8;
+  --surface-floating: rgba(255, 255, 255, 0.88);
+  --surface-soft: rgba(45, 45, 45, 0.04);
+  --surface-hover: rgba(45, 45, 45, 0.06);
+  --surface-active: rgba(45, 45, 45, 0.1);
+  --surface-accent: rgba(255, 107, 74, 0.12);
+  --surface-accent-strong: rgba(255, 107, 74, 0.18);
+  --surface-success: rgba(34, 197, 94, 0.12);
+  --surface-warning: rgba(245, 158, 11, 0.14);
+  --surface-danger: rgba(239, 68, 68, 0.14);
+  --surface-overlay: rgba(0, 0, 0, 0.6);
+  --header-backdrop: rgba(247, 246, 243, 0.78);
+  --card-action-bg: rgba(255, 255, 255, 0.92);
+  --glow-accent: rgba(255, 107, 74, 0.14);
+  --glow-secondary: rgba(43, 87, 154, 0.08);
+
+  /* Elevation System */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 8px 30px rgba(0, 0, 0, 0.12), 0 20px 60px rgba(0, 0, 0, 0.08);
+
+  /* Radius System */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  /* Border System */
+  --border-subtle: rgba(0, 0, 0, 0.03);
+  --border-default: rgba(0, 0, 0, 0.06);
+  --border-emphasis: rgba(0, 0, 0, 0.12);
+  --platform-border-width: 3px;
+
+  /* Effects */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.24);
+  --shimmer-base: rgba(0, 0, 0, 0.05);
+  --shimmer-highlight: rgba(255, 255, 255, 0.72);
+}
+
+/* Dark Mode Theme (system preference) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0B1020;
+    --background-secondary: #121A2B;
+    --foreground: #F5EFE5;
+    --foreground-muted: #9AA5BD;
+    --card-bg: #151D31;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.15);
+
+    --accent-primary: #FF8A66;
+    --accent-hover: #FF9D7F;
+    --accent-light: rgba(255, 138, 102, 0.18);
+
+    --tag-green: #00C2B5;
+    --tag-red: #FF6BC7;
+    --tag-blue: #4A90E2;
+    --tag-orange: #FF7F63;
+    --tag-purple: #B88FE0;
+    --tag-pink: #FF8FCC;
+    --tag-cyan: #00C2B5;
+    --tag-amber: #FFE600;
+
+    --surface-primary: var(--background);
+    --surface-secondary: #101726;
+    --surface-card: var(--card-bg);
+    --surface-elevated: #1A2339;
+    --surface-floating: rgba(19, 27, 45, 0.88);
+    --surface-soft: rgba(255, 255, 255, 0.04);
+    --surface-hover: rgba(255, 255, 255, 0.06);
+    --surface-active: rgba(255, 255, 255, 0.1);
+    --surface-accent: rgba(255, 138, 102, 0.14);
+    --surface-accent-strong: rgba(255, 138, 102, 0.22);
+    --surface-success: rgba(16, 185, 129, 0.16);
+    --surface-warning: rgba(245, 158, 11, 0.18);
+    --surface-danger: rgba(239, 68, 68, 0.2);
+    --surface-overlay: rgba(3, 6, 15, 0.76);
+    --header-backdrop: rgba(11, 16, 32, 0.74);
+    --card-action-bg: rgba(17, 25, 43, 0.9);
+    --glow-accent: rgba(255, 138, 102, 0.18);
+    --glow-secondary: rgba(56, 189, 248, 0.12);
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28), 0 8px 18px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 12px 30px rgba(3, 7, 18, 0.34), 0 4px 14px rgba(3, 7, 18, 0.22);
+    --shadow-lg: 0 20px 48px rgba(3, 7, 18, 0.42), 0 10px 28px rgba(3, 7, 18, 0.28);
+    --shadow-xl: 0 32px 80px rgba(3, 7, 18, 0.52), 0 16px 36px rgba(3, 7, 18, 0.35);
+
+    --border-subtle: rgba(255, 255, 255, 0.04);
+    --border-default: rgba(255, 255, 255, 0.08);
+    --border-emphasis: rgba(255, 255, 255, 0.16);
+
+    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+    --shimmer-base: rgba(255, 255, 255, 0.05);
+    --shimmer-highlight: rgba(255, 255, 255, 0.16);
+  }
+}
+
+/* Manual dark mode override */
+[data-theme="dark"] {
+  --background: #0B1020;
+  --background-secondary: #121A2B;
+  --foreground: #F5EFE5;
+  --foreground-muted: #9AA5BD;
+  --card-bg: #151D31;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+
+  --accent-primary: #FF8A66;
+  --accent-hover: #FF9D7F;
+  --accent-light: rgba(255, 138, 102, 0.18);
+
+  --tag-green: #00C2B5;
+  --tag-red: #FF6BC7;
+  --tag-blue: #4A90E2;
+  --tag-orange: #FF7F63;
+  --tag-purple: #B88FE0;
+  --tag-pink: #FF8FCC;
+  --tag-cyan: #00C2B5;
+  --tag-amber: #FFE600;
+
+  --surface-primary: var(--background);
+  --surface-secondary: #101726;
+  --surface-card: var(--card-bg);
+  --surface-elevated: #1A2339;
+  --surface-floating: rgba(19, 27, 45, 0.88);
+  --surface-soft: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface-active: rgba(255, 255, 255, 0.1);
+  --surface-accent: rgba(255, 138, 102, 0.14);
+  --surface-accent-strong: rgba(255, 138, 102, 0.22);
+  --surface-success: rgba(16, 185, 129, 0.16);
+  --surface-warning: rgba(245, 158, 11, 0.18);
+  --surface-danger: rgba(239, 68, 68, 0.2);
+  --surface-overlay: rgba(3, 6, 15, 0.76);
+  --header-backdrop: rgba(11, 16, 32, 0.74);
+  --card-action-bg: rgba(17, 25, 43, 0.9);
+  --glow-accent: rgba(255, 138, 102, 0.18);
+  --glow-secondary: rgba(56, 189, 248, 0.12);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28), 0 8px 18px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 12px 30px rgba(3, 7, 18, 0.34), 0 4px 14px rgba(3, 7, 18, 0.22);
+  --shadow-lg: 0 20px 48px rgba(3, 7, 18, 0.42), 0 10px 28px rgba(3, 7, 18, 0.28);
+  --shadow-xl: 0 32px 80px rgba(3, 7, 18, 0.52), 0 16px 36px rgba(3, 7, 18, 0.35);
+
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-emphasis: rgba(255, 255, 255, 0.16);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  --shimmer-base: rgba(255, 255, 255, 0.05);
+  --shimmer-highlight: rgba(255, 255, 255, 0.16);
+}
+
+/* =============================================================================
+   BASE STYLES (Mobile-First)
+   ============================================================================= */
+
+html {
+  scroll-behavior: smooth;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+html.no-transition,
+html.no-transition * {
+  transition: none !important;
+}
+
+body {
+  font-family: var(--font-sans);
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background-color: var(--background);
+  color: var(--foreground);
+  line-height: 1.6;
+  transition: background-color 200ms ease, color 200ms ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 0%, var(--glow-accent), transparent 34%),
+    radial-gradient(circle at 88% 0%, var(--glow-secondary), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 240px);
+}
+
+/* Serif headings */
+h1, h2, h3 {
+  font-family: var(--font-serif);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* =============================================================================
+   TAG COLOR CLASSES
+   ============================================================================= */
+
+.tag-green { --tag-color: var(--tag-green); }
+.tag-red { --tag-color: var(--tag-red); }
+.tag-blue { --tag-color: var(--tag-blue); }
+.tag-orange { --tag-color: var(--tag-orange); }
+.tag-purple { --tag-color: var(--tag-purple); }
+.tag-pink { --tag-color: var(--tag-pink); }
+.tag-cyan { --tag-color: var(--tag-cyan); }
+.tag-amber { --tag-color: var(--tag-amber); }
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-default);
+  color: var(--foreground);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tag-pill:hover {
+  border-color: var(--border-emphasis);
+  box-shadow: var(--shadow-sm);
+}
+
+.tag-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--tag-color, var(--accent-primary));
+}
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Card base (unified foundation for all card types) */
+.card-base {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--duration-normal) ease,
+              transform var(--duration-normal) var(--ease-snappy),
+              border-color var(--duration-normal) ease;
+}
+
+.card-base:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* =============================================================================
+   MOBILE-FIRST RESPONSIVE MASONRY
+   ============================================================================= */
+
+/* Mobile: single column */
+:root {
+  --masonry-columns: 1;
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 640px) {
+  :root {
+    --masonry-columns: 2;
+  }
+}
+
+/* Small desktop: 3 columns */
+@media (min-width: 1024px) {
+  :root {
+    --masonry-columns: 3;
+  }
+}
+
+/* Desktop: 4 columns */
+@media (min-width: 1280px) {
+  :root {
+    --masonry-columns: 4;
+  }
+}
+
+/* Wide desktop: 5 columns */
+@media (min-width: 1536px) {
+  :root {
+    --masonry-columns: 5;
+  }
+}
+
+/* =============================================================================
+   SURFACE SYSTEM & INTERACTION CLASSES
+   ============================================================================= */
+
+/* Tactile button - Standard CTA feel */
+.tactile-btn {
+  transition: transform 150ms var(--ease-spring),
+    box-shadow 150ms ease;
+}
+
+.tactile-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.tactile-btn:active {
+  transform: scale(0.97) translateY(0);
+  transition-duration: 80ms;
+}
+
+/* Subtle lift on hover */
+.hover-lift {
+  transition: transform 200ms var(--ease-out-expo),
+    box-shadow 200ms ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.surface-shell {
+  background: var(--surface-floating);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
+}
+
+.surface-card-elevated {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+}
+
+.surface-chip {
+  background: var(--surface-soft);
+  border: 1px solid transparent;
+}
+
+.surface-chip:hover {
+  background: var(--surface-hover);
+}
+
+.surface-chip-active {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.surface-input {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.surface-input:hover {
+  border-color: var(--border-emphasis);
+}
+
+.surface-input:focus-within {
+  border-color: var(--border-emphasis);
+  box-shadow: 0 0 0 1px var(--surface-accent), var(--shadow-lg);
+}
+
+/* Click ripple animation */
+@keyframes click-ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.click-ripple {
+  animation: click-ripple 400ms var(--ease-out-expo) forwards;
+}
+
+/* Bounce-in for selection feedback */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 200ms var(--ease-spring);
+}
+
+/* Pulse ring for active state */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 74, 0.4);
+  }
+
+  100% {
+    box-shadow: 0 0 0 4px rgba(255, 107, 74, 0);
+  }
+}
+
+.pulse-ring-active {
+  animation: pulse-ring 300ms ease-out;
+}
+
+/* =============================================================================
+   PHYSICS-BASED ANIMATION SYSTEM (Atomic UI)
+   ============================================================================= */
+
+/* Physics press - Tactile button feedback */
+.physics-press {
+  transition: transform var(--duration-fast) var(--ease-snappy),
+    box-shadow var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+}
+
+.physics-press:active {
+  transform: scale(0.98);
+  transition-duration: var(--duration-instant);
+}
+
+/* Elastic tap - Mobile tap with overshoot */
+.elastic-tap {
+  transition: transform var(--duration-fast) var(--ease-elastic);
+}
+
+.elastic-tap:active {
+  transform: scale(0.95);
+  transition-duration: var(--duration-instant);
+}
+
+/* Fade up animation - Content entrance */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up var(--duration-normal) var(--ease-snappy) forwards;
+}
+
+/* Staggered fade-up — reads --stagger-index from card wrapper inline style */
+.animate-fade-up-stagger {
+  opacity: 0;
+  animation: fade-up var(--duration-normal) var(--ease-snappy) forwards;
+  animation-delay: calc(var(--stagger-index, 0) * 20ms);
+}
+
+/* Scale in animation - Modal/tooltip entrance */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in var(--duration-fast) var(--ease-snappy) forwards;
+}
+
+/* Stagger children - Cascading list animations */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-up var(--duration-normal) var(--ease-snappy) forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+/* Physics pulse - Skeleton loading */
+@keyframes physics-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.02);
+  }
+}
+
+.physics-pulse {
+  animation: physics-pulse 2s var(--ease-gentle-spring) infinite;
+}
+
+/* =============================================================================
+   TOUCH TARGET UTILITIES
+   ============================================================================= */
+
+/* Ensure minimum touch target size on mobile */
+@media (max-width: 767px) {
+  .touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+
+  .touch-target-comfortable {
+    min-height: var(--touch-target-comfortable);
+    min-width: var(--touch-target-comfortable);
+  }
+}
+
+/* Touch target hitbox extension */
+.touch-hitbox::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/* =============================================================================
+   ATOMIC WEIGHT VISIBILITY CLASSES
+   ============================================================================= */
+
+/* Weight-based visibility (higher weight = more critical) */
+.atomic-weight-10 { } /* Always visible */
+.atomic-weight-9 { }  /* Always visible */
+.atomic-weight-8 { }  /* Always visible */
+.atomic-weight-7 { }  /* Hidden on xs (<=374px) */
+.atomic-weight-6 { }  /* Hidden on xs, sm */
+.atomic-weight-5 { }  /* Hidden on xs, sm */
+.atomic-weight-4 { }  /* Hidden on xs, sm, md */
+.atomic-weight-3 { }  /* Hidden on xs, sm, md */
+.atomic-weight-2 { }  /* Hidden on xs, sm, md, lg */
+
+@media (max-width: 374px) {
+  .atomic-weight-7,
+  .atomic-weight-6,
+  .atomic-weight-5,
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 375px) and (max-width: 639px) {
+  .atomic-weight-6,
+  .atomic-weight-5,
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+/* =============================================================================
+   FADE EDGE INDICATORS (for overflow scrolling)
+   ============================================================================= */
+
+.fade-edge-left {
+  mask-image: linear-gradient(to right, transparent, black 24px);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px);
+}
+
+.fade-edge-right {
+  mask-image: linear-gradient(to left, transparent, black 24px);
+  -webkit-mask-image: linear-gradient(to left, transparent, black 24px);
+}
+
+.fade-edge-both {
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
+/* =============================================================================
+   MOMENTUM SCROLL (for touch devices)
+   ============================================================================= */
+
+.momentum-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+}
+
+/* =============================================================================
+   ANALYZING INDICATOR ANIMATIONS
+   ============================================================================= */
+
+/* Fast shimmer for analyzing indicator text */
+@keyframes shimmer-fast {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-fast {
+  animation: shimmer-fast 2s infinite;
+}
+
+/* Analyzing indicator base styling */
+.analyzing-indicator {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient border effect */
+.analyzing-indicator::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  border-radius: inherit;
+  opacity: 0;
+  animation: analyzing-glow 2s ease-in-out infinite;
+}
+
+@keyframes analyzing-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(100%);
+  }
+}
+
+/* Analyzing text animation */
+.analyzing-text {
+  display: inline-block;
+}
+
+.analyzing-text::after {
+  content: '...';
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: analyzing-dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes analyzing-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+/* =============================================================================
+   SERENDIPITY SLIDE ANIMATIONS
+   ============================================================================= */
+
+/* Slide in from right (next card) */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 300ms var(--ease-snappy) forwards;
+}
+
+/* Slide in from left (previous card) */
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 300ms var(--ease-snappy) forwards;
+}
+
+/* Bounce-short for save button */
+@keyframes bounce-short {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-bounce-short {
+  animation: bounce-short 0.6s ease-in-out infinite;
+}
+
+/* Custom scrollbar for card detail modal */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* =============================================================================
+   ADD MODAL ANIMATIONS (Notion-like minimal polish)
+   ============================================================================= */
+
+/* Modal entrance - subtle scale + fade + lift */
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modal-enter 200ms var(--ease-snappy) forwards;
+}
+
+/* Backdrop fade in */
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-backdrop-enter {
+  animation: backdrop-enter 150ms ease-out forwards;
+}
+
+/* Subtle shake for error toast */
+@keyframes subtle-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.animate-subtle-shake {
+  animation: subtle-shake 400ms ease-out;
+}
+
+/* Badge pulse on appear */
+@keyframes badge-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 250ms var(--ease-snappy) forwards;
+}
+
+/* =============================================================================
+   AI SUMMARY MERGE SEPARATOR
+   ============================================================================= */
+
+/* For prose content with --- separators rendered as <hr> */
+.prose-summary hr {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 1rem 0;
+  opacity: 0.6;
+}
+
+/* Card size slider styling */
+.card-size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.card-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease;
+}
+
+.card-size-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.card-size-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+}
+
+.card-size-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease;
+}
+
+.card-size-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+/* =============================================================================
+   MOBILE TOOLBAR GRID (3-element layout < 768px)
+   ============================================================================= */
+
+@media (max-width: 767px) {
+  .mobile-toolbar-grid {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    align-items: center;
+  }
+  .mobile-col-count  { grid-column: 1 / 8; }
+  .mobile-col-slider { grid-column: 8 / 16; display: flex; justify-content: center; }
+  .mobile-col-toggle { grid-column: 16 / 21; display: flex; justify-content: flex-end; }
+}
