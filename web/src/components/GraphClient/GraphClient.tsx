@@ -226,8 +226,11 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// RENDER
 	// -------------------------------------------------------------------------
 
+	// Don't render the graph until we have real measurements
+	const isReady = dimensions.width > 10 && dimensions.height > 10;
+
 	return (
-		<div ref={containerRef} className="absolute inset-0">
+		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
 			<GraphFilterPanel
 				tagFilter=""
 				onTagFilterChange={() => {}}
@@ -238,8 +241,13 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				onReset={handleReset}
 			/>
 
+			{!isReady ? (
+				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
+					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+				</div>
+			) : (
 			<Suspense fallback={
-				<div className="flex-1 flex items-center justify-center min-h-[60vh]">
+				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
 					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
 				</div>
 			}>
@@ -265,6 +273,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					d3VelocityDecay={0.3}
 				/>
 			</Suspense>
+			)}
 
 			<GraphTooltip node={hoveredNode} position={tooltipPos} />
 		</div>
