@@ -208,8 +208,11 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const linkColor = useCallback(
 		(link: FGLink) => {
 			const weight = link.weight ?? 1;
-			const opacity = 0.1 + (weight / maxWeight) * 0.4;
-			return `rgba(150, 150, 150, ${opacity})`;
+			const t = 0.1 + (weight / maxWeight) * 0.4;
+			// react-force-graph-2d requires hex colors (rgba crashes hexIndex)
+			const v = Math.round(255 - t * 105); // 255 (light) → 150 (darker)
+			const hex = v.toString(16).padStart(2, '0');
+			return `#${hex}${hex}${hex}`;
 		},
 		[maxWeight]
 	);
@@ -267,7 +270,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					linkWidth={linkWidth}
 					onNodeHover={handleNodeHover}
 					onNodeClick={handleNodeClick}
-					backgroundColor="transparent"
+					backgroundColor="#00000000"
 					cooldownTicks={100}
 					d3AlphaDecay={0.02}
 					d3VelocityDecay={0.3}
