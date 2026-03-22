@@ -21351,17 +21351,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-server-dom-webpack@npm:19.0.0-rc-8269d55d-20240802":
-  version: 19.0.0-rc-8269d55d-20240802
-  resolution: "react-server-dom-webpack@npm:19.0.0-rc-8269d55d-20240802"
+"react-server-dom-webpack@npm:19.1.0":
+  version: 19.1.0
+  resolution: "react-server-dom-webpack@npm:19.1.0"
   dependencies:
     acorn-loose: "npm:^8.3.0"
     neo-async: "npm:^2.6.1"
+    webpack-sources: "npm:^3.2.0"
   peerDependencies:
-    react: 19.0.0-rc-8269d55d-20240802
-    react-dom: 19.0.0-rc-8269d55d-20240802
+    react: ^19.1.0
+    react-dom: ^19.1.0
     webpack: ^5.59.0
-  checksum: 10c0/b483cecdd77d0ba1aada0b00d8cede2fad4d010c97022ad859e2094bb3aa9cd5c16c5267806ef4fa21777250c4bb6ae3c9b0f4c6578b24d1af9f8bb23e172d74
+  checksum: 10c0/ba423b34eabc50fa7d6ae5738878f9fd93ee6d6720975626ed71e3db4c0c8601a2ef575c8b1f91436090add9b93a182ba3561676f6c627e79655da4327d389e5
   languageName: node
   linkType: hard
 
@@ -25008,6 +25009,13 @@ __metadata:
   version: 7.0.0
   resolution: "webidl-conversions@npm:7.0.0"
   checksum: 10c0/228d8cb6d270c23b0720cb2d95c579202db3aaf8f633b4e9dd94ec2000a04e7e6e43b76a94509cdb30479bd00ae253ab2371a2da9f81446cc313f89a4213a2c4
+  languageName: node
+  linkType: hard
+
+"webpack-sources@npm:^3.2.0":
+  version: 3.3.4
+  resolution: "webpack-sources@npm:3.3.4"
+  checksum: 10c0/94a42508531338eb41939cf1d48a4a8a6db97f3a47e5453cff2133a68d3169ca779d4bcbe9dfed072ce16611959eba1e16f085bc2dc56714e1a1c1783fd661a3
   languageName: node
   linkType: hard
 
