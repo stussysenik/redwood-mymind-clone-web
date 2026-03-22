@@ -5,13 +5,16 @@
  * Nodes are cards, edges connect cards that share tags.
  * Uses react-force-graph-2d for WebGL-accelerated rendering.
  *
+ * Accepts pre-built graph data (nodes + links) as props — the GraphQL query
+ * in GraphCell handles data fetching, so this component is purely presentational.
+ *
  * @fileoverview Client-side knowledge graph visualization
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
-import { buildGraphData, type GraphData, type GraphNode } from 'src/lib/graph';
+import type { GraphNode } from 'src/lib/graph';
 import { GraphFilterPanel } from 'src/components/GraphFilterPanel/GraphFilterPanel';
-import { GraphTooltip } from 'src/components/GraphTooltip';
+import { GraphTooltip } from 'src/components/GraphTooltip/GraphTooltip';
 import { Loader2 } from 'lucide-react';
 
 const ForceGraph2D = lazy(() => import('react-force-graph-2d'));
@@ -20,13 +23,27 @@ const ForceGraph2D = lazy(() => import('react-force-graph-2d'));
 // TYPES
 // =============================================================================
 
-interface ApiCard {
+interface GraphClientNode {
 	id: string;
-	title: string | null;
-	image_url: string | null;
+	title?: string | null;
+	imageUrl?: string | null;
 	type: string;
-	tags: string[];
-	metadata: { colors?: string[] } | null;
+	tags: string[] | readonly string[];
+	colors?: string[] | readonly string[] | null;
+	connections: number;
+	color?: string;
+}
+
+interface GraphClientLink {
+	source: string;
+	target: string;
+	sharedTags: string[] | readonly string[];
+	weight: number;
+}
+
+interface GraphClientProps {
+	nodes: readonly GraphClientNode[];
+	links: readonly GraphClientLink[];
 }
 
 // react-force-graph augments node/link objects at runtime with positional data.
@@ -37,17 +54,24 @@ type FGNode = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FGLink = any;
 
+// Map from card type to a default node colour
+const TYPE_COLORS: Record<string, string> = {
+	article: '#3B82F6',
+	social: '#1DA1F2',
+	video: '#EF4444',
+	note: '#F59E0B',
+	image: '#8B5CF6',
+	book: '#10B981',
+	movie: '#F97316',
+	product: '#6B7280',
+};
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
 
-export function GraphClient() {
-	const [cards, setCards] = useState<ApiCard[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-
-	// Filter state
-	const [tagFilter, setTagFilter] = useState('');
+export function GraphClient({ nodes, links }: GraphClientProps) {
+	// Filter state (client-side post-filter on top of the server data)
 	const [minWeight, setMinWeight] = useState(1);
 
 	// Tooltip state
@@ -56,38 +80,6 @@ export function GraphClient() {
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-
-	// -------------------------------------------------------------------------
-	// FETCH CARDS
-	// -------------------------------------------------------------------------
-
-	useEffect(() => {
-		async function fetchCards() {
-			try {
-				setLoading(true);
-				const params = new URLSearchParams();
-				if (tagFilter) params.set('tag', tagFilter);
-
-				// TODO: Replace with GraphQL query for graph data
-				const res = await fetch(`/api/graph?${params.toString()}`);
-				if (!res.ok) {
-					const body = await res.json().catch(() => ({}));
-					throw new Error(body.error ?? `HTTP ${res.status}`);
-				}
-
-				const json = await res.json();
-				setCards(json.cards ?? []);
-				setError(null);
-			} catch (err) {
-				console.error('[GraphClient] Fetch error:', err);
-				setError(err instanceof Error ? err.message : 'Failed to load graph data');
-			} finally {
-				setLoading(false);
-			}
-		}
-
-		fetchCards();
-	}, [tagFilter]);
 
 	// -------------------------------------------------------------------------
 	// RESPONSIVE SIZING
@@ -109,20 +101,21 @@ export function GraphClient() {
 	}, []);
 
 	// -------------------------------------------------------------------------
-	// BUILD GRAPH DATA
+	// BUILD GRAPH DATA (add colours, apply client-side minWeight filter)
 	// -------------------------------------------------------------------------
 
-	const graphData: GraphData = useMemo(() => {
-		const cardInputs = cards.map((c) => ({
-			id: c.id,
-			title: c.title,
-			imageUrl: c.image_url,
-			type: c.type,
-			tags: c.tags,
-			metadata: c.metadata,
+	const graphData = useMemo(() => {
+		// Assign colour to each node (prefer first entry in `colors`, fall back to type colour)
+		const colouredNodes = nodes.map((n) => ({
+			...n,
+			color: n.colors?.[0] ?? TYPE_COLORS[n.type] ?? '#6B7280',
 		}));
-		return buildGraphData(cardInputs, minWeight);
-	}, [cards, minWeight]);
+
+		// Apply client-side minimum-weight filter
+		const filteredLinks = links.filter((l) => l.weight >= minWeight);
+
+		return { nodes: colouredNodes, links: filteredLinks };
+	}, [nodes, links, minWeight]);
 
 	// Compute max weight for edge opacity scaling
 	const maxWeight = useMemo(
@@ -138,8 +131,6 @@ export function GraphClient() {
 		(node: FGNode | null, _previousNode: FGNode | null) => {
 			if (node) {
 				setHoveredNode(node as GraphNode);
-				// Use the node's screen coordinates from the canvas
-				// The tooltip will follow the mouse via the global position
 				setTooltipPos({ x: (node.__screenX ?? 0) as number, y: (node.__screenY ?? 0) as number });
 			} else {
 				setHoveredNode(null);
@@ -161,7 +152,6 @@ export function GraphClient() {
 	}, [hoveredNode]);
 
 	const handleNodeClick = useCallback((node: FGNode) => {
-		// Navigate to the card in the main view (scroll to or open detail)
 		window.open(`/?highlight=${node.id}`, '_self');
 	}, []);
 
@@ -211,7 +201,6 @@ export function GraphClient() {
 	}, []);
 
 	const handleReset = useCallback(() => {
-		setTagFilter('');
 		setMinWeight(1);
 	}, []);
 
@@ -219,47 +208,11 @@ export function GraphClient() {
 	// RENDER
 	// -------------------------------------------------------------------------
 
-	if (loading) {
-		return (
-			<div className="flex-1 flex items-center justify-center min-h-[60vh]">
-				<div className="flex flex-col items-center gap-3">
-					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
-					<p className="text-sm text-[var(--foreground-muted)]">Building knowledge graph...</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<div className="flex-1 flex items-center justify-center min-h-[60vh]">
-				<div className="text-center">
-					<p className="text-sm text-red-500 mb-2">Failed to load graph</p>
-					<p className="text-xs text-[var(--foreground-muted)]">{error}</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (graphData.nodes.length === 0) {
-		return (
-			<div className="flex-1 flex items-center justify-center min-h-[60vh]">
-				<div className="text-center max-w-sm">
-					<p className="text-lg font-medium text-[var(--foreground)] mb-2">No connections yet</p>
-					<p className="text-sm text-[var(--foreground-muted)]">
-						Cards need at least {minWeight} shared tag{minWeight > 1 ? 's' : ''} to form connections.
-						Try lowering the minimum weight or adding more tagged cards.
-					</p>
-				</div>
-			</div>
-		);
-	}
-
 	return (
-		<div ref={containerRef} className="relative flex-1 w-full" style={{ height: 'calc(100vh - 120px)' }}>
+		<div ref={containerRef} className="absolute inset-0">
 			<GraphFilterPanel
-				tagFilter={tagFilter}
-				onTagFilterChange={setTagFilter}
+				tagFilter=""
+				onTagFilterChange={() => {}}
 				minWeight={minWeight}
 				onMinWeightChange={setMinWeight}
 				nodeCount={graphData.nodes.length}

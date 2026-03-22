@@ -7,17 +7,39 @@
  * @fileoverview Reusable tag display with colored indicators
  */
 
-// Color palette for tags - cycles through these colors
-const TAG_COLORS = [
-  '#10B981', // emerald/teal
-  '#3B82F6', // blue
-  '#8B5CF6', // purple
-  '#F97316', // orange
-  '#EC4899', // pink
-  '#14B8A6', // cyan
-  '#EAB308', // yellow
-  '#EF4444', // red
-];
+/**
+ * Pastel color palette for AI-generated tags.
+ *
+ * Each entry pairs a soft background with a legible darker text color.
+ * The palette is designed for visual traceability in a card grid: the same
+ * tag name always resolves to the same color via `getTagColor()`.
+ */
+export const TAG_COLORS = [
+  { bg: '#E8F5E9', text: '#2E7D32', dot: '#10B981' }, // green
+  { bg: '#FFF3E0', text: '#E65100', dot: '#F97316' }, // orange
+  { bg: '#E3F2FD', text: '#1565C0', dot: '#3B82F6' }, // blue
+  { bg: '#FCE4EC', text: '#C62828', dot: '#EC4899' }, // red/pink
+  { bg: '#F3E5F5', text: '#7B1FA2', dot: '#8B5CF6' }, // purple
+  { bg: '#E0F7FA', text: '#00838F', dot: '#14B8A6' }, // cyan
+  { bg: '#FFF8E1', text: '#F57F17', dot: '#EAB308' }, // amber
+  { bg: '#EFEBE9', text: '#4E342E', dot: '#EF4444' }, // warm brown
+]
+
+/**
+ * Deterministic hash-based color assignment for tags.
+ *
+ * Uses a simple string hash (djb2-like) so the same tag name always
+ * resolves to the same color across every component in the app.
+ * This is critical for visual traceability — users should be able to
+ * spot "machine-learning" (always purple, say) at a glance.
+ */
+export function getTagColor(tag: string) {
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length]
+}
 
 interface TagDisplayProps {
   tags: string[];
@@ -36,19 +58,23 @@ export function TagDisplay({ tags, maxTags = 5, className = '' }: TagDisplayProp
 
   return (
     <div data-testid="tag-display" className={`flex flex-wrap gap-x-3 gap-y-1.5 ${className}`}>
-      {displayTags.map((tag, index) => (
-        <span
-          key={tag}
-          data-testid="tag-item"
-          className="flex items-center gap-1 text-sm sm:text-xs text-[var(--foreground-muted)]"
-        >
+      {displayTags.map((tag) => {
+        const color = getTagColor(tag)
+        return (
           <span
-            className="w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0"
-            style={{ backgroundColor: TAG_COLORS[index % TAG_COLORS.length] }}
-          />
-          {tag}
-        </span>
-      ))}
+            key={tag}
+            data-testid="tag-item"
+            className="flex items-center gap-1 text-sm sm:text-xs"
+            style={{ color: color.text }}
+          >
+            <span
+              className="w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: color.dot }}
+            />
+            {tag}
+          </span>
+        )
+      })}
     </div>
   );
 }

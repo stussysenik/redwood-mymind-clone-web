@@ -4,6 +4,7 @@ import type { CardsQuery, CardsQueryVariables } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
+import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
 import type { Card } from 'src/lib/types'
 
 export const QUERY = gql`
@@ -252,21 +253,24 @@ export const Success = ({
                         marginTop: 4,
                       }}
                     >
-                      {card.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            fontSize: 10,
-                            padding: '4px 8px',
-                            borderRadius: 9999,
-                            backgroundColor: 'var(--surface-soft)',
-                            color: 'var(--foreground-muted)',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                      {card.tags.slice(0, 3).map((tag) => {
+                        const color = getTagColor(tag)
+                        return (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: 10,
+                              padding: '4px 8px',
+                              borderRadius: 9999,
+                              backgroundColor: color.bg,
+                              color: color.text,
+                              lineHeight: 1,
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

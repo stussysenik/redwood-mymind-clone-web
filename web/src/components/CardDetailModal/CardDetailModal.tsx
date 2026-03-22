@@ -40,6 +40,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { navigate } from '@redwoodjs/router'
 import { useMutation } from '@redwoodjs/web'
 
+import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
 import { useMediaQuery } from 'src/hooks/useMediaQuery'
 import { useSwipe } from 'src/hooks/useSwipe'
 import type { Card } from 'src/lib/types'
@@ -1476,35 +1477,45 @@ export function CardDetailModal({
                   </button>
                 )}
 
-                {tags.map((tag) => (
-                  <div
-                    key={tag}
-                    className="group flex min-h-[44px] items-center rounded-full border border-gray-200 bg-gray-50 pr-1 text-sm font-medium text-gray-600 transition-colors hover:border-[var(--accent-primary)] hover:bg-gray-100"
-                  >
-                    <button
-                      onClick={() => {
-                        const params = new URLSearchParams()
-                        params.set('q', `#${tag}`)
-                        navigate('/?' + params.toString())
-                        onClose()
+                {tags.map((tag) => {
+                  const color = getTagColor(tag)
+                  return (
+                    <div
+                      key={tag}
+                      className="group flex min-h-[44px] items-center rounded-full border pr-1 text-sm font-medium transition-colors hover:border-[var(--accent-primary)]"
+                      style={{
+                        backgroundColor: color.bg,
+                        borderColor: color.bg,
+                        color: color.text,
                       }}
-                      className="rounded-full px-4 py-2.5 text-left hover:text-[var(--accent-primary)] active:bg-gray-200"
-                      type="button"
                     >
-                      {tag}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRemoveTag(tag)
-                      }}
-                      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
-                      aria-label={`Remove tag ${tag}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams()
+                          params.set('q', `#${tag}`)
+                          navigate('/?' + params.toString())
+                          onClose()
+                        }}
+                        className="rounded-full px-4 py-2.5 text-left hover:opacity-80"
+                        type="button"
+                        style={{ color: color.text }}
+                      >
+                        {tag}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveTag(tag)
+                        }}
+                        className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
+                        style={{ color: color.text }}
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 

@@ -1,6 +1,8 @@
 import type { GraphDataQuery, GraphDataQueryVariables } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
+import { GraphClient } from 'src/components/GraphClient/GraphClient'
+
 export const QUERY = gql`
   query GraphDataQuery($spaceId: String, $tag: String, $minWeight: Int) {
     graphData(spaceId: $spaceId, tag: $tag, minWeight: $minWeight) {
@@ -74,25 +76,12 @@ export const Success = ({
       className="rounded-xl overflow-hidden relative"
       style={{
         height: 'calc(100vh - var(--header-height) - 120px)',
-        minHeight: '400px',
+        minHeight: '70vh',
         backgroundColor: 'var(--surface-card)',
         border: '1px solid var(--border-default)',
       }}
     >
-      {/* GraphClient (react-force-graph-2d) will be rendered here */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-center">
-          <p
-            className="font-serif text-lg mb-1"
-            style={{ color: 'var(--foreground)' }}
-          >
-            {nodes.length} nodes, {links.length} connections
-          </p>
-          <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            Knowledge graph visualization
-          </p>
-        </div>
-      </div>
+      <GraphClient nodes={nodes} links={links} />
     </div>
   )
 }
