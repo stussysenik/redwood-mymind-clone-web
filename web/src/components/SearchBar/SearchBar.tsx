@@ -7,7 +7,7 @@
  * @fileoverview Search input with mymind-inspired styling
  */
 
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { navigate, useLocation } from '@redwoodjs/router';
 import { Search, X, PackagePlus, Loader2 } from 'lucide-react';
 import { useDebounce } from 'src/hooks/useDebounce';
@@ -42,6 +42,7 @@ export function SearchBar({
 	const [query, setQuery] = useState(initialQuery);
 	const [isFocused, setIsFocused] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	const debouncedQuery = useDebounce(query, 350);
 	const currentUrlQuery = searchParams.get('q') ?? '';
@@ -62,14 +63,14 @@ export function SearchBar({
 		return nextQuery ? `?${nextQuery}` : '/';
 	}, [query, searchParamsString]);
 
-	// Sync local state when URL changes externally (e.g. tag click)
+	// Sync local state when URL changes externally (e.g. tag click, back button).
+	// Only depends on currentUrlQuery — NOT on query, to avoid resetting input while typing.
 	useEffect(() => {
-		// Only update if different AND we aren't focused (to avoid overwriting while typing)
-		// This prevents the race condition where debounced URL update reverts local state
-		if (!isFocused && currentUrlQuery !== query) {
+		if (!isFocused) {
 			setQuery(currentUrlQuery);
 		}
-	}, [currentUrlQuery, isFocused, query]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [currentUrlQuery]);
 
 	// Update URL when debounced query changes
 	useEffect(() => {
@@ -90,6 +91,10 @@ export function SearchBar({
 		startTransition(() => {
 			navigate(nextQuery ? `?${nextQuery}` : '/');
 		});
+
+		// Redwood's router steals focus via document.body.focus() on query param changes.
+		// Reclaim focus so the user can keep typing.
+		requestAnimationFrame(() => inputRef.current?.focus());
 
 		onSearch?.(debouncedQuery);
 	}, [debouncedQuery, currentUrlQuery, hasLegacyMode, searchParamsString, onSearch]);
@@ -173,6 +178,7 @@ export function SearchBar({
 
 				{/* Input Field */}
 				<input
+					ref={inputRef}
 					type="text"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}

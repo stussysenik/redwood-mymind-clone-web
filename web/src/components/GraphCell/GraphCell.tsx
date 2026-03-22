@@ -27,11 +27,10 @@ export const QUERY = gql`
 
 export const Loading = () => (
   <div
-    className="rounded-xl flex items-center justify-center animate-pulse"
+    className="flex items-center justify-center"
     style={{
-      height: 'calc(100vh - var(--header-height) - 120px)',
-      minHeight: '400px',
-      backgroundColor: 'var(--shimmer-base)',
+      height: 'calc(100vh - var(--header-height))',
+      backgroundColor: 'var(--background)',
     }}
   >
     <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
@@ -42,12 +41,10 @@ export const Loading = () => (
 
 export const Empty = () => (
   <div
-    className="rounded-xl flex items-center justify-center"
+    className="flex items-center justify-center"
     style={{
-      height: 'calc(100vh - var(--header-height) - 120px)',
-      minHeight: '400px',
-      backgroundColor: 'var(--surface-card)',
-      border: '1px solid var(--border-default)',
+      height: 'calc(100vh - var(--header-height))',
+      backgroundColor: 'var(--background)',
     }}
   >
     <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
@@ -73,12 +70,10 @@ export const Success = ({
 
   return (
     <div
-      className="rounded-xl overflow-hidden relative"
+      className="overflow-hidden relative"
       style={{
-        height: 'calc(100vh - var(--header-height) - 120px)',
-        minHeight: '70vh',
-        backgroundColor: 'var(--surface-card)',
-        border: '1px solid var(--border-default)',
+        height: 'calc(100vh - var(--header-height))',
+        backgroundColor: 'var(--background)',
       }}
     >
       <GraphClient nodes={nodes} links={links} />

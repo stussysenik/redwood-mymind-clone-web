@@ -6,7 +6,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "rootDirs": [
       "./src",
       "../.redwood/types/mirror/web/src",

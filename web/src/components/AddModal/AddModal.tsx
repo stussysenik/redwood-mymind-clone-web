@@ -8,7 +8,7 @@
  * @fileoverview Modal for adding new cards (Smart Input)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp } from 'lucide-react';
 import { useMutation } from '@redwoodjs/web';
 import { getPlatformInfo } from 'src/lib/platforms';
@@ -126,39 +126,6 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		}
 	}, [isOpen]);
 
-	// Keyboard & Paste
-	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onClose();
-			// CMD+Enter to save
-			if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-				handleSubmit();
-			}
-		};
-
-		const handlePaste = (e: ClipboardEvent) => {
-			const items = e.clipboardData?.items;
-			if (items) {
-				for (let i = 0; i < items.length; i++) {
-					if (items[i].type.indexOf('image') !== -1) {
-						const file = items[i].getAsFile();
-						if (file) handleImageFile(file);
-						e.preventDefault(); // Prevent pasting binary text
-					}
-				}
-			}
-		};
-
-		if (isOpen) {
-			document.addEventListener('keydown', handleKeyDown);
-			document.addEventListener('paste', handlePaste);
-			return () => {
-				document.removeEventListener('keydown', handleKeyDown);
-				document.removeEventListener('paste', handlePaste);
-			};
-		}
-	}, [isOpen, content, imageFile, imagePreview]); // dependencies for callbacks
-
 	const handleImageFile = (file: File) => {
 		if (!file.type.startsWith('image/')) {
 			setError('Please select an image file');
@@ -184,7 +151,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		if (file) handleImageFile(file);
 	};
 
-	const handleSubmit = async () => {
+	const handleSubmit = useCallback(async () => {
 		if (isSubmitting) return;
 
 		// Corrections before submitting
@@ -208,7 +175,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 					setBatchProgress({ current: i + 1, total: links.length });
 					try {
 						const result = await saveCard({
-							variables: { input: { url: links[i], type: 'auto' } },
+							variables: { input: { url: links[i], type: 'website' } },
 						});
 						if (result.data?.saveCard?.id) {
 							successCount++;
@@ -246,11 +213,11 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 					imageUrl: imagePreview,
 				};
 			} else if (mode === 'link' || (mode === 'auto' && /^(http|\w+\.)/.test(finalContent))) {
-				// Assume link
+				// Assume link — use 'website' as default type (DB has a type check constraint)
 				if (!/^https?:\/\//i.test(finalContent)) {
 					finalContent = 'https://' + finalContent;
 				}
-				payload = { url: finalContent, type: 'auto' };
+				payload = { url: finalContent, type: 'website' };
 			} else {
 				// Default to note
 				const lines = finalContent.split('\n');
@@ -313,7 +280,40 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setIsSubmitting(false);
 			setBatchProgress(null);
 		}
-	};
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, enrichCard, onClose]);
+
+	// Keyboard & Paste — must be declared AFTER handleSubmit (const with useCallback isn't hoisted)
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') onClose();
+			if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+				handleSubmit();
+			}
+		};
+
+		const handlePaste = (e: ClipboardEvent) => {
+			const items = e.clipboardData?.items;
+			if (items) {
+				for (let i = 0; i < items.length; i++) {
+					if (items[i].type.indexOf('image') !== -1) {
+						const file = items[i].getAsFile();
+						if (file) handleImageFile(file);
+						e.preventDefault();
+					}
+				}
+			}
+		};
+
+		if (isOpen) {
+			document.addEventListener('keydown', handleKeyDown);
+			document.addEventListener('paste', handlePaste);
+			return () => {
+				document.removeEventListener('keydown', handleKeyDown);
+				document.removeEventListener('paste', handlePaste);
+			};
+		}
+	}, [isOpen, onClose, handleSubmit]);
 
 	if (!isOpen) return null;
 

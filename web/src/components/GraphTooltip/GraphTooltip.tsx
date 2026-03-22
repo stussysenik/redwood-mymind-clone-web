@@ -1,26 +1,17 @@
 /**
- * MyMind Clone - Graph Tooltip
+ * Graph Tooltip — Shows relationships, not just metadata
  *
- * Positioned tooltip that appears near a hovered node in the graph view.
- * Shows the card title, type badge, tags, and connection count.
- *
- * @fileoverview Tooltip overlay for graph node hover
+ * Tufte principle: show the data that matters. For a graph, that means
+ * showing what a node is connected TO, not just its own properties.
  */
 
 import type { GraphNode } from 'src/lib/graph';
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
 interface GraphTooltipProps {
 	node: GraphNode | null;
 	position: { x: number; y: number } | null;
+	connectedNames?: string[];
 }
-
-// =============================================================================
-// TYPE COLOR MAP (matches graph.ts palette)
-// =============================================================================
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
 	article: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -33,11 +24,7 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
 
 const DEFAULT_BADGE = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
 
-// =============================================================================
-// COMPONENT
-// =============================================================================
-
-export function GraphTooltip({ node, position }: GraphTooltipProps) {
+export function GraphTooltip({ node, position, connectedNames = [] }: GraphTooltipProps) {
 	if (!node || !position) return null;
 
 	const badgeClass = TYPE_BADGE_COLORS[node.type] ?? DEFAULT_BADGE;
@@ -48,7 +35,7 @@ export function GraphTooltip({ node, position }: GraphTooltipProps) {
 			style={{
 				left: position.x + 12,
 				top: position.y - 8,
-				maxWidth: 280,
+				maxWidth: 300,
 			}}
 		>
 			<div className="surface-shell rounded-xl px-3 py-2.5 shadow-lg border border-[var(--border-subtle)]">
@@ -57,7 +44,7 @@ export function GraphTooltip({ node, position }: GraphTooltipProps) {
 					{node.title}
 				</p>
 
-				{/* Type badge + connection count */}
+				{/* Type + connections */}
 				<div className="flex items-center gap-2 mb-1.5">
 					<span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${badgeClass}`}>
 						{node.type}
@@ -67,10 +54,32 @@ export function GraphTooltip({ node, position }: GraphTooltipProps) {
 					</span>
 				</div>
 
-				{/* Tags */}
+				{/* Connected nodes — the key insight: show relationships */}
+				{connectedNames.length > 0 && (
+					<div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
+						<p className="text-[10px] font-medium text-[var(--foreground-muted)] mb-1">
+							Connected to
+						</p>
+						{connectedNames.map((name, i) => (
+							<p
+								key={i}
+								className="text-[11px] text-[var(--foreground)] truncate leading-relaxed"
+							>
+								{name}
+							</p>
+						))}
+						{node.connections > 3 && (
+							<p className="text-[10px] text-[var(--foreground-muted)] mt-0.5">
+								+{node.connections - 3} more
+							</p>
+						)}
+					</div>
+				)}
+
+				{/* Tags — compact */}
 				{node.tags.length > 0 && (
-					<div className="flex flex-wrap gap-1">
-						{node.tags.slice(0, 5).map((tag) => (
+					<div className="flex flex-wrap gap-1 mt-2">
+						{node.tags.slice(0, 4).map((tag) => (
 							<span
 								key={tag}
 								className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-accent)] text-[var(--foreground-muted)]"
@@ -78,9 +87,9 @@ export function GraphTooltip({ node, position }: GraphTooltipProps) {
 								#{tag}
 							</span>
 						))}
-						{node.tags.length > 5 && (
+						{node.tags.length > 4 && (
 							<span className="text-[10px] text-[var(--foreground-muted)]">
-								+{node.tags.length - 5}
+								+{node.tags.length - 4}
 							</span>
 						)}
 					</div>
