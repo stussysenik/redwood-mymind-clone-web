@@ -1348,65 +1348,7 @@ export function CardDetailModal({
               </div>
             </div>
 
-            {/* AI Enrichment Badge */}
-            {!card.metadata.processing && enrichmentStage && (
-              <div
-                className={`mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm animate-in fade-in ${enrichmentTone}`}
-              >
-                <div className="flex items-center gap-2">
-                  {hasFallbackEnrichment ? (
-                    <AlertTriangle className="h-4 w-4" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  <div className="flex flex-col">
-                    <span className="font-medium">{enrichmentLabel}</span>
-                    <span className="text-xs opacity-80">
-                      {card.metadata.enrichmentSource || 'mixed'} &bull; tags{' '}
-                      {card.metadata.tagsSource || 'unknown'} &bull; summary{' '}
-                      {card.metadata.summarySource || 'unknown'}
-                    </span>
-                  </div>
-                </div>
-                {typeof enrichmentConfidence === 'number' && (
-                  <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-gray-700">
-                    {Math.round(enrichmentConfidence * 100)}%
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* AI Processing / Failure Indicator */}
-            {(card.metadata.processing || card.metadata.enrichmentError) && (
-              <AIThinkingIndicator
-                createdAt={card.createdAt}
-                isReAnalyzing={isReAnalyzing}
-                hasFailed={!!card.metadata.enrichmentError}
-                retryCount={retryCount}
-                onRetry={handleReAnalyze}
-                enrichmentTiming={card.metadata.enrichmentTiming}
-                onManual={async () => {
-                  setIsEditingSummary(true)
-                  setSummaryExpanded(true)
-
-                  const updated = {
-                    ...card.metadata,
-                    processing: false,
-                    enrichmentError: null,
-                  }
-                  try {
-                    await updateCard({
-                      variables: {
-                        id: card.id,
-                        input: { metadata: updated },
-                      },
-                    })
-                  } catch (e) {
-                    console.error(e)
-                  }
-                }}
-              />
-            )}
+            {/* Silently handle processing — no error banners shown to user */}
 
             {/* AI Summary Section - Editable with Comfortable Reading */}
             {(card.metadata.summary ||
@@ -1483,19 +1425,7 @@ export function CardDetailModal({
                 </div>
               )}
 
-              {/* CTA banner for cards that need analysis (fallback/0 tags, not currently processing) */}
-              {!isReAnalyzing && (hasFallbackEnrichment || tags.length === 0) && (
-                <button
-                  onClick={handleReAnalyze}
-                  className="mb-3 w-full flex items-center gap-2.5 rounded-xl border border-dashed border-orange-300 bg-orange-50/50 px-4 py-3 text-left text-sm transition-colors hover:bg-orange-50 hover:border-orange-400"
-                >
-                  <Sparkles className="w-4 h-4 text-[var(--accent-primary)] flex-shrink-0" />
-                  <div>
-                    <span className="font-medium text-orange-800">Re-analyze this card</span>
-                    <p className="text-xs text-orange-600 mt-0.5">Generate tags, summary, and classification with AI</p>
-                  </div>
-                </button>
-              )}
+              {/* Re-analyze is available via the bottom action bar button */}
               <div className="flex flex-wrap gap-1.5 w-full pb-1">
                 {/* Shimmer placeholders while processing */}
                 {isReAnalyzing && tags.length === 0 && (

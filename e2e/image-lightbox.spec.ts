@@ -1,58 +1,66 @@
 import { test, expect } from '@playwright/test'
 
+async function login(page) {
+  const email = process.env.E2E_EMAIL
+  const password = process.env.E2E_PASSWORD
+  if (!email || !password) {
+    test.skip(true, 'E2E_EMAIL and E2E_PASSWORD env vars required')
+    return
+  }
+  await page.goto('/login')
+  await page.fill('input[type="email"]', email)
+  await page.fill('input[type="password"]', password)
+  await page.click('button:has-text("Sign In")')
+  await page.waitForURL('/', { timeout: 10000 })
+}
+
 test.describe('Image Lightbox', () => {
-  test('lightbox opens on image click in card detail', async ({ page }) => {
-    await page.goto('/')
+  test.beforeEach(async ({ page }) => {
+    await login(page)
     await page.waitForLoadState('networkidle')
+  })
 
-    // Click the first card that has an image
-    const card = page.locator('[data-testid="card-item"]').first()
-    if (await card.isVisible()) {
-      await card.click()
+  test('lightbox opens on image click in card detail', async ({ page }) => {
+    // Click the first card image to open detail modal
+    const cardImage = page.locator('img[alt]').first()
+    await expect(cardImage).toBeVisible({ timeout: 5000 })
+    await cardImage.click()
 
-      // Wait for card detail modal
-      const modal = page.locator('[role="dialog"]')
-      await expect(modal).toBeVisible({ timeout: 3000 })
+    // Wait for card detail modal
+    const modal = page.locator('dialog, [role="dialog"]')
+    await expect(modal).toBeVisible({ timeout: 3000 })
 
-      // Click the main image (should have cursor-zoom-in class)
-      const zoomableImage = modal.locator('img.cursor-zoom-in').first()
-      if (await zoomableImage.isVisible()) {
-        await zoomableImage.click()
+    // Click the main image (should have cursor-zoom-in)
+    const zoomableImage = modal.locator('img.cursor-zoom-in').first()
+    if (await zoomableImage.isVisible({ timeout: 2000 })) {
+      await zoomableImage.click()
 
-        // Lightbox should open (z-index 100+ overlay)
-        const lightbox = page.locator('[class*="z-\\[100\\]"]')
-        await expect(lightbox).toBeVisible({ timeout: 1000 })
+      // Lightbox should show zoom controls
+      const zoomIn = page.locator('button[title="Zoom in"]')
+      await expect(zoomIn).toBeVisible({ timeout: 2000 })
 
-        // Close with Escape
-        await page.keyboard.press('Escape')
-        await expect(lightbox).not.toBeVisible({ timeout: 1000 })
-      }
+      // Close with Escape
+      await page.keyboard.press('Escape')
+      await expect(zoomIn).not.toBeVisible({ timeout: 1000 })
     }
   })
 
   test('lightbox zoom controls work', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    const cardImage = page.locator('img[alt]').first()
+    await expect(cardImage).toBeVisible({ timeout: 5000 })
+    await cardImage.click()
 
-    // Open first card with image, then lightbox
-    const card = page.locator('[data-testid="card-item"]').first()
-    if (await card.isVisible()) {
-      await card.click()
-      const modal = page.locator('[role="dialog"]')
-      await expect(modal).toBeVisible({ timeout: 3000 })
+    const modal = page.locator('dialog, [role="dialog"]')
+    await expect(modal).toBeVisible({ timeout: 3000 })
 
-      const zoomableImage = modal.locator('img.cursor-zoom-in').first()
-      if (await zoomableImage.isVisible()) {
-        await zoomableImage.click()
+    const zoomableImage = modal.locator('img.cursor-zoom-in').first()
+    if (await zoomableImage.isVisible({ timeout: 2000 })) {
+      await zoomableImage.click()
 
-        // Zoom in button should be visible
-        const zoomInBtn = page.locator('button[title="Zoom in"]')
-        await expect(zoomInBtn).toBeVisible()
-
-        // Zoom out button should be visible
-        const zoomOutBtn = page.locator('button[title="Zoom out"]')
-        await expect(zoomOutBtn).toBeVisible()
-      }
+      const zoomIn = page.locator('button[title="Zoom in"]')
+      const zoomOut = page.locator('button[title="Zoom out"]')
+      await expect(zoomIn).toBeVisible({ timeout: 2000 })
+      await expect(zoomOut).toBeVisible({ timeout: 2000 })
     }
   })
 })
