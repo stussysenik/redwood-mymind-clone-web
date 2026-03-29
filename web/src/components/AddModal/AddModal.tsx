@@ -13,6 +13,7 @@ import { X, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp } from
 import { useMutation } from '@redwoodjs/web';
 import { getPlatformInfo } from 'src/lib/platforms';
 import { useLocalAI } from 'src/lib/local-ai';
+import { posthog } from 'src/lib/posthog';
 
 const SAVE_CARD_MUTATION = gql`
   mutation SaveCard($input: SaveCardInput!) {
@@ -274,6 +275,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			);
 
 			// MyMind-style vanish: animate out, card appears in timeline
+			posthog?.capture('card_saved', { mode, type: savedCard.type })
 			vanishAndClose();
 			window.dispatchEvent(new CustomEvent('card-saved', {
 				detail: {

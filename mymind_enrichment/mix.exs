@@ -58,7 +58,9 @@ defmodule MymindEnrichment.MixProject do
       {:gen_stage, "~> 1.2"},
 
       # Observability
-      {:phoenix_pubsub, "~> 2.1"}
+      {:phoenix_pubsub, "~> 2.1"},
+      {:sentry, "~> 10.0"},
+      {:hackney, "~> 1.8"}
     ]
   end
 

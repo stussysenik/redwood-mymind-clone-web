@@ -8,6 +8,7 @@ import services from 'src/services/**/*.{js,ts}'
 import { getCurrentUser } from 'src/lib/auth'
 import { db } from 'src/lib/db'
 import { logger } from 'src/lib/logger'
+import { Sentry } from 'src/lib/sentry'
 
 /**
  * Decode the Supabase JWT from the Authorization header.
@@ -54,7 +55,7 @@ export const handler = createGraphQLHandler({
   sdls,
   services,
   onException: () => {
-    // Disconnect from your database with an unhandled exception.
+    Sentry.captureException(new Error('Unhandled GraphQL exception'))
     db.$disconnect()
   },
 })

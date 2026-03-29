@@ -24,7 +24,13 @@ config :mymind_enrichment, MymindEnrichmentWeb.Endpoint,
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :card_id]
+
+# Sentry error tracking (DSN set in runtime.exs from env)
+config :sentry,
+  environment_name: config_env(),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

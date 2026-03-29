@@ -2,6 +2,7 @@ import type { QueryResolvers, MutationResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
 import { logger } from 'src/lib/logger'
+import { Sentry } from 'src/lib/sentry'
 import { detectPlatform } from 'src/lib/platforms'
 import { createEnrichmentTiming } from 'src/lib/enrichmentTiming'
 import { buildEmbeddingText } from 'src/lib/pinecone'
@@ -458,6 +459,10 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       { cardId, err: error },
       `Enrichment pipeline failed: ${errorMessage}`
     )
+    Sentry.captureException(error, {
+      tags: { service: 'enrichment', cardId },
+      extra: { errorMessage, stage: 'pipeline' },
+    })
 
     // Apply fallback tags so the card never gets stuck
     try {

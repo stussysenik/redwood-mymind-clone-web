@@ -26,6 +26,7 @@ defmodule MymindEnrichment.Pipeline.Worker do
   end
 
   def run(card_id) do
+    Logger.metadata(card_id: card_id)
     Logger.info("[Worker] Starting enrichment for card #{card_id}")
     started_at = System.monotonic_time(:millisecond)
 
@@ -44,14 +45,26 @@ defmodule MymindEnrichment.Pipeline.Worker do
 
       {:ok, {:error, reason}} ->
         Logger.error("[Worker] Card #{card_id} failed: #{inspect(reason)}")
+        Sentry.capture_message("Enrichment pipeline failed",
+          extra: %{card_id: card_id, reason: inspect(reason)},
+          level: :error
+        )
         apply_fallback(card_id, reason)
 
       {:exit, reason} ->
         Logger.error("[Worker] Card #{card_id} crashed: #{inspect(reason)}")
+        Sentry.capture_message("Enrichment worker crashed",
+          extra: %{card_id: card_id, reason: inspect(reason)},
+          level: :error
+        )
         apply_fallback(card_id, "Worker crashed: #{inspect(reason)}")
 
       nil ->
         Logger.error("[Worker] Card #{card_id} timed out after #{@pipeline_timeout_ms}ms")
+        Sentry.capture_message("Enrichment pipeline timeout",
+          extra: %{card_id: card_id, timeout_ms: @pipeline_timeout_ms},
+          level: :warning
+        )
         apply_fallback(card_id, "Pipeline timeout after #{@pipeline_timeout_ms}ms")
     end
   end

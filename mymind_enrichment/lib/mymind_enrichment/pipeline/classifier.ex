@@ -47,10 +47,10 @@ defmodule MymindEnrichment.Pipeline.Classifier do
 
           {:error, reason} ->
             Logger.warning("[Classifier] Vision strategy failed: #{reason}, trying text-only")
-            classify_text_only(content, url, title, platform, guideline)
+            classify_text_only_with_retry(content, url, title, platform, guideline)
         end
       else
-        classify_text_only(content, url, title, platform, guideline)
+        classify_text_only_with_retry(content, url, title, platform, guideline)
       end
 
     case result do
@@ -81,6 +81,18 @@ defmodule MymindEnrichment.Pipeline.Classifier do
     call_glm(@vision_model, messages, @default_timeout_ms)
   end
 
+  # Text-only with 1 retry on timeout — most timeouts happen between 25-35s
+  defp classify_text_only_with_retry(content, url, title, platform, guideline) do
+    case classify_text_only(content, url, title, platform, guideline) do
+      {:error, "GLM API timeout" <> _ = reason} ->
+        Logger.warning("[Classifier] Text-only timed out, retrying once: #{reason}")
+        classify_text_only(content, url, title, platform, guideline)
+
+      other ->
+        other
+    end
+  end
+
   defp classify_text_only(content, url, title, platform, guideline) do
     if content == "" and url == "" do
       {:error, "No content or URL to classify"}
@@ -92,7 +104,7 @@ defmodule MymindEnrichment.Pipeline.Classifier do
         %{role: "user", content: build_user_message(content, url, title)}
       ]
 
-      call_glm(@text_model, messages, 25_000)
+      call_glm(@text_model, messages, 30_000)
     end
   end
 
@@ -346,18 +358,15 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   end
 
   defp extract_keywords(content, url, title) do
-    text = "#{title} #{content}" |> String.downcase()
-
-    # Simple keyword extraction from content
-    words =
-      text
+    # Use title words as primary tag source (much better than raw content keywords)
+    title_tags =
+      (title || "")
+      |> String.downcase()
       |> String.replace(~r/[^a-z0-9\s-]/, "")
       |> String.split(~r/\s+/)
       |> Enum.filter(&(String.length(&1) > 3))
-      |> Enum.frequencies()
-      |> Enum.sort_by(fn {_, count} -> count end, :desc)
+      |> Enum.reject(&(&1 in ~w(this that with from have been will what your they their about just more than some also like into very)))
       |> Enum.take(3)
-      |> Enum.map(fn {word, _} -> word end)
 
     # Add domain-based tag
     domain_tag =
@@ -372,8 +381,23 @@ defmodule MymindEnrichment.Pipeline.Classifier do
           nil
       end
 
-    tags = if domain_tag && domain_tag not in words, do: [domain_tag | words], else: words
-    tags = Enum.take(tags, 4) ++ ["editorial"]
-    Enum.uniq(tags) |> Enum.take(5)
+    # Platform-based tag
+    platform_tag =
+      cond do
+        String.contains?(url || "", "instagram.com") -> "instagram"
+        String.contains?(url || "", ["twitter.com", "x.com"]) -> "tweet"
+        String.contains?(url || "", "youtube.com") -> "youtube"
+        String.contains?(url || "", "reddit.com") -> "reddit"
+        true -> nil
+      end
+
+    tags =
+      [platform_tag, domain_tag | title_tags]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      |> Enum.take(5)
+
+    if tags == [], do: ["saved"], else: tags
   end
 end

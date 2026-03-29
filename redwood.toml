@@ -7,6 +7,8 @@
   includeEnvironmentVariables = [
     "REDWOOD_ENV_SUPABASE_URL",
     "REDWOOD_ENV_SUPABASE_ANON_KEY",
+    "REDWOOD_ENV_SENTRY_DSN",
+    "REDWOOD_ENV_POSTHOG_KEY",
   ]
 
 [api]

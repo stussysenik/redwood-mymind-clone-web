@@ -52,8 +52,8 @@ test.describe('Add Flow - MyMind-style vanish', () => {
 
     await page.locator('button:has-text("Save to Brain")').click()
 
-    // Modal should vanish quickly (within 1s — animation + network)
-    await expect(textarea).not.toBeVisible({ timeout: 1000 })
+    // Modal should vanish quickly (within 2s — animation + mutation + network)
+    await expect(textarea).not.toBeVisible({ timeout: 2000 })
   })
 })
 

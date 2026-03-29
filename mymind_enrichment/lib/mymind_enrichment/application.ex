@@ -4,6 +4,12 @@ defmodule MymindEnrichment.Application do
 
   @impl true
   def start(_type, _args) do
+    # Sentry logger handler — only forwards Logger.error to Sentry (budget-safe)
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:request_id, :card_id]},
+      level: :error
+    })
+
     children = [
       # Telemetry
       MymindEnrichmentWeb.Telemetry,
