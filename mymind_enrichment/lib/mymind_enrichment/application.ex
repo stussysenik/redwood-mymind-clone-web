@@ -1,0 +1,45 @@
+defmodule MymindEnrichment.Application do
+  @moduledoc false
+  use Application
+
+  @impl true
+  def start(_type, _args) do
+    children = [
+      # Telemetry
+      MymindEnrichmentWeb.Telemetry,
+      {DNSCluster, query: Application.get_env(:mymind_enrichment, :dns_cluster_query) || :ignore},
+      {Phoenix.PubSub, name: MymindEnrichment.PubSub},
+
+      # HTTP connection pools
+      {Finch, name: MymindEnrichment.Finch, pools: finch_pools()},
+
+      # Database connection for NOTIFY listener
+      MymindEnrichment.Repo,
+
+      # Enrichment pipeline supervisor
+      MymindEnrichment.Pipeline.Supervisor,
+
+      # Phoenix endpoint (API + LiveDashboard)
+      MymindEnrichmentWeb.Endpoint
+    ]
+
+    opts = [strategy: :one_for_one, name: MymindEnrichment.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+
+  @impl true
+  def config_change(changed, _new, removed) do
+    MymindEnrichmentWeb.Endpoint.config_change(changed, removed)
+    :ok
+  end
+
+  defp finch_pools do
+    %{
+      :default => [size: 10],
+      # GLM API pool
+      "https://api.z.ai" => [size: 5, count: 2],
+      # Gemini embeddings pool
+      "https://generativelanguage.googleapis.com" => [size: 5, count: 2]
+    }
+  end
+end
