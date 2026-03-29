@@ -5,20 +5,14 @@ import type {
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
 export const QUERY = gql`
-  query SimilarCardsQuery($cardId: String, $text: String, $topK: Int) {
-    similarCards(cardId: $cardId, text: $text, topK: $topK) {
-      matches {
-        id
-        score
-      }
-      cards {
-        id
-        type
-        title
-        imageUrl
-        metadata
-        tags
-      }
+  query SimilarCardsQuery($cardId: String!, $limit: Int) {
+    similarCards(cardId: $cardId, limit: $limit) {
+      id
+      type
+      title
+      imageUrl
+      metadata
+      tags
     }
   }
 `
@@ -50,11 +44,11 @@ export const Failure = ({ error }: CellFailureProps) => (
 export const Success = ({
   similarCards,
 }: CellSuccessProps<SimilarCardsQuery, SimilarCardsQueryVariables>) => {
-  if (!similarCards.cards.length) return <Empty />
+  if (!similarCards.length) return <Empty />
 
   return (
     <div className="flex gap-3 overflow-x-auto hide-scrollbar py-2">
-      {similarCards.cards.map((card) => (
+      {similarCards.map((card) => (
         <div
           key={card.id}
           className="flex-shrink-0 w-32 rounded-lg overflow-hidden cursor-pointer card-base"

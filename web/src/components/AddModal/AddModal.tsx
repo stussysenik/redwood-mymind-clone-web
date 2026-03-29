@@ -70,12 +70,22 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'enriching'>('idle');
 	const [error, setError] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
+	const [isVanishing, setIsVanishing] = useState(false);
 
 	// Batch link upload state
 	const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	// MyMind-style vanish: animate out, then unmount
+	const vanishAndClose = useCallback(() => {
+		setIsVanishing(true);
+		setTimeout(() => {
+			setIsVanishing(false);
+			onClose();
+		}, 150); // matches animation duration
+	}, [onClose]);
 
 	// Extract all URLs from text (for batch upload)
 	const extractLinks = (text: string): string[] => {
@@ -196,11 +206,8 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 					throw new Error('Failed to save any links');
 				}
 
-				// Show brief enriching status before closing
-				setSaveStatus('enriching');
-				await new Promise((resolve) => setTimeout(resolve, 1200));
-
-				onClose();
+				// MyMind-style vanish: animate out then close
+				vanishAndClose();
 				window.dispatchEvent(new CustomEvent('cards-changed'));
 				return;
 			}
@@ -261,19 +268,23 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			const savedCard = result.data?.saveCard;
 			if (!savedCard?.id) throw new Error('Failed to save');
 
-			// Show brief "Saved! Enriching..." status before closing
-			setSaveStatus('enriching');
-
 			// Trigger enrichment in background (non-blocking)
 			enrichCard({ variables: { cardId: savedCard.id } }).catch((err) =>
 				console.error('[AddModal] Enrichment failed:', err)
 			);
 
-			// Brief pause so user sees the enriching confirmation
-			await new Promise((resolve) => setTimeout(resolve, 1200));
-
-			onClose();
-			window.dispatchEvent(new CustomEvent('card-saved', { detail: savedCard }));
+			// MyMind-style vanish: animate out, card appears in timeline
+			vanishAndClose();
+			window.dispatchEvent(new CustomEvent('card-saved', {
+				detail: {
+					...savedCard,
+					url: payload.url,
+					content: payload.content,
+					imageUrl: payload.imageUrl,
+					metadata: { processing: true, enrichmentStage: 'processing' },
+					createdAt: new Date().toISOString(),
+				}
+			}));
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Something went wrong');
 		} finally {
@@ -281,7 +292,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setBatchProgress(null);
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, enrichCard, onClose]);
+	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, enrichCard, vanishAndClose]);
 
 	// Keyboard & Paste — must be declared AFTER handleSubmit (const with useCallback isn't hoisted)
 	useEffect(() => {
@@ -324,7 +335,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		<>
 			{/* Backdrop with fade animation */}
 			<div
-				className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md animate-backdrop-enter"
+				className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-md ${isVanishing ? 'animate-backdrop-vanish' : 'animate-backdrop-enter'}`}
 				onClick={onClose}
 			/>
 
@@ -334,7 +345,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 					fixed inset-x-4 top-[15%] z-[70] mx-auto max-w-2xl
 					sm:inset-x-6
 					rounded-2xl shadow-2xl overflow-visible
-					animate-modal-enter
+					${isVanishing ? 'animate-modal-vanish' : 'animate-modal-enter'}
 					transition-colors duration-300 ease-out
 					${mode === 'link' ? 'bg-[var(--surface-accent)]' : 'bg-[var(--surface-elevated)]'}
 					${isDragOver ? 'scale-105 ring-4 ring-[var(--accent-primary)]' : ''}

@@ -947,6 +947,28 @@ h1, h2, h3 {
   animation: backdrop-enter 150ms ease-out forwards;
 }
 
+/* Modal vanish — MyMind-style instant close */
+@keyframes modal-vanish {
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+}
+
+.animate-modal-vanish {
+  animation: modal-vanish 150ms var(--ease-snappy) forwards;
+}
+
+@keyframes backdrop-vanish {
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-backdrop-vanish {
+  animation: backdrop-vanish 120ms ease-out forwards;
+}
+
 /* Subtle shake for error toast */
 @keyframes subtle-shake {
   0%, 100% { transform: translateX(0); }

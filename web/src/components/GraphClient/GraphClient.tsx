@@ -136,6 +136,10 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 	const forcesConfigured = useRef(false);
 	const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+	const isMobile = dimensions.width < 768;
+
+	// Track double-tap for mobile "open detail" gesture
+	const lastTapRef = useRef<{ nodeId: string; time: number } | null>(null);
 
 	// -------------------------------------------------------------------------
 	// RESPONSIVE SIZING
@@ -168,17 +172,28 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// CONFIGURE D3 FORCES
 	// -------------------------------------------------------------------------
 
+	// Reset force configuration when mobile breakpoint changes so forces re-apply
+	useEffect(() => {
+		forcesConfigured.current = false;
+	}, [isMobile]);
+
 	const configureForces = useCallback(() => {
 		const fg = fgRef.current;
 		if (!fg || forcesConfigured.current) return;
 		forcesConfigured.current = true;
-		fg.d3Force('charge')?.strength(-500).distanceMax(400);
+
+		const chargeStrength = isMobile ? -300 : -500;
+		const distanceMax = isMobile ? 300 : 400;
+
+		fg.d3Force('charge')?.strength(chargeStrength).distanceMax(distanceMax);
 		fg.d3Force('link')?.distance((link: FGLink) => {
 			const w = link.weight ?? 1;
-			return 60 + (1 / w) * 120;
+			const base = isMobile ? 40 : 60;
+			const scale = isMobile ? 80 : 120;
+			return base + (1 / w) * scale;
 		});
 		fg.d3ReheatSimulation();
-	}, []);
+	}, [isMobile]);
 
 	// -------------------------------------------------------------------------
 	// BUILD GRAPH DATA
@@ -318,19 +333,26 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	const handleNodeClick = useCallback(
 		(node: FGNode) => {
-			if (focusedNodeId === node.id) {
-				// Second click on the focused node — open card detail modal
+			const now = Date.now();
+			const last = lastTapRef.current;
+
+			// Double-tap / double-click detection: same node within 400ms
+			const isDoubleTap = last && last.nodeId === node.id && now - last.time < 400;
+			lastTapRef.current = { nodeId: node.id, time: now };
+
+			if (focusedNodeId === node.id || isDoubleTap) {
+				// Second click on the focused node OR double-tap — open card detail modal
 				setSelectedCardId(node.id);
 			} else {
 				setFocusedNodeId(node.id);
 				const fg = fgRef.current;
 				if (fg) {
 					fg.centerAt(node.x, node.y, 600);
-					fg.zoom(2.5, 600);
+					fg.zoom(isMobile ? 2 : 2.5, 600);
 				}
 			}
 		},
-		[focusedNodeId]
+		[focusedNodeId, isMobile]
 	);
 
 	const closeFocus = useCallback(() => {
@@ -548,7 +570,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		: null;
 
 	return (
-		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }}>
 			{!isReady ? (
 				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
 					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
@@ -575,14 +597,16 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					}}
 					linkCanvasObject={linkCanvasObject}
 					linkPointerAreaPaint={() => {}}
-					enableNodeDrag={false}
+					enableNodeDrag={isMobile}
+					enableZoomInteraction={true}
+					enablePanInteraction={true}
 					onNodeHover={handleNodeHover}
 					onNodeClick={handleNodeClick}
 					onBackgroundClick={handleBackgroundClick}
 					onEngineStop={configureForces}
 					backgroundColor="#00000000"
-					cooldownTicks={200}
-					d3AlphaDecay={0.01}
+					cooldownTicks={isMobile ? 100 : 200}
+					d3AlphaDecay={isMobile ? 0.05 : 0.01}
 					d3VelocityDecay={0.4}
 				/>
 			</Suspense>

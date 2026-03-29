@@ -448,6 +448,7 @@ export function CardGridClient({
 
   // Color search state
   const colorFilter = searchParams.get('color')
+  const colorCategory = searchParams.get('colorCategory')
 
   // ---------------------------------------------------------------------------
   // EFFECTS
@@ -507,15 +508,39 @@ export function CardGridClient({
     localStorage.setItem('mymind_page_size', String(effectivePageSize))
   }, [effectivePageSize])
 
-  // Optimistic card insert from AddModal (custom event)
+  // Optimistic card insert from AddModal
+  const [optimisticCards, setOptimisticCards] = useState<Card[]>([])
+
   useEffect(() => {
-    const handleCardSaved = () => {
-      // TODO: When AddModal emits card-saved, refetch via Cell / Apollo cache
-      console.debug('[CardGridClient] card-saved event — parent Cell should refetch')
+    const handleCardSaved = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.id) {
+        const skeleton: Card = {
+          id: detail.id,
+          userId: '',
+          title: detail.title || detail.url || 'Processing...',
+          type: detail.type || 'website',
+          url: detail.url || null,
+          content: detail.content || null,
+          imageUrl: detail.imageUrl || null,
+          tags: detail.tags || [],
+          metadata: detail.metadata || { processing: true },
+          createdAt: detail.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          deletedAt: null,
+          archivedAt: null,
+        }
+        setOptimisticCards((prev) => [skeleton, ...prev])
+
+        // Remove optimistic card after 30s (server data should have arrived by then)
+        setTimeout(() => {
+          setOptimisticCards((prev) => prev.filter((c) => c.id !== detail.id))
+        }, 30_000)
+      }
     }
     const handleCardsChanged = () => {
-      // TODO: Trigger Cell refetch via Apollo cache eviction or refetchQueries
-      console.debug('[CardGridClient] cards-changed event — parent Cell should refetch')
+      // Clear optimistic cards and let parent refetch
+      setOptimisticCards([])
     }
     window.addEventListener('card-saved', handleCardSaved)
     window.addEventListener('cards-changed', handleCardsChanged)
@@ -623,9 +648,16 @@ export function CardGridClient({
 
   const mergedCards = useMemo(() => {
     if (similarityId) return similarCards
-    // Deduplicate cards
+    // Deduplicate cards and prepend optimistic inserts
     const seen = new Set<string>()
     const result: Card[] = []
+    // Add optimistic cards first (they appear at top)
+    for (const card of optimisticCards) {
+      if (!seen.has(card.id)) {
+        seen.add(card.id)
+        result.push(card)
+      }
+    }
     for (const card of serverCards) {
       if (!seen.has(card.id)) {
         seen.add(card.id)
@@ -633,15 +665,22 @@ export function CardGridClient({
       }
     }
     return result
-  }, [similarityId, similarCards, serverCards])
+  }, [similarityId, similarCards, serverCards, optimisticCards])
 
   const searchableCards = useMemo(() => {
     let cards = mergedCards
 
-    // Color filter
+    // Color filter (hex match)
     if (colorFilter) {
       cards = cards.filter((card) =>
         hasMatchingColor(card.metadata?.colors, colorFilter, 30)
+      )
+    }
+
+    // Color category filter (warm/cool/monochrome/vibrant/muted)
+    if (colorCategory) {
+      cards = cards.filter((card) =>
+        card.metadata?.colorCategory === colorCategory
       )
     }
 
@@ -667,7 +706,7 @@ export function CardGridClient({
     })
 
     return searchCardsByQuery(deduped, deferredQuery)
-  }, [mergedCards, colorFilter, deletedIds, mode, deferredQuery])
+  }, [mergedCards, colorFilter, colorCategory, deletedIds, mode, deferredQuery])
 
   const uniqueCards = useMemo(() => {
     if (!activeFilter) {
@@ -815,10 +854,10 @@ export function CardGridClient({
 
   // Reset chunk count when filters change
   useEffect(() => {
-    if (deferredQuery || activeFilter || colorFilter) {
+    if (deferredQuery || activeFilter || colorFilter || colorCategory) {
       setRenderedCount(INITIAL_CHUNK)
     }
-  }, [deferredQuery, activeFilter, colorFilter])
+  }, [deferredQuery, activeFilter, colorFilter, colorCategory])
 
   /**
    * Calculate column count based on viewport and card size.

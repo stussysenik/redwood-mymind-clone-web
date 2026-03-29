@@ -38,12 +38,13 @@ import {
 import { useEffect, useState, useRef, useCallback } from 'react'
 
 import { navigate } from '@redwoodjs/router'
-import { useMutation } from '@redwoodjs/web'
+import { useMutation, useQuery } from '@redwoodjs/web'
 
 import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
 import { useMediaQuery } from 'src/hooks/useMediaQuery'
 import { useSwipe } from 'src/hooks/useSwipe'
 import type { Card } from 'src/lib/types'
+import { ImageLightbox } from 'src/components/ImageLightbox/ImageLightbox'
 
 // =============================================================================
 // GRAPHQL MUTATIONS
@@ -69,6 +70,19 @@ const ENRICH_CARD_MUTATION = gql`
       cardId
       stage
       error
+    }
+  }
+`
+
+const REFETCH_CARD_QUERY = gql`
+  query RefetchCard($id: String!) {
+    card(id: $id) {
+      id
+      title
+      type
+      tags
+      metadata
+      updatedAt
     }
   }
 `
@@ -224,6 +238,12 @@ export function CardDetailModal({
   const [updateCard] = useMutation(UPDATE_CARD_MUTATION)
   const [enrichCard] = useMutation(ENRICH_CARD_MUTATION)
 
+  // For polling after re-analyze — always hits the server
+  const { refetch: refetchCard } = useQuery(REFETCH_CARD_QUERY, {
+    variables: { id: card?.id || '' },
+    skip: true, // Don't run on mount — only on manual refetch
+  })
+
   // ---------------------------------------------------------------------------
   // State - initialised from props (parent should use key={card.id} to remount)
   // ---------------------------------------------------------------------------
@@ -264,6 +284,7 @@ export function CardDetailModal({
   // Carousel state
   // ---------------------------------------------------------------------------
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const images = (() => {
     const metaImages = card?.metadata?.images as string[] | undefined
     if (metaImages?.length) {
@@ -338,13 +359,39 @@ export function CardDetailModal({
 
     try {
       await enrichCard({ variables: { cardId: card.id } })
-      // TODO: Trigger data refetch from parent or use Apollo cache update
+
+      // Poll for enrichment completion (checks every 5s, up to 60s)
+      const pollForUpdate = async (attempts = 0): Promise<void> => {
+        if (attempts >= 12) {
+          console.warn('[Re-analyze] Timed out waiting for enrichment')
+          return
+        }
+        await new Promise((r) => setTimeout(r, 5000))
+        try {
+          const result = await refetchCard({ id: card.id })
+          const updated = result.data?.card
+          if (updated) {
+            const stage = updated.metadata?.enrichmentStage
+            if (stage === 'complete' || stage === 'failed') {
+              // Update local state with new data
+              setTags(updated.tags || [])
+              setSummary(decodeHtmlEntities(updated.metadata?.summary || ''))
+              setTitle(decodeHtmlEntities(updated.title || ''))
+              return
+            }
+          }
+          return pollForUpdate(attempts + 1)
+        } catch {
+          return pollForUpdate(attempts + 1)
+        }
+      }
+      await pollForUpdate()
     } catch (err) {
       console.error('[Re-analyze] Error:', err)
     } finally {
       setIsReAnalyzing(false)
     }
-  }, [card, isReAnalyzing, enrichCard])
+  }, [card, isReAnalyzing, enrichCard, refetchCard])
 
   // ---------------------------------------------------------------------------
   // Regenerate tags only
@@ -657,6 +704,7 @@ export function CardDetailModal({
   // RENDER
   // ---------------------------------------------------------------------------
   return (
+    <>
     <div
       role="dialog"
       aria-modal="true"
@@ -911,12 +959,13 @@ export function CardDetailModal({
                 />
               </div>
 
-              {/* Main Image */}
+              {/* Main Image — click to open lightbox */}
               <div className="relative w-full h-full flex items-center justify-center p-4">
                 <img
                   src={images[currentImageIndex]}
                   alt={card.title || 'Card content'}
-                  className="max-w-full max-h-full object-contain drop-shadow-xl"
+                  className="max-w-full max-h-full object-contain drop-shadow-xl cursor-zoom-in"
+                  onClick={() => setIsLightboxOpen(true)}
                   onError={(e) => {
                     ;(e.target as HTMLImageElement).style.display = 'none'
                   }}
@@ -1271,8 +1320,16 @@ export function CardDetailModal({
                 {card.metadata?.previewSource && (
                   <div className="flex items-center gap-2">
                     <span className="text-gray-300">Preview</span>
-                    <span className="capitalize">
-                      {card.metadata.previewSource.replace('-', ' ')}
+                    <span>
+                      {{
+                        'instagram-api': 'Instagram API',
+                        'twitter-api': 'Twitter API',
+                        'scraper': 'Scraper',
+                        'playwright': 'Playwright',
+                        'microlink': 'Microlink',
+                        'user-upload': 'User Upload',
+                        'unknown': 'Unknown',
+                      }[card.metadata.previewSource] ?? card.metadata.previewSource}
                     </span>
                   </div>
                 )}
@@ -1439,7 +1496,7 @@ export function CardDetailModal({
                   </div>
                 </button>
               )}
-              <div className="flex flex-wrap gap-2 w-full pb-1">
+              <div className="flex flex-wrap gap-1.5 w-full pb-1">
                 {/* Shimmer placeholders while processing */}
                 {isReAnalyzing && tags.length === 0 && (
                   <>
@@ -1496,7 +1553,7 @@ export function CardDetailModal({
                 ) : (
                   <button
                     onClick={() => setIsAddingTag(true)}
-                    className="px-4 py-2.5 rounded-full bg-[var(--accent-primary)] text-white text-sm font-bold hover:opacity-90 active:opacity-80 transition-opacity shadow-sm shadow-orange-200 flex items-center gap-1 min-h-[44px]"
+                    className="px-3.5 py-1.5 rounded-full bg-[var(--accent-primary)] text-white text-sm font-bold hover:opacity-90 active:opacity-80 transition-opacity shadow-sm shadow-orange-200 flex items-center gap-1 min-h-[36px]"
                     data-testid="tag-start-button"
                   >
                     + Add Tag
@@ -1508,7 +1565,7 @@ export function CardDetailModal({
                   return (
                     <div
                       key={tag}
-                      className="group flex min-h-[44px] items-center rounded-full border pr-1 text-sm font-medium transition-colors hover:border-[var(--accent-primary)]"
+                      className="group flex min-h-[36px] items-center rounded-full border pr-1 text-sm font-medium transition-colors hover:border-[var(--accent-primary)]"
                       style={{
                         backgroundColor: color.bg,
                         borderColor: color.bg,
@@ -1522,7 +1579,7 @@ export function CardDetailModal({
                           navigate('/?' + params.toString())
                           onClose()
                         }}
-                        className="rounded-full px-4 py-2.5 text-left hover:opacity-80"
+                        className="rounded-full px-3 py-1.5 text-left hover:opacity-80"
                         type="button"
                         style={{ color: color.text }}
                       >
@@ -1533,7 +1590,7 @@ export function CardDetailModal({
                           e.stopPropagation()
                           handleRemoveTag(tag)
                         }}
-                        className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
+                        className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
                         style={{ color: color.text }}
                         aria-label={`Remove tag ${tag}`}
                       >
@@ -1685,6 +1742,15 @@ export function CardDetailModal({
         </div>
       </div>
     </div>
+
+    {/* Image Lightbox */}
+    <ImageLightbox
+      images={images}
+      initialIndex={currentImageIndex}
+      isOpen={isLightboxOpen}
+      onClose={() => setIsLightboxOpen(false)}
+    />
+  </>
   )
 }
 

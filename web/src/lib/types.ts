@@ -31,6 +31,8 @@ export interface CardMetadata {
   composition?: string
   visualElements?: string[]
   paletteType?: string
+  colorPalette?: Array<{ hex: string; hsl: { h: number; s: number; l: number }; weight: number }>
+  colorCategory?: 'warm' | 'cool' | 'monochrome' | 'vibrant' | 'muted' | 'mixed'
   price?: string
   author?: string
   authorName?: string
