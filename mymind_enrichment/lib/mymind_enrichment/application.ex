@@ -42,7 +42,9 @@ defmodule MymindEnrichment.Application do
   defp finch_pools do
     %{
       :default => [size: 10],
-      # GLM API pool
+      # NVIDIA NIM pool (Kimi K2.5 — primary classifier)
+      "https://integrate.api.nvidia.com" => [size: 5, count: 2],
+      # GLM API pool (fallback classifier)
       "https://api.z.ai" => [size: 5, count: 2],
       # Gemini embeddings pool
       "https://generativelanguage.googleapis.com" => [size: 5, count: 2]

@@ -1,14 +1,26 @@
 defmodule MymindEnrichment.Pipeline.Classifier do
   @moduledoc """
-  Classifies card content via GLM-4.7 (text) or GLM-4.6v (vision).
-  Constructs platform-aware prompts and parses structured JSON responses.
+  Classifies card content using a multi-model strategy:
+  1. Kimi K2.5 via NVIDIA NIM (primary — fast, reliable, free tier)
+  2. GLM-4.7 text-only (fallback if Kimi fails)
+  3. Title/platform-based tags (last resort)
+
+  All models use OpenAI-compatible chat completions API.
   """
   require Logger
 
-  @text_model "glm-4.7"
-  @vision_model "glm-4.6v"
-  @default_timeout_ms 40_000
-  @max_tokens 4000
+  # Primary: Kimi K2.5 via NVIDIA NIM (free, reliable, 10-20s responses)
+  @kimi_model "moonshotai/kimi-k2.5"
+  @kimi_api_base "https://integrate.api.nvidia.com/v1"
+  @kimi_timeout_ms 30_000
+
+  # Fallback: GLM-4.7 via Zhipu (paid, 25% timeout rate)
+  @glm_text_model "glm-4.7"
+  @glm_vision_model "glm-4.6v"
+  @glm_timeout_ms 40_000
+
+  # Kimi K2.5 is a thinking model — needs extra tokens for reasoning + response
+  @max_tokens 8000
 
   defmodule Classification do
     @moduledoc false
@@ -24,11 +36,8 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   end
 
   @doc """
-  Classify card content using a two-strategy approach:
-  1. Vision + text (if image available)
-  2. Text-only fallback
-
-  Returns {:ok, %Classification{}} or {:error, reason}
+  Classify card content using multi-model strategy.
+  Returns {:ok, %Classification{}} — always succeeds (fallback guaranteed).
   """
   def classify(card, scraped_content) do
     content = scraped_content || card["content"] || ""
@@ -37,20 +46,18 @@ defmodule MymindEnrichment.Pipeline.Classifier do
     title = card["title"] || ""
 
     {platform, guideline} = detect_platform(url)
+    system_prompt = build_system_prompt(platform, guideline)
+    user_message = build_user_message(content, url, title)
 
-    # Strategy 1: Vision + content (if image available)
+    # Strategy chain: Kimi K2.5 → GLM vision → GLM text → fallback
+    result = try_kimi(system_prompt, user_message)
+
     result =
-      if image_url && image_url != "" do
-        case classify_with_vision(content, url, title, image_url, platform, guideline) do
-          {:ok, classification} ->
-            {:ok, classification}
-
-          {:error, reason} ->
-            Logger.warning("[Classifier] Vision strategy failed: #{reason}, trying text-only")
-            classify_text_only_with_retry(content, url, title, platform, guideline)
-        end
-      else
-        classify_text_only_with_retry(content, url, title, platform, guideline)
+      case result do
+        {:ok, _} -> result
+        {:error, kimi_reason} ->
+          Logger.warning("[Classifier] Kimi K2.5 failed: #{kimi_reason}, trying GLM")
+          try_glm(system_prompt, user_message, image_url)
       end
 
     case result do
@@ -63,104 +70,194 @@ defmodule MymindEnrichment.Pipeline.Classifier do
     end
   end
 
-  # --- Strategy implementations ---
+  # --- Kimi K2.5 via NVIDIA NIM ---
 
-  defp classify_with_vision(content, url, title, image_url, platform, guideline) do
-    system_prompt = build_system_prompt(platform, guideline)
+  defp try_kimi(system_prompt, user_message) do
+    api_key = System.get_env("NIM_API_KEY")
 
-    user_content = [
-      %{type: "text", text: build_user_message(content, url, title)},
-      %{type: "image_url", image_url: %{url: image_url}}
-    ]
-
-    messages = [
-      %{role: "system", content: system_prompt},
-      %{role: "user", content: user_content}
-    ]
-
-    call_glm(@vision_model, messages, @default_timeout_ms)
-  end
-
-  # Text-only with 1 retry on timeout — most timeouts happen between 25-35s
-  defp classify_text_only_with_retry(content, url, title, platform, guideline) do
-    case classify_text_only(content, url, title, platform, guideline) do
-      {:error, "GLM API timeout" <> _ = reason} ->
-        Logger.warning("[Classifier] Text-only timed out, retrying once: #{reason}")
-        classify_text_only(content, url, title, platform, guideline)
-
-      other ->
-        other
-    end
-  end
-
-  defp classify_text_only(content, url, title, platform, guideline) do
-    if content == "" and url == "" do
-      {:error, "No content or URL to classify"}
+    unless api_key do
+      {:error, "NIM_API_KEY not set"}
     else
-      system_prompt = build_system_prompt(platform, guideline)
-
-      messages = [
-        %{role: "system", content: system_prompt},
-        %{role: "user", content: build_user_message(content, url, title)}
-      ]
-
-      call_glm(@text_model, messages, 30_000)
+      call_openai_compatible(
+        @kimi_api_base,
+        api_key,
+        @kimi_model,
+        [
+          %{role: "system", content: system_prompt},
+          %{role: "user", content: user_message}
+        ],
+        @kimi_timeout_ms
+      )
     end
   end
 
-  # --- GLM API call ---
+  # --- GLM fallback (vision then text) ---
 
-  defp call_glm(model, messages, timeout_ms) do
+  defp try_glm(system_prompt, user_message, image_url) do
+    # Try vision first if image available
+    result =
+      if image_url && image_url != "" do
+        case try_glm_vision(system_prompt, user_message, image_url) do
+          {:ok, _} = ok -> ok
+          {:error, reason} ->
+            Logger.warning("[Classifier] GLM vision failed: #{reason}, trying text-only")
+            try_glm_text(system_prompt, user_message)
+        end
+      else
+        try_glm_text(system_prompt, user_message)
+      end
+
+    # Retry once on timeout
+    case result do
+      {:error, "GLM API timeout" <> _ = reason} ->
+        Logger.warning("[Classifier] GLM text timed out, retrying: #{reason}")
+        try_glm_text(system_prompt, user_message)
+      other -> other
+    end
+  end
+
+  defp try_glm_vision(system_prompt, user_message, image_url) do
     api_key = System.get_env("ZHIPU_API_KEY")
     api_base = System.get_env("ZHIPU_API_BASE") || "https://api.z.ai/api/coding/paas/v4"
 
     unless api_key do
       {:error, "ZHIPU_API_KEY not set"}
     else
-      url = "#{api_base}/chat/completions"
+      user_content = [
+        %{type: "text", text: user_message},
+        %{type: "image_url", image_url: %{url: image_url}}
+      ]
 
-      body =
-        %{
-          model: model,
-          messages: messages,
-          max_tokens: @max_tokens,
-          tools: [classification_tool()],
-          tool_choice: %{type: "function", function: %{name: "classify_content"}}
-        }
-        |> Jason.encode!()
-
-      request =
-        Finch.build(:post, url, [
-          {"Content-Type", "application/json"},
-          {"Authorization", "Bearer #{api_key}"}
-        ], body)
-
-      case Finch.request(request, MymindEnrichment.Finch, receive_timeout: timeout_ms) do
-        {:ok, %Finch.Response{status: 200, body: resp_body}} ->
-          parse_glm_response(resp_body)
-
-        {:ok, %Finch.Response{status: status, body: resp_body}} ->
-          {:error, "GLM API error #{status}: #{String.slice(resp_body, 0, 200)}"}
-
-        {:error, %Mint.TransportError{reason: :timeout}} ->
-          {:error, "GLM API timeout after #{timeout_ms}ms"}
-
-        {:error, reason} ->
-          {:error, "GLM API request failed: #{inspect(reason)}"}
-      end
+      call_glm(
+        api_base, api_key, @glm_vision_model,
+        [
+          %{role: "system", content: system_prompt},
+          %{role: "user", content: user_content}
+        ],
+        @glm_timeout_ms
+      )
     end
   end
 
+  defp try_glm_text(system_prompt, user_message) do
+    api_key = System.get_env("ZHIPU_API_KEY")
+    api_base = System.get_env("ZHIPU_API_BASE") || "https://api.z.ai/api/coding/paas/v4"
+
+    unless api_key do
+      {:error, "ZHIPU_API_KEY not set"}
+    else
+      call_glm(
+        api_base, api_key, @glm_text_model,
+        [
+          %{role: "system", content: system_prompt},
+          %{role: "user", content: user_message}
+        ],
+        30_000
+      )
+    end
+  end
+
+  # --- API calls ---
+
+  # OpenAI-compatible API (Kimi K2.5 via NIM)
+  defp call_openai_compatible(api_base, api_key, model, messages, timeout_ms) do
+    url = "#{api_base}/chat/completions"
+
+    body =
+      %{
+        model: model,
+        messages: messages,
+        max_tokens: @max_tokens,
+        temperature: 0.3
+      }
+      |> Jason.encode!()
+
+    request =
+      Finch.build(:post, url, [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ], body)
+
+    case Finch.request(request, MymindEnrichment.Finch, receive_timeout: timeout_ms) do
+      {:ok, %Finch.Response{status: 200, body: resp_body}} ->
+        parse_openai_response(resp_body)
+
+      {:ok, %Finch.Response{status: status, body: resp_body}} ->
+        {:error, "NIM API error #{status}: #{String.slice(resp_body, 0, 200)}"}
+
+      {:error, %Mint.TransportError{reason: :timeout}} ->
+        {:error, "NIM API timeout after #{timeout_ms}ms"}
+
+      {:error, reason} ->
+        {:error, "NIM API request failed: #{inspect(reason)}"}
+    end
+  end
+
+  # GLM API call (with tool_choice for structured output)
+  defp call_glm(api_base, api_key, model, messages, timeout_ms) do
+    url = "#{api_base}/chat/completions"
+
+    body =
+      %{
+        model: model,
+        messages: messages,
+        max_tokens: @max_tokens,
+        tools: [classification_tool()],
+        tool_choice: %{type: "function", function: %{name: "classify_content"}}
+      }
+      |> Jason.encode!()
+
+    request =
+      Finch.build(:post, url, [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ], body)
+
+    case Finch.request(request, MymindEnrichment.Finch, receive_timeout: timeout_ms) do
+      {:ok, %Finch.Response{status: 200, body: resp_body}} ->
+        parse_glm_response(resp_body)
+
+      {:ok, %Finch.Response{status: status, body: resp_body}} ->
+        {:error, "GLM API error #{status}: #{String.slice(resp_body, 0, 200)}"}
+
+      {:error, %Mint.TransportError{reason: :timeout}} ->
+        {:error, "GLM API timeout after #{timeout_ms}ms"}
+
+      {:error, reason} ->
+        {:error, "GLM API request failed: #{inspect(reason)}"}
+    end
+  end
+
+  # --- Response parsing ---
+
+  # Parse OpenAI-compatible response (NIM/Kimi — returns JSON in content)
+  defp parse_openai_response(body) do
+    case Jason.decode(body) do
+      {:ok, %{"choices" => [%{"message" => %{"content" => content}} | _]}} when is_binary(content) ->
+        parse_json_from_content(content)
+
+      {:ok, %{"choices" => [%{"message" => message} | _]}} ->
+        parse_message(message)
+
+      {:ok, _} ->
+        {:error, "Unexpected NIM response format"}
+
+      {:error, err} ->
+        {:error, "Failed to parse NIM response: #{inspect(err)}"}
+    end
+  end
+
+  # Parse GLM response (may use tool_calls or content)
   defp parse_glm_response(body) do
     case Jason.decode(body) do
       {:ok, %{"choices" => [%{"message" => message} | _]}} ->
         parse_message(message)
 
-      {:ok, other} ->
-        {:error, "Unexpected GLM response format: #{inspect(other) |> String.slice(0, 200)}"}
+      {:ok, _} ->
+        {:error, "Unexpected GLM response format"}
 
       {:error, err} ->
-        {:error, "Failed to parse GLM response JSON: #{inspect(err)}"}
+        {:error, "Failed to parse GLM response: #{inspect(err)}"}
     end
   end
 
@@ -169,7 +266,13 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   end
 
   defp parse_message(%{"content" => content}) when is_binary(content) do
-    # Try to extract JSON from content (fenced or raw)
+    parse_json_from_content(content)
+  end
+
+  defp parse_message(_), do: {:error, "No usable content in response"}
+
+  defp parse_json_from_content(content) do
+    # Extract JSON from content (may be fenced or raw)
     json_str =
       case Regex.run(~r/```(?:json)?\s*([\s\S]*?)```/, content) do
         [_, captured] -> captured
@@ -182,8 +285,6 @@ defmodule MymindEnrichment.Pipeline.Classifier do
 
     parse_classification_json(json_str)
   end
-
-  defp parse_message(_), do: {:error, "No usable content in GLM response"}
 
   defp parse_classification_json(json_str) do
     case Jason.decode(json_str) do
@@ -358,7 +459,6 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   end
 
   defp extract_keywords(content, url, title) do
-    # Use title words as primary tag source (much better than raw content keywords)
     title_tags =
       (title || "")
       |> String.downcase()
@@ -368,20 +468,13 @@ defmodule MymindEnrichment.Pipeline.Classifier do
       |> Enum.reject(&(&1 in ~w(this that with from have been will what your they their about just more than some also like into very)))
       |> Enum.take(3)
 
-    # Add domain-based tag
     domain_tag =
       case URI.parse(url || "") do
         %URI{host: host} when is_binary(host) ->
-          host
-          |> String.replace(~r/^www\./, "")
-          |> String.split(".")
-          |> hd()
-
-        _ ->
-          nil
+          host |> String.replace(~r/^www\./, "") |> String.split(".") |> hd()
+        _ -> nil
       end
 
-    # Platform-based tag
     platform_tag =
       cond do
         String.contains?(url || "", "instagram.com") -> "instagram"
