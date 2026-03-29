@@ -12,7 +12,7 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   # Primary: Kimi K2.5 via NVIDIA NIM (free, reliable, 10-20s responses)
   @kimi_model "moonshotai/kimi-k2.5"
   @kimi_api_base "https://integrate.api.nvidia.com/v1"
-  @kimi_timeout_ms 30_000
+  @kimi_timeout_ms 90_000
 
   # Fallback: GLM-4.7 via Zhipu (paid, 25% timeout rate)
   @glm_text_model "glm-4.7"
