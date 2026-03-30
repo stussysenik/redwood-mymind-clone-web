@@ -24,7 +24,9 @@ import {
   memo,
 } from 'react'
 import { navigate, useLocation } from '@redwoodjs/router'
+import { useMutation } from '@redwoodjs/web'
 import { Sparkles, X, Plus } from 'lucide-react'
+import { useToast } from 'src/components/Toast/Toast'
 import type { Card } from 'src/lib/types'
 import { Card as CardComponent } from 'src/components/Card/Card'
 import { TagScroller } from 'src/components/TagScroller/TagScroller'
@@ -41,6 +43,31 @@ const DEFAULT_PAGE_SIZE = 25
 
 /** Available page size options */
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+
+// =============================================================================
+// GRAPHQL MUTATIONS
+// =============================================================================
+
+const ARCHIVE_CARD = gql`
+  mutation ArchiveCard($id: String!) {
+    archiveCard(id: $id) { id }
+  }
+`
+const UNARCHIVE_CARD = gql`
+  mutation UnarchiveCard($id: String!) {
+    unarchiveCard(id: $id) { id }
+  }
+`
+const DELETE_CARD = gql`
+  mutation DeleteCard($id: String!, $permanent: Boolean) {
+    deleteCard(id: $id, permanent: $permanent) { id }
+  }
+`
+const RESTORE_CARD = gql`
+  mutation RestoreCard($id: String!) {
+    restoreCard(id: $id) { id }
+  }
+`
 
 // =============================================================================
 // PLATFORM DETECTION (inlined to avoid missing dependency)
@@ -407,6 +434,11 @@ export function CardGridClient({
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+  const { showToast } = useToast()
+  const [archiveCardMutation] = useMutation(ARCHIVE_CARD)
+  const [unarchiveCardMutation] = useMutation(UNARCHIVE_CARD)
+  const [deleteCardMutation] = useMutation(DELETE_CARD)
+  const [restoreCardMutation] = useMutation(RESTORE_CARD)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [isBulkUnarchiving, setIsBulkUnarchiving] = useState(false)
 
@@ -510,6 +542,8 @@ export function CardGridClient({
 
   // Optimistic card insert from AddModal
   const [optimisticCards, setOptimisticCards] = useState<Card[]>([])
+  // Track which optimistic cards are "fresh" (for entrance animation)
+  const [freshCardIds, setFreshCardIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const handleCardSaved = (e: Event) => {
@@ -524,22 +558,27 @@ export function CardGridClient({
           content: detail.content || null,
           imageUrl: detail.imageUrl || null,
           tags: detail.tags || [],
-          metadata: detail.metadata || { processing: true },
+          metadata: detail.metadata || { processing: true, enrichmentStage: 'processing' },
           createdAt: detail.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           deletedAt: null,
           archivedAt: null,
         }
         setOptimisticCards((prev) => [skeleton, ...prev])
+        setFreshCardIds((prev) => new Set(prev).add(detail.id))
 
-        // Remove optimistic card after 30s (server data should have arrived by then)
+        // Clear "fresh" flag after entrance animation (400ms)
+        setTimeout(() => {
+          setFreshCardIds((prev) => { const next = new Set(prev); next.delete(detail.id); return next })
+        }, 500)
+
+        // Remove optimistic card after 2 minutes (server data should replace it well before)
         setTimeout(() => {
           setOptimisticCards((prev) => prev.filter((c) => c.id !== detail.id))
-        }, 30_000)
+        }, 120_000)
       }
     }
     const handleCardsChanged = () => {
-      // Clear optimistic cards and let parent refetch
       setOptimisticCards([])
     }
     window.addEventListener('card-saved', handleCardSaved)
@@ -554,42 +593,38 @@ export function CardGridClient({
   // CARD ACTIONS (stubbed for GraphQL mutations)
   // ---------------------------------------------------------------------------
 
-  const handleDelete = useCallback(
-    async (cardId: string) => {
-      // Optimistically hide
-      setDeletedIds((prev) => new Set(prev).add(cardId))
-
-      // TODO: Replace with GraphQL mutation
-      // const permanentDelete = mode === 'trash'
-      // Example: deleteCard({ variables: { id: cardId, permanent: permanentDelete } })
-      console.warn(`[CardGridClient] Delete card ${cardId} — TODO: GraphQL mutation`)
-    },
-    [mode]
-  )
-
-  const handleRestore = useCallback(async (cardId: string) => {
+  // Shared optimistic action pattern: hide → mutate → toast → rollback on error
+  const optimisticAction = useCallback(async (
+    cardId: string, mutation: () => Promise<unknown>,
+    successMsg: string, label: string, successType: 'success' | 'info' = 'success',
+  ) => {
     setDeletedIds((prev) => new Set(prev).add(cardId))
+    try {
+      await mutation()
+      showToast(successMsg, successType)
+    } catch (err) {
+      console.error(`[CardGridClient] ${label} failed:`, err)
+      setDeletedIds((prev) => { const next = new Set(prev); next.delete(cardId); return next })
+      showToast(`Failed to ${label} card`, 'error')
+    }
+  }, [showToast])
 
-    // TODO: Replace with GraphQL mutation
-    // Example: restoreCard({ variables: { id: cardId } })
-    console.warn(`[CardGridClient] Restore card ${cardId} — TODO: GraphQL mutation`)
-  }, [])
+  const handleDelete = useCallback((cardId: string) =>
+    optimisticAction(cardId, () => deleteCardMutation({ variables: { id: cardId, permanent: mode === 'trash' } }),
+      mode === 'trash' ? 'Card permanently deleted' : 'Card moved to trash', 'delete', 'info'),
+  [deleteCardMutation, optimisticAction, mode])
 
-  const handleArchive = useCallback(async (cardId: string) => {
-    setDeletedIds((prev) => new Set(prev).add(cardId))
+  const handleRestore = useCallback((cardId: string) =>
+    optimisticAction(cardId, () => restoreCardMutation({ variables: { id: cardId } }), 'Card restored', 'restore'),
+  [restoreCardMutation, optimisticAction])
 
-    // TODO: Replace with GraphQL mutation
-    // Example: archiveCard({ variables: { id: cardId } })
-    console.warn(`[CardGridClient] Archive card ${cardId} — TODO: GraphQL mutation`)
-  }, [])
+  const handleArchive = useCallback((cardId: string) =>
+    optimisticAction(cardId, () => archiveCardMutation({ variables: { id: cardId } }), 'Card archived', 'archive'),
+  [archiveCardMutation, optimisticAction])
 
-  const handleUnarchive = useCallback(async (cardId: string) => {
-    setDeletedIds((prev) => new Set(prev).add(cardId))
-
-    // TODO: Replace with GraphQL mutation
-    // Example: unarchiveCard({ variables: { id: cardId } })
-    console.warn(`[CardGridClient] Unarchive card ${cardId} — TODO: GraphQL mutation`)
-  }, [])
+  const handleUnarchive = useCallback((cardId: string) =>
+    optimisticAction(cardId, () => unarchiveCardMutation({ variables: { id: cardId } }), 'Card unarchived', 'unarchive'),
+  [unarchiveCardMutation, optimisticAction])
 
   // Create Space from Similar Cards
   const handleCreateSpaceFromSimilar = useCallback(async () => {
@@ -1284,14 +1319,19 @@ export function CardGridClient({
               }
               style={masonryStyle ?? undefined}
             >
-              {visibleCards.map((card, index) => (
+              {visibleCards.map((card, index) => {
+                const isFresh = freshCardIds.has(card.id)
+                const isProcessing = card.metadata?.processing === true
+                return (
                 <div
                   key={card.id}
                   className={`relative card-contained ${
-                    index < PRIORITY_CARD_COUNT
-                      ? 'animate-fade-up'
-                      : 'animate-fade-up-stagger'
-                  }`}
+                    isFresh
+                      ? 'animate-card-arrive'
+                      : index < PRIORITY_CARD_COUNT
+                        ? 'animate-fade-up'
+                        : 'animate-fade-up-stagger'
+                  } ${isProcessing ? 'card-shimmer overflow-hidden' : ''}`}
                   style={
                     index >= PRIORITY_CARD_COUNT
                       ? ({
@@ -1340,7 +1380,7 @@ export function CardGridClient({
                     onSelect={setSelectedCard}
                   />
                 </div>
-              ))}
+              )})}
             </div>
           ) : (
             <div className="flex flex-col gap-4 max-w-3xl mx-auto">

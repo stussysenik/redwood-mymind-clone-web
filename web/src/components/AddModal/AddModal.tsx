@@ -14,6 +14,7 @@ import { useMutation } from '@redwoodjs/web';
 import { getPlatformInfo } from 'src/lib/platforms';
 import { useLocalAI } from 'src/lib/local-ai';
 import { posthog } from 'src/lib/posthog';
+import { useToast } from 'src/components/Toast/Toast';
 
 const SAVE_CARD_MUTATION = gql`
   mutation SaveCard($input: SaveCardInput!) {
@@ -51,6 +52,7 @@ interface AddModalProps {
 
 export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const localAI = useLocalAI();
+	const { showToast } = useToast();
 	const [saveCard] = useMutation(SAVE_CARD_MUTATION);
 	const [enrichCard] = useMutation(ENRICH_CARD_MUTATION);
 
@@ -208,6 +210,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 				}
 
 				// MyMind-style vanish: animate out then close
+				showToast(`Saved ${successCount} cards to your mind`, 'success')
 				vanishAndClose();
 				window.dispatchEvent(new CustomEvent('cards-changed'));
 				return;
@@ -276,6 +279,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
 			// MyMind-style vanish: animate out, card appears in timeline
 			posthog?.capture('card_saved', { mode, type: savedCard.type })
+			showToast('Saved to your mind', 'success')
 			vanishAndClose();
 			window.dispatchEvent(new CustomEvent('card-saved', {
 				detail: {
@@ -305,25 +309,10 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			}
 		};
 
-		const handlePaste = (e: ClipboardEvent) => {
-			const items = e.clipboardData?.items;
-			if (items) {
-				for (let i = 0; i < items.length; i++) {
-					if (items[i].type.indexOf('image') !== -1) {
-						const file = items[i].getAsFile();
-						if (file) handleImageFile(file);
-						e.preventDefault();
-					}
-				}
-			}
-		};
-
 		if (isOpen) {
 			document.addEventListener('keydown', handleKeyDown);
-			document.addEventListener('paste', handlePaste);
 			return () => {
 				document.removeEventListener('keydown', handleKeyDown);
-				document.removeEventListener('paste', handlePaste);
 			};
 		}
 	}, [isOpen, onClose, handleSubmit]);
@@ -394,6 +383,20 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								ref={textareaRef}
 								value={content}
 								onChange={(e) => setContent(e.target.value)}
+								onPaste={(e) => {
+									const items = e.clipboardData?.items
+									if (items) {
+										for (let i = 0; i < items.length; i++) {
+											if (items[i].type.indexOf('image') !== -1) {
+												const file = items[i].getAsFile()
+												if (file) handleImageFile(file)
+												e.preventDefault()
+												return
+											}
+										}
+									}
+									// Text paste falls through naturally — no preventDefault
+								}}
 								placeholder="Save something... (paste multiple links to batch import)"
 								className="
 									w-full text-2xl font-serif text-[var(--foreground)]

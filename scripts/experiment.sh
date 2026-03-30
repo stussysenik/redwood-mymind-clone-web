@@ -43,7 +43,7 @@ gql_query() {
   local result=$(curl -s -X POST "$API_URL" \
     -H "Content-Type: application/json" \
     -H "auth-provider: custom" \
-    -H "Authorization: Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjkxZTVkOWJhLWU4ZjktNDk3My1iZWFjLTMzMzBlYzg0YWUxMCIsInR5cCI6IkpXVCJ9.***REMOVED_JWT***.Rz2s0Kb6kwj_nUsE6eKdIQ8ekhaau2flyOlsYW3ENW_FN2Kgv1DSZGNS0lRHQYVmohs86hF6_RIJYamI3-MfoA" \
+    -H "Authorization: Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjkxZTVkOWJhLWU4ZjktNDk3My1iZWFjLTMzMzBlYzg0YWUxMCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3F1eGFhbWl1emR6cHpyY2NvaGJ1LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI4OGQ2NzQ2Zi0wOGI0LTQ4ZTQtOTMwYi1iMDViZWFiMmI3ZjIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc0MTk0MTI5LCJpYXQiOjE3NzQxOTA1MjksImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20ifQ.Rz2s0Kb6kwj_nUsE6eKdIQ8ekhaau2flyOlsYW3ENW_FN2Kgv1DSZGNS0lRHQYVmohs86hF6_RIJYamI3-MfoA" \
     -d "$query" 2>/dev/null)
   local end=$(date +%s%3N 2>/dev/null || python3 -c "import time; print(int(time.time()*1000))")
   local latency=$((end - start))

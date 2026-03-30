@@ -7,6 +7,7 @@ import { navigate, routes, useLocation } from '@redwoodjs/router'
 
 import { useAuth } from 'src/auth'
 import AddModal from 'src/components/AddModal'
+import { ToastProvider } from 'src/components/Toast/Toast'
 import { LocalAIProvider } from 'src/lib/local-ai'
 
 interface AppLayoutProps {
@@ -51,6 +52,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   }
 
   return (
+    <ToastProvider>
     <LocalAIProvider>
     <div
       className="min-h-screen"
@@ -324,6 +326,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       )}
     </div>
     </LocalAIProvider>
+    </ToastProvider>
   )
 }
 

@@ -621,6 +621,50 @@ h1, h2, h3 {
   animation-delay: calc(var(--stagger-index, 0) * 20ms);
 }
 
+/* Toast slide up entrance */
+.animate-slide-up {
+  animation: fade-up 200ms var(--ease-snappy) forwards;
+}
+
+/* Card arrive — newly saved card enters grid */
+@keyframes card-arrive {
+  0% { opacity: 0; transform: scale(0.92) translateY(8px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-card-arrive {
+  animation: card-arrive 400ms var(--ease-spring) forwards;
+}
+
+/* Processing shimmer — reuses shimmer-fast keyframe */
+.card-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+  animation: shimmer-fast 1.8s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Tags stagger in when enrichment completes */
+@keyframes tag-appear {
+  from { opacity: 0; transform: scale(0.8) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-tag-stagger > * {
+  opacity: 0;
+  animation: tag-appear 200ms var(--ease-snappy) forwards;
+}
+
+.animate-tag-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.animate-tag-stagger > *:nth-child(2) { animation-delay: 80ms; }
+.animate-tag-stagger > *:nth-child(3) { animation-delay: 160ms; }
+.animate-tag-stagger > *:nth-child(4) { animation-delay: 240ms; }
+.animate-tag-stagger > *:nth-child(5) { animation-delay: 320ms; }
+
 /* Scale in animation - Modal/tooltip entrance */
 @keyframes scale-in {
   from {
