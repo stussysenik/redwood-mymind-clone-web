@@ -137,6 +137,7 @@ defmodule MymindEnrichment.Pipeline.Worker do
   defp write_enriched(card_id, classification) do
     now = DateTime.utc_now() |> DateTime.to_iso8601()
     summary_text = classification.summary || ""
+    tags_source = classification.source || "unknown"
 
     sql = """
     UPDATE cards
@@ -148,13 +149,13 @@ defmodule MymindEnrichment.Pipeline.Worker do
         'enrichmentStage', 'complete',
         'enrichedAt', $4::text,
         'summary', $5::text,
-        'tagsSource', 'glm',
+        'tagsSource', $6::text,
         'enrichmentSource', 'elixir'
       )
     WHERE id = $1
     """
 
-    case Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text]) do
+    case Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text, tags_source]) do
       {:ok, _} ->
         # Notify RedwoodJS frontend via Postgres NOTIFY
         Repo.query("NOTIFY card_enriched, '#{card_id}'", [])

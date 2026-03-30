@@ -24,14 +24,15 @@ defmodule MymindEnrichment.Pipeline.Classifier do
 
   defmodule Classification do
     @moduledoc false
-    defstruct [:type, :title, :tags, :summary, :platform]
+    defstruct [:type, :title, :tags, :summary, :platform, source: "unknown"]
 
     @type t :: %__MODULE__{
             type: String.t(),
             title: String.t(),
             tags: [String.t()],
             summary: String.t(),
-            platform: String.t() | nil
+            platform: String.t() | nil,
+            source: String.t()
           }
   end
 
@@ -52,21 +53,25 @@ defmodule MymindEnrichment.Pipeline.Classifier do
     # Strategy chain: Kimi K2.5 → GLM vision → GLM text → fallback
     result = try_kimi(system_prompt, user_message)
 
-    result =
+    {result, source} =
       case result do
-        {:ok, _} -> result
+        {:ok, _} -> {result, "kimi"}
         {:error, kimi_reason} ->
           Logger.warning("[Classifier] Kimi K2.5 failed: #{kimi_reason}, trying GLM")
-          try_glm(system_prompt, user_message, image_url)
+          glm_result = try_glm(system_prompt, user_message, image_url)
+          case glm_result do
+            {:ok, _} -> {glm_result, "glm"}
+            _ -> {glm_result, "fallback"}
+          end
       end
 
     case result do
       {:ok, classification} ->
-        {:ok, classification}
+        {:ok, %{classification | source: source}}
 
       {:error, reason} ->
         Logger.warning("[Classifier] All strategies failed: #{reason}, generating fallback")
-        {:ok, generate_fallback(url, content, title)}
+        {:ok, %{generate_fallback(url, content, title) | source: "fallback"}}
     end
   end
 

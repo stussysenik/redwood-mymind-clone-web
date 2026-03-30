@@ -125,8 +125,8 @@ defmodule Mix.Tasks.Backfill do
   defp write_enriched(card_id, classification) do
     now = DateTime.utc_now() |> DateTime.to_iso8601()
     summary_text = classification.summary || ""
+    tags_source = classification.source || "unknown"
 
-    # Use a single jsonb_build_object merge to avoid nested jsonb_set issues
     sql = """
     UPDATE cards
     SET
@@ -137,13 +137,13 @@ defmodule Mix.Tasks.Backfill do
         'enrichmentStage', 'complete',
         'enrichedAt', $4::text,
         'summary', $5::text,
-        'tagsSource', 'glm',
+        'tagsSource', $6::text,
         'enrichmentSource', 'elixir-backfill'
       )
     WHERE id = $1
     """
 
-    MymindEnrichment.Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text])
+    MymindEnrichment.Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text, tags_source])
   end
 
   defp write_fallback(card_id, reason) do
