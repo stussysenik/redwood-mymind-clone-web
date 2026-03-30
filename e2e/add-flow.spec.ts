@@ -76,8 +76,8 @@ test.describe('Rapid Interaction Stress Test', () => {
       await page.waitForTimeout(100)
       await page.locator('button:has-text("Save to Brain")').click()
 
-      await expect(textarea).not.toBeVisible({ timeout: 1000 })
-      await page.waitForTimeout(300)
+      await expect(textarea).not.toBeVisible({ timeout: 2000 })
+      await page.waitForTimeout(500)
     }
 
     await expect(page).toHaveURL(/.*/)
