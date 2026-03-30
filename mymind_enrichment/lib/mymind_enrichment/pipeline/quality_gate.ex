@@ -117,9 +117,11 @@ defmodule MymindEnrichment.Pipeline.QualityGate do
       final = cap_tags(with_aesthetic, 5)
 
       id_str = if is_binary(card_id) and byte_size(card_id) == 16, do: Base.encode16(card_id, case: :lower), else: "#{card_id}"
+      removed = max(0, length(tags) - length(final))
+      added = max(0, length(final) - length(cleaned))
       Logger.info(
-        "[QualityGate] Card #{id_str}: #{inspect(tags)} -> #{inspect(final)} " <>
-          "(removed #{length(tags) - length(final)} tags)"
+        "[QualityGate] Card #{id_str}: #{inspect(final)} " <>
+          "(#{removed} removed, #{added} added, #{length(final)} final)"
       )
 
       {:ok, %{classification | tags: final}}

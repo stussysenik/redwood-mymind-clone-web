@@ -19,25 +19,53 @@ defmodule Mix.Tasks.Backfill do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args, strict: [limit: :integer, dry_run: :boolean])
+    {opts, _, _} = OptionParser.parse(args, strict: [limit: :integer, dry_run: :boolean, fix_bad: :boolean])
     limit = Keyword.get(opts, :limit, 100)
     dry_run = Keyword.get(opts, :dry_run, false)
+    fix_bad = Keyword.get(opts, :fix_bad, false)
 
     # Start the application (boots Repo, Finch, etc.)
     Mix.Task.run("app.start")
 
-    Logger.info("[Backfill] Starting backfill (limit: #{limit}, dry_run: #{dry_run})")
+    Logger.info("[Backfill] Starting backfill (limit: #{limit}, dry_run: #{dry_run}, fix_bad: #{fix_bad})")
 
-    # Find unenriched cards
-    sql = """
-    SELECT id, url, title, content, image_url, tags, metadata, type
-    FROM cards
-    WHERE (metadata->>'tagsSource') IS NULL
-      AND (metadata->>'processing')::text IS DISTINCT FROM 'true'
-      AND deleted_at IS NULL
-    ORDER BY created_at DESC
-    LIMIT $1
-    """
+    # Find cards that need enrichment
+    sql = if fix_bad do
+      # Target cards with stale/bad tags: fallback source, generic tags, or stopword tags
+      """
+      SELECT id, url, title, content, image_url, tags, metadata, type
+      FROM cards
+      WHERE deleted_at IS NULL
+        AND (metadata->>'processing')::text IS DISTINCT FROM 'true'
+        AND (
+          metadata->>'tagsSource' = 'fallback'
+          OR metadata->>'tagsSource' IS NULL
+          OR tags @> '{"editorial"}'
+          OR tags @> '{"design"}'
+          OR tags @> '{"technology"}'
+          OR tags @> '{"ai"}'
+          OR tags @> '{"this"}'
+          OR tags @> '{"that"}'
+          OR tags @> '{"blame"}'
+          OR tags @> '{"knew"}'
+          OR tags @> '{"website"}'
+          OR tags @> '{"link"}'
+          OR (array_length(tags, 1) IS NULL OR array_length(tags, 1) = 0)
+        )
+      ORDER BY created_at DESC
+      LIMIT $1
+      """
+    else
+      """
+      SELECT id, url, title, content, image_url, tags, metadata, type
+      FROM cards
+      WHERE (metadata->>'tagsSource') IS NULL
+        AND (metadata->>'processing')::text IS DISTINCT FROM 'true'
+        AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT $1
+      """
+    end
 
     case MymindEnrichment.Repo.query_maps(sql, [limit]) do
       {:ok, cards} ->

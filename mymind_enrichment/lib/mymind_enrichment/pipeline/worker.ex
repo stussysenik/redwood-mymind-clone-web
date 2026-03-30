@@ -26,8 +26,9 @@ defmodule MymindEnrichment.Pipeline.Worker do
   end
 
   def run(card_id) do
-    Logger.metadata(card_id: card_id)
-    Logger.info("[Worker] Starting enrichment for card #{card_id}")
+    id_str = safe_id(card_id)
+    Logger.metadata(card_id: id_str)
+    Logger.info("[Worker] Starting enrichment for card #{id_str}")
     started_at = System.monotonic_time(:millisecond)
 
     task = Task.async(fn -> run_pipeline(card_id) end)
@@ -135,6 +136,10 @@ defmodule MymindEnrichment.Pipeline.Worker do
   end
 
   defp write_enriched(card_id, classification) do
+    write_enriched_with_retry(card_id, classification, 3)
+  end
+
+  defp write_enriched_with_retry(card_id, classification, retries_left) do
     now = DateTime.utc_now() |> DateTime.to_iso8601()
     summary_text = classification.summary || ""
     tags_source = classification.source || "unknown"
@@ -157,12 +162,16 @@ defmodule MymindEnrichment.Pipeline.Worker do
 
     case Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text, tags_source]) do
       {:ok, _} ->
-        # Notify RedwoodJS frontend via Postgres NOTIFY
-        Repo.query("NOTIFY card_enriched, '#{card_id}'", [])
+        Repo.query("NOTIFY card_enriched, '#{safe_id(card_id)}'", [])
         :ok
 
+      {:error, err} when retries_left > 0 ->
+        Logger.warning("[Worker] DB write failed, retrying (#{retries_left} left): #{inspect(err)}")
+        Process.sleep(1000 * (4 - retries_left))
+        write_enriched_with_retry(card_id, classification, retries_left - 1)
+
       {:error, err} ->
-        {:error, "Failed to write enriched data: #{inspect(err)}"}
+        {:error, "Failed to write enriched data after retries: #{inspect(err)}"}
     end
   end
 
@@ -186,7 +195,15 @@ defmodule MymindEnrichment.Pipeline.Worker do
         Logger.info("[Worker] Fallback applied for card #{card_id}")
 
       {:error, err} ->
-        Logger.error("[Worker] CRITICAL: Failed to apply fallback for card #{card_id}: #{inspect(err)}")
+        Logger.error("[Worker] CRITICAL: Failed to apply fallback for card #{safe_id(card_id)}: #{inspect(err)}")
     end
   end
+
+  # Format binary UUIDs safely for logging (Postgrex returns 16-byte binaries)
+  defp safe_id(id) when is_binary(id) and byte_size(id) == 16 do
+    Base.encode16(id, case: :lower)
+    |> String.replace(~r/(.{8})(.{4})(.{4})(.{4})(.{12})/, "\\1-\\2-\\3-\\4-\\5")
+  end
+  defp safe_id(id) when is_binary(id), do: id
+  defp safe_id(id), do: inspect(id)
 end

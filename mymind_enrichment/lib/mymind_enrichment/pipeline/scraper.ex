@@ -20,7 +20,8 @@ defmodule MymindEnrichment.Pipeline.Scraper do
 
     case Finch.request(request, MymindEnrichment.Finch, receive_timeout: @timeout_ms) do
       {:ok, %Finch.Response{status: status, body: body}} when status in 200..299 ->
-        content = extract_content(body)
+        safe_body = ensure_utf8(body)
+        content = extract_content(safe_body)
         Logger.info("[Scraper] Got #{String.length(content)} chars from #{url}")
         {:ok, content}
 
@@ -96,6 +97,15 @@ defmodule MymindEnrichment.Pipeline.Scraper do
     parts
     |> Enum.reverse()
     |> Enum.join("\n")
+  end
+
+  # Ensure content is valid UTF-8 — replaces invalid bytes with ?
+  defp ensure_utf8(binary) do
+    case :unicode.characters_to_binary(binary, :utf8) do
+      {:error, valid, _rest} -> valid
+      {:incomplete, valid, _rest} -> valid
+      valid when is_binary(valid) -> valid
+    end
   end
 
   # Basic HTML text extraction

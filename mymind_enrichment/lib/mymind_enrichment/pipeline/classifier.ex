@@ -12,7 +12,7 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   # Primary: Kimi K2.5 via NVIDIA NIM (free, reliable, 10-20s responses)
   @kimi_model "moonshotai/kimi-k2.5"
   @kimi_api_base "https://integrate.api.nvidia.com/v1"
-  @kimi_timeout_ms 90_000
+  @kimi_timeout_ms 60_000
 
   # Fallback: GLM-4.7 via Zhipu (paid, 25% timeout rate)
   @glm_text_model "glm-4.7"
@@ -99,26 +99,26 @@ defmodule MymindEnrichment.Pipeline.Classifier do
   # --- GLM fallback (vision then text) ---
 
   defp try_glm(system_prompt, user_message, image_url) do
-    # Try vision first if image available
-    result =
-      if image_url && image_url != "" do
-        case try_glm_vision(system_prompt, user_message, image_url) do
-          {:ok, _} = ok -> ok
-          {:error, reason} ->
-            Logger.warning("[Classifier] GLM vision failed: #{reason}, trying text-only")
-            try_glm_text(system_prompt, user_message)
-        end
-      else
-        try_glm_text(system_prompt, user_message)
+    # Try vision first if image available, then text-only. No retry — go to fallback.
+    if image_url && image_url != "" && !bad_image_host?(image_url) do
+      case try_glm_vision(system_prompt, user_message, image_url) do
+        {:ok, _} = ok -> ok
+        {:error, reason} ->
+          Logger.warning("[Classifier] GLM vision failed: #{reason}, trying text-only")
+          try_glm_text(system_prompt, user_message)
       end
-
-    # Retry once on timeout
-    case result do
-      {:error, "GLM API timeout" <> _ = reason} ->
-        Logger.warning("[Classifier] GLM text timed out, retrying: #{reason}")
-        try_glm_text(system_prompt, user_message)
-      other -> other
+    else
+      try_glm_text(system_prompt, user_message)
     end
+  end
+
+  # Skip GLM vision for hosts that always return error 1210
+  defp bad_image_host?(url) do
+    host = case URI.parse(url) do
+      %URI{host: h} when is_binary(h) -> String.downcase(h)
+      _ -> ""
+    end
+    String.contains?(host, ["pbs.twimg.com", "video.twimg.com", "ton.twitter.com"])
   end
 
   defp try_glm_vision(system_prompt, user_message, image_url) do
@@ -463,14 +463,24 @@ defmodule MymindEnrichment.Pipeline.Classifier do
     }
   end
 
-  defp extract_keywords(content, url, title) do
+  @fallback_stopwords MapSet.new(~w(
+    this that with from have been will what your they their about just more than
+    some also like into very best most only such much even made each well good
+    great many every most here there then when where which while being does done
+    make take come give look find want tell know need help keep start think feel
+    would could should really first last still back over down after before
+    article image note video audio social website link page content post
+    editorial design technology 2024 2025 2026
+  ))
+
+  defp extract_keywords(_content, url, title) do
     title_tags =
       (title || "")
       |> String.downcase()
       |> String.replace(~r/[^a-z0-9\s-]/, "")
       |> String.split(~r/\s+/)
       |> Enum.filter(&(String.length(&1) > 3))
-      |> Enum.reject(&(&1 in ~w(this that with from have been will what your they their about just more than some also like into very)))
+      |> Enum.reject(&MapSet.member?(@fallback_stopwords, &1))
       |> Enum.take(3)
 
     domain_tag =
