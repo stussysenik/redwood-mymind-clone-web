@@ -323,6 +323,10 @@ export type TitleSource = z.infer<typeof TitleSourceSchema>
 export type LegacyTitleSource = 'ai'
 export type AnyTitleSource = TitleSource | LegacyTitleSource
 
+export const EMBEDDING_STATUS_VALUES = ['stored', 'skipped', 'failed'] as const
+export const EmbeddingStatusSchema = z.enum(EMBEDDING_STATUS_VALUES)
+export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>
+
 export const VECTOR_BACKEND_VALUES = ['supabase', 'pinecone'] as const
 export const VectorBackendSchema = z.enum(VECTOR_BACKEND_VALUES)
 export type VectorBackend = z.infer<typeof VectorBackendSchema>

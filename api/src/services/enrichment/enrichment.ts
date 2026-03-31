@@ -19,6 +19,7 @@ import {
 } from 'src/lib/ai/dspyClient'
 import {
   embedDocument,
+  getEmbeddingAvailability,
   getEmbeddingProvenance,
 } from 'src/lib/ai/embeddings'
 import { storeEmbedding, matchCards } from 'src/lib/vectorOperations'
@@ -83,6 +84,15 @@ function resolveEnrichmentPlatform(...candidates: unknown[]): string {
   }
 
   return normalized.find((candidate) => candidate !== 'unknown') || 'unknown'
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const trimmed = error.message.trim()
+    return trimmed || fallback
+  }
+
+  return fallback
 }
 
 type ScrapedCardData = {
@@ -612,27 +622,72 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     }
 
     // 7. Generate embedding and store it
-    let embeddingStored = false
-    try {
-      const embeddingText = buildEmbeddingText({
-        title: classification.title,
-        tags: finalTags,
-        metadata: {
-          summary: finalSummary,
-          author:
-            currentMetadata.authorName ||
-            currentMetadata.authorHandle ||
-            currentMetadata.author,
-          platform: detectedPlatform,
-        },
-      })
+    const hadStoredEmbedding = currentMetadata.embeddingStored === true
+    const embeddingAvailability = getEmbeddingAvailability()
+    let embeddingStored = hadStoredEmbedding
+    let embeddingStatus: 'stored' | 'skipped' | 'failed' = hadStoredEmbedding
+      ? 'stored'
+      : embeddingAvailability.configured
+        ? 'failed'
+        : 'skipped'
+    let embeddingError: string | null = hadStoredEmbedding
+      ? null
+      : embeddingAvailability.reason
+    let vectorBackend =
+      currentMetadata.vectorBackend === 'supabase' ||
+      currentMetadata.vectorBackend === 'pinecone'
+        ? currentMetadata.vectorBackend
+        : undefined
+    let embeddingProvider =
+      typeof currentMetadata.embeddingProvider === 'string'
+        ? currentMetadata.embeddingProvider
+        : undefined
+    let embeddingModel =
+      typeof currentMetadata.embeddingModel === 'string'
+        ? currentMetadata.embeddingModel
+        : undefined
 
-      const vector = await embedDocument(embeddingText)
-      await storeEmbedding(cardId, vector)
-      embeddingStored = true
-      logger.info({ cardId }, 'Embedding stored via pgvector')
-    } catch (embErr) {
-      logger.warn({ cardId, err: embErr }, 'Embedding generation/storage failed')
+    if (!embeddingAvailability.configured) {
+      logger.info(
+        { cardId, reason: embeddingAvailability.reason },
+        'Embedding skipped: provider unavailable'
+      )
+    } else {
+      try {
+        const embeddingText = buildEmbeddingText({
+          title: classification.title,
+          tags: finalTags,
+          metadata: {
+            summary: finalSummary,
+            author:
+              currentMetadata.authorName ||
+              currentMetadata.authorHandle ||
+              currentMetadata.author,
+            platform: detectedPlatform,
+          },
+        })
+
+        const vector = await embedDocument(embeddingText)
+        await storeEmbedding(cardId, vector)
+        const provenance = getEmbeddingProvenance()
+        embeddingStored = true
+        embeddingStatus = 'stored'
+        embeddingError = null
+        vectorBackend = 'supabase'
+        embeddingProvider = provenance.provider || embeddingProvider
+        embeddingModel = provenance.model || embeddingModel
+        logger.info({ cardId }, 'Embedding stored via pgvector')
+      } catch (embErr) {
+        embeddingStatus = 'failed'
+        embeddingError = getErrorMessage(
+          embErr,
+          'Embedding generation/storage failed'
+        )
+        logger.warn(
+          { cardId, err: embErr, reason: embeddingError },
+          'Embedding generation/storage failed'
+        )
+      }
     }
 
     // 8. Determine final title
@@ -673,8 +728,6 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 
     // 10. Calculate total timing
     const totalMs = Date.now() - timing.startedAt
-    const embeddingProvenance = getEmbeddingProvenance()
-
     const enrichmentSource =
       summarySource === 'dspy' && tagsSource === 'dspy'
         ? 'dspy'
@@ -723,9 +776,12 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           tagsSource,
           summarySource,
           titleSource: finalTitle ? 'glm' : currentMetadata.titleSource || 'scraped',
-          embeddingProvider: embeddingProvenance.provider || currentMetadata.embeddingProvider,
-          embeddingModel: embeddingProvenance.model || currentMetadata.embeddingModel,
+          embeddingProvider,
+          embeddingModel,
           embeddingStored,
+          embeddingStatus,
+          embeddingError,
+          vectorBackend,
           enrichedAt: new Date().toISOString(),
           enrichmentTiming: {
             startedAt: timing.startedAt,
@@ -865,6 +921,15 @@ export const captureScreenshot: MutationResolvers['captureScreenshot'] =
 export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
   async ({ limit = 100 }) => {
     const userId = context.currentUser!.id
+    const embeddingAvailability = getEmbeddingAvailability()
+
+    if (!embeddingAvailability.configured) {
+      logger.info(
+        { userId, limit, reason: embeddingAvailability.reason },
+        'Embedding backfill skipped: provider unavailable'
+      )
+      return 0
+    }
 
     // Find cards without embeddings (no embeddingStored flag or old ones)
     const cards = await db.card.findMany({
@@ -927,8 +992,11 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
             metadata: {
               ...meta,
               embeddingStored: true,
+              embeddingStatus: 'stored',
+              embeddingError: null,
               embeddingProvider: provenance.provider,
               embeddingModel: provenance.model,
+              vectorBackend: 'supabase',
               embeddingBackfilledAt: new Date().toISOString(),
             },
           },
@@ -940,8 +1008,24 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
           'Backfilled embedding'
         )
       } catch (err) {
+        const errorMessage = getErrorMessage(
+          err,
+          'Failed to backfill embedding'
+        )
+        const meta = (card.metadata as any) || {}
+        await db.card.update({
+          where: { id: card.id },
+          data: {
+            metadata: {
+              ...meta,
+              embeddingStored: meta.embeddingStored === true,
+              embeddingStatus: 'failed',
+              embeddingError: errorMessage,
+            },
+          },
+        })
         logger.warn(
-          { cardId: card.id, err },
+          { cardId: card.id, err, reason: errorMessage },
           'Failed to backfill embedding for card'
         )
       }

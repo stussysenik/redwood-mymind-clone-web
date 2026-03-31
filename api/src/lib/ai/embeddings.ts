@@ -12,6 +12,14 @@ export interface EmbeddingProvider {
   embedQuery(text: string): Promise<number[]>;
 }
 
+export interface EmbeddingAvailability {
+  configured: boolean;
+  provider: string | null;
+  model: string | null;
+  dimension: number | null;
+  reason: string | null;
+}
+
 const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || 'gemini';
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-2';
@@ -144,10 +152,51 @@ export function isEmbeddingsConfigured(): boolean {
   return getEmbeddingProvider() !== null;
 }
 
+export function getEmbeddingAvailability(): EmbeddingAvailability {
+  const current = getEmbeddingProvider();
+  if (current) {
+    return {
+      configured: true,
+      provider: current.name,
+      model: current.model,
+      dimension: current.name === 'gemini' ? GEMINI_EMBEDDING_DIMENSION : 1536,
+      reason: null,
+    };
+  }
+
+  if (EMBEDDING_PROVIDER === 'gemini' && !GOOGLE_API_KEY && !OPENAI_API_KEY) {
+    return {
+      configured: false,
+      provider: null,
+      model: null,
+      dimension: null,
+      reason: 'GOOGLE_API_KEY is not configured',
+    };
+  }
+
+  if (EMBEDDING_PROVIDER === 'openai' && !OPENAI_API_KEY && !GOOGLE_API_KEY) {
+    return {
+      configured: false,
+      provider: null,
+      model: null,
+      dimension: null,
+      reason: 'OPENAI_API_KEY is not configured',
+    };
+  }
+
+  return {
+    configured: false,
+    provider: null,
+    model: null,
+    dimension: null,
+    reason: 'No embedding provider configured',
+  };
+}
+
 export async function embedDocument(text: string): Promise<number[]> {
   const current = getEmbeddingProvider();
   if (!current) {
-    throw new Error('No embedding provider configured');
+    throw new Error(getEmbeddingAvailability().reason || 'No embedding provider configured');
   }
   return current.embedDocument(text);
 }
@@ -155,7 +204,7 @@ export async function embedDocument(text: string): Promise<number[]> {
 export async function embedQuery(text: string): Promise<number[]> {
   const current = getEmbeddingProvider();
   if (!current) {
-    throw new Error('No embedding provider configured');
+    throw new Error(getEmbeddingAvailability().reason || 'No embedding provider configured');
   }
   return current.embedQuery(text);
 }

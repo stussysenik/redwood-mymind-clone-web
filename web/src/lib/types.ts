@@ -11,6 +11,7 @@ import type {
   CardType as SharedCardType,
   ClassificationResult as SharedClassificationResult,
   ClientClassification as SharedClientClassification,
+  EmbeddingStatus as SharedEmbeddingStatus,
   EnrichmentSource as SharedEnrichmentSource,
   PreviewSource as SharedPreviewSource,
   SummarySource as SharedSummarySource,
@@ -86,6 +87,9 @@ export interface CardMetadata {
   tagsSource?: SharedTagSource
   summarySource?: SharedSummarySource
   titleSource?: SharedAnyTitleSource
+  embeddingStored?: boolean
+  embeddingStatus?: SharedEmbeddingStatus
+  embeddingError?: string
   embeddingProvider?: string
   embeddingModel?: string
   vectorBackend?: SharedVectorBackend
