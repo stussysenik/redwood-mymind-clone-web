@@ -21,6 +21,7 @@ export type Platform =
   | 'instagram'
   | 'youtube'
   | 'reddit'
+  | 'wikipedia'
   | 'letterboxd'
   | 'imdb'
   | 'goodreads'
@@ -230,6 +231,7 @@ export function detectPlatformFromUrl(url: string): Platform {
     if (hostname.includes('medium.com')) return 'medium';
     if (hostname.includes('substack.com')) return 'substack';
     if (hostname.includes('reddit.com')) return 'reddit';
+    if (hostname.includes('wikipedia.org')) return 'wikipedia';
     if (hostname.includes('github.com')) return 'github';
     if (hostname.includes('letterboxd.com')) return 'letterboxd';
 

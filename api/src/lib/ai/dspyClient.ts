@@ -16,7 +16,10 @@ import { DSPyTagsResponseSchema, flattenDSPyTags } from 'src/lib/semantic';
 // =============================================================================
 
 const DSPY_SERVICE_URL = process.env.DSPY_SERVICE_URL || 'http://localhost:7860';
-const DSPY_TIMEOUT = parseInt(process.env.DSPY_TIMEOUT || '10000', 10);
+const DSPY_TIMEOUT = Math.max(
+  parseInt(process.env.DSPY_TIMEOUT || '30000', 10) || 30000,
+  30000
+);
 const DSPY_ENABLED = process.env.DSPY_ENABLED !== 'false';
 
 // Circuit breaker configuration

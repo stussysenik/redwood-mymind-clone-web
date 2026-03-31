@@ -19,6 +19,7 @@ export type Platform =
   | 'instagram'
   | 'youtube'
   | 'reddit'
+  | 'wikipedia'
   | 'letterboxd'
   | 'imdb'
   | 'goodreads'
@@ -87,6 +88,13 @@ export const PLATFORMS: Record<Platform, PlatformInfo> = {
     color: '#FF4500',
     bgColor: 'rgba(255, 69, 0, 0.08)',
     icon: 'messageSquare',
+  },
+  wikipedia: {
+    id: 'wikipedia',
+    name: 'Wikipedia',
+    color: '#6B7280',
+    bgColor: 'rgba(107, 114, 128, 0.08)',
+    icon: 'fileText',
   },
   letterboxd: {
     id: 'letterboxd',
@@ -224,6 +232,7 @@ export function detectPlatform(url: string | null | undefined): Platform {
   if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be'))
     return 'youtube'
   if (urlLower.includes('reddit.com')) return 'reddit'
+  if (urlLower.includes('wikipedia.org')) return 'wikipedia'
   if (urlLower.includes('letterboxd.com')) return 'letterboxd'
   if (urlLower.includes('imdb.com')) return 'imdb'
   if (urlLower.includes('spotify.com') || urlLower.includes('open.spotify.com'))

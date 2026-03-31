@@ -79,6 +79,7 @@ type Platform =
   | 'instagram'
   | 'youtube'
   | 'reddit'
+  | 'wikipedia'
   | 'letterboxd'
   | 'imdb'
   | 'goodreads'
@@ -111,6 +112,7 @@ function detectPlatform(url: string): Platform {
     if (hostname.includes('youtube.com') || hostname.includes('youtu.be'))
       return 'youtube'
     if (hostname.includes('reddit.com')) return 'reddit'
+    if (hostname.includes('wikipedia.org')) return 'wikipedia'
     if (hostname.includes('letterboxd.com')) return 'letterboxd'
     if (hostname.includes('imdb.com')) return 'imdb'
     if (hostname.includes('goodreads.com')) return 'goodreads'

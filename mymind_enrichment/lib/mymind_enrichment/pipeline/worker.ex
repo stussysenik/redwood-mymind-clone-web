@@ -36,7 +36,7 @@ defmodule MymindEnrichment.Pipeline.Worker do
     case Task.yield(task, @pipeline_timeout_ms) || Task.shutdown(task) do
       {:ok, :ok} ->
         duration = System.monotonic_time(:millisecond) - started_at
-        Logger.info("[Worker] Card #{card_id} enriched in #{duration}ms")
+        Logger.info("[Worker] Card #{id_str} enriched in #{duration}ms")
 
         :telemetry.execute(
           [:enrichment, :pipeline, :complete],
@@ -45,27 +45,33 @@ defmodule MymindEnrichment.Pipeline.Worker do
         )
 
       {:ok, {:error, reason}} ->
-        Logger.error("[Worker] Card #{card_id} failed: #{inspect(reason)}")
+        Logger.error("[Worker] Card #{id_str} failed: #{inspect(reason)}")
+
         Sentry.capture_message("Enrichment pipeline failed",
           extra: %{card_id: card_id, reason: inspect(reason)},
           level: :error
         )
+
         apply_fallback(card_id, reason)
 
       {:exit, reason} ->
-        Logger.error("[Worker] Card #{card_id} crashed: #{inspect(reason)}")
+        Logger.error("[Worker] Card #{id_str} crashed: #{inspect(reason)}")
+
         Sentry.capture_message("Enrichment worker crashed",
           extra: %{card_id: card_id, reason: inspect(reason)},
           level: :error
         )
+
         apply_fallback(card_id, "Worker crashed: #{inspect(reason)}")
 
       nil ->
-        Logger.error("[Worker] Card #{card_id} timed out after #{@pipeline_timeout_ms}ms")
+        Logger.error("[Worker] Card #{id_str} timed out after #{@pipeline_timeout_ms}ms")
+
         Sentry.capture_message("Enrichment pipeline timeout",
           extra: %{card_id: card_id, timeout_ms: @pipeline_timeout_ms},
           level: :warning
         )
+
         apply_fallback(card_id, "Pipeline timeout after #{@pipeline_timeout_ms}ms")
     end
   end
@@ -160,13 +166,23 @@ defmodule MymindEnrichment.Pipeline.Worker do
     WHERE id = $1
     """
 
-    case Repo.query(sql, [card_id, classification.tags, classification.type, now, summary_text, tags_source]) do
+    case Repo.query(sql, [
+           card_id,
+           classification.tags,
+           classification.type,
+           now,
+           summary_text,
+           tags_source
+         ]) do
       {:ok, _} ->
         Repo.query("NOTIFY card_enriched, '#{safe_id(card_id)}'", [])
         :ok
 
       {:error, err} when retries_left > 0 ->
-        Logger.warning("[Worker] DB write failed, retrying (#{retries_left} left): #{inspect(err)}")
+        Logger.warning(
+          "[Worker] DB write failed, retrying (#{retries_left} left): #{inspect(err)}"
+        )
+
         Process.sleep(1000 * (4 - retries_left))
         write_enriched_with_retry(card_id, classification, retries_left - 1)
 
@@ -195,7 +211,9 @@ defmodule MymindEnrichment.Pipeline.Worker do
         Logger.info("[Worker] Fallback applied for card #{card_id}")
 
       {:error, err} ->
-        Logger.error("[Worker] CRITICAL: Failed to apply fallback for card #{safe_id(card_id)}: #{inspect(err)}")
+        Logger.error(
+          "[Worker] CRITICAL: Failed to apply fallback for card #{safe_id(card_id)}: #{inspect(err)}"
+        )
     end
   end
 
@@ -204,6 +222,7 @@ defmodule MymindEnrichment.Pipeline.Worker do
     Base.encode16(id, case: :lower)
     |> String.replace(~r/(.{8})(.{4})(.{4})(.{4})(.{12})/, "\\1-\\2-\\3-\\4-\\5")
   end
+
   defp safe_id(id) when is_binary(id), do: id
   defp safe_id(id), do: inspect(id)
 end

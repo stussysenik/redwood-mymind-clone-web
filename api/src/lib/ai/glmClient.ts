@@ -432,7 +432,18 @@ export async function generateSummary(
 	const platform = url ? detectPlatformFromUrl(url) : 'unknown';
 
 	// DSPy Enhancement: Try DSPy microservice first for supported platforms
-	const DSPY_SUPPORTED_PLATFORMS = ['instagram', 'twitter', 'reddit', 'imdb', 'letterboxd', 'youtube'];
+	const DSPY_SUPPORTED_PLATFORMS = [
+		'instagram',
+		'twitter',
+		'reddit',
+		'imdb',
+		'letterboxd',
+		'youtube',
+		'amazon',
+		'goodreads',
+		'storygraph',
+		'wikipedia',
+	];
 	if (DSPY_SUPPORTED_PLATFORMS.includes(platform)) {
 		try {
 			const dspyPlatform = platform as DSPyPlatform;

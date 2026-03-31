@@ -14,6 +14,16 @@ defmodule MymindEnrichmentWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  # DSPy-compatible sync endpoints for the Redwood API client
+  scope "/", MymindEnrichmentWeb do
+    pipe_through :api
+
+    get "/health", DspyCompatController, :health
+    post "/extract/title", DspyCompatController, :extract_title
+    post "/generate/summary", DspyCompatController, :generate_summary
+    post "/generate/tags", DspyCompatController, :generate_tags
+  end
+
   # API endpoints
   scope "/api", MymindEnrichmentWeb do
     pipe_through :api

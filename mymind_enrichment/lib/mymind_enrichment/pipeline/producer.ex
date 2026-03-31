@@ -31,7 +31,7 @@ defmodule MymindEnrichment.Pipeline.Producer do
 
   @impl true
   def handle_cast({:enqueue, card_id}, %{queue: queue} = state) do
-    Logger.info("[Producer] Enqueued card #{card_id}")
+    Logger.info("[Producer] Enqueued card #{safe_card_id(card_id)}")
     queue = :queue.in(card_id, queue)
     {events, new_state} = dispatch_events(%{state | queue: queue})
     {:noreply, events, new_state}
@@ -99,4 +99,14 @@ defmodule MymindEnrichment.Pipeline.Producer do
         Logger.warning("[Producer] Failed to poll stuck cards: #{inspect(err)}")
     end
   end
+
+  defp safe_card_id(card_id) when is_binary(card_id) and byte_size(card_id) == 16 do
+    <<a1::binary-size(4), a2::binary-size(2), a3::binary-size(2), a4::binary-size(2),
+      a5::binary-size(6)>> =
+      Base.encode16(card_id, case: :lower)
+
+    Enum.join([a1, a2, a3, a4, a5], "-")
+  end
+
+  defp safe_card_id(card_id), do: to_string(card_id)
 end

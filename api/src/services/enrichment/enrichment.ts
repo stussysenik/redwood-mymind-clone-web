@@ -46,6 +46,45 @@ function toDSPyPlatform(platform: string): DSPyPlatform | null {
     : null
 }
 
+function normalizePlatformCandidate(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+
+  if (
+    normalized === 'web' ||
+    normalized === 'general' ||
+    normalized === 'generic' ||
+    normalized === 'article'
+  ) {
+    return 'unknown'
+  }
+
+  if (normalized === 'x' || normalized === 'twitter/x') {
+    return 'twitter'
+  }
+
+  return normalized
+}
+
+function resolveEnrichmentPlatform(...candidates: unknown[]): string {
+  const normalized = candidates
+    .map((candidate) => normalizePlatformCandidate(candidate))
+    .filter((candidate): candidate is string => !!candidate)
+
+  const supported = normalized.find((candidate) => toDSPyPlatform(candidate))
+  if (supported) {
+    return supported
+  }
+
+  return normalized.find((candidate) => candidate !== 'unknown') || 'unknown'
+}
+
 type ScrapedCardData = {
   title?: string
   description?: string
@@ -508,11 +547,11 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     )
 
     // 6. Try DSPy enrichment for supported platforms
-    const detectedPlatform = (
-      classification.platform ||
-      currentMetadata.platform ||
+    const detectedPlatform = resolveEnrichmentPlatform(
+      classification.platform,
+      currentMetadata.platform,
       platform
-    ).toLowerCase()
+    )
     const dspyPlatform = toDSPyPlatform(detectedPlatform)
 
     let finalSummary = classification.summary
