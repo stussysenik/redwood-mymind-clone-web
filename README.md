@@ -1,5 +1,8 @@
 # README
 
+![Demo](demo.gif)
+
+
 Welcome to [RedwoodJS](https://redwoodjs.com)!
 
 > **Prerequisites**
