@@ -1,7 +1,9 @@
 import type { QueryResolvers, MutationResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
+import { createEnrichmentTiming } from 'src/lib/enrichmentTiming'
 import { logger } from 'src/lib/logger'
+import { detectPlatform } from 'src/lib/platforms'
 import { enrichCardPipeline } from 'src/services/enrichment/enrichment'
 
 export const cards: QueryResolvers['cards'] = async ({
@@ -88,6 +90,18 @@ export const randomCards: QueryResolvers['randomCards'] = async ({
 
 export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
   const userId = context.currentUser!.id
+  const clientMetadata =
+    input.clientClassification &&
+    typeof input.clientClassification === 'object' &&
+    !Array.isArray(input.clientClassification)
+      ? (input.clientClassification as Record<string, unknown>)
+      : {}
+  const contentLength = (input.content?.length || 0) + (input.title?.length || 0)
+  const timing = createEnrichmentTiming(
+    input.url ? detectPlatform(input.url) : input.type || 'generic',
+    contentLength,
+    !!input.imageUrl
+  )
 
   const card = await db.card.create({
     data: {
@@ -98,18 +112,23 @@ export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
       url: input.url || null,
       imageUrl: input.imageUrl || null,
       tags: input.tags || [],
-      metadata: input.clientClassification
-        ? { ...input.clientClassification, processing: true }
-        : { processing: true },
+      metadata: {
+        ...clientMetadata,
+        processing: true,
+        enrichmentStage: 'queued',
+        enrichmentTiming: {
+          startedAt: timing.startedAt,
+          estimatedTotalMs: timing.estimatedTotalMs,
+          platform: timing.platform,
+        },
+      },
     },
   })
 
-  // Fire-and-forget enrichment for URL-based cards
-  if (card.url) {
-    enrichCardPipeline(card.id).catch((err) => {
-      logger.error({ cardId: card.id, err }, 'Background enrichment failed')
-    })
-  }
+  // Save is the single entry point for new-card enrichment.
+  enrichCardPipeline(card.id).catch((err) => {
+    logger.error({ cardId: card.id, err }, 'Background enrichment failed')
+  })
 
   return card
 }
@@ -229,4 +248,3 @@ export const bulkCardAction: MutationResolvers['bulkCardAction'] = async ({
 
   return { success: true, affectedCount: result.count }
 }
-

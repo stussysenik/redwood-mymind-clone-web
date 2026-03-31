@@ -23131,6 +23131,7 @@ __metadata:
     daisyui: "npm:^5.5.19"
     prettier-plugin-tailwindcss: "npm:^0.5.12"
     react-colorful: "npm:^5.6.1"
+    zod: "npm:^4.3.6"
   languageName: unknown
   linkType: soft
 
@@ -26642,5 +26643,12 @@ __metadata:
     compress-commons: "npm:^6.0.2"
     readable-stream: "npm:^4.0.0"
   checksum: 10c0/50f2fb30327fb9d09879abf7ae2493705313adf403e794b030151aaae00009162419d60d0519e807673ec04d442e140c8879ca14314df0a0192de3b233e8f28b
+  languageName: node
+  linkType: hard
+
+"zod@npm:^4.3.6":
+  version: 4.3.6
+  resolution: "zod@npm:4.3.6"
+  checksum: 10c0/860d25a81ab41d33aa25f8d0d07b091a04acb426e605f396227a796e9e800c44723ed96d0f53a512b57be3d1520f45bf69c0cb3b378a232a00787a2609625307
   languageName: node
   linkType: hard

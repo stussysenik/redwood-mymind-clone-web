@@ -36,6 +36,12 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
 	const { theme, setTheme } = useTheme();
 
 	useEffect(() => {
+		if (!supabase) {
+			setLoading(false);
+			setUser(null);
+			return;
+		}
+
 		const getUser = async () => {
 			const { data: { user } } = await supabase.auth.getUser();
 			setUser(user);
@@ -49,9 +55,14 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
 		});
 
 		return () => subscription.unsubscribe();
-	}, [supabase.auth]);
+	}, [supabase]);
 
 	const handleSignOut = async () => {
+		if (!supabase) {
+			navigate('/login');
+			return;
+		}
+
 		// Clear iOS Keychain token before signing out
 		await clearAuthTokenOnLogout();
 		await supabase.auth.signOut();

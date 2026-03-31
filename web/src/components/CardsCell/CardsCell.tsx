@@ -1,10 +1,30 @@
-import { useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 
 import type { CardsQuery, CardsQueryVariables } from 'types/graphql'
-import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
+
+import {
+  type CellFailureProps,
+  type CellSuccessProps,
+  useMutation,
+} from '@redwoodjs/web'
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
-import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
+import {
+  FeedCardBody,
+  FeedCardVisual,
+  toFeedCard,
+  type FeedCardRecord,
+} from 'src/components/FeedCellShared/FeedCellShared'
+import {
+  mergeFeedCardRecord,
+  useRealtimeCardUpdates,
+} from 'src/lib/realtimeCards'
 import type { Card } from 'src/lib/types'
 
 export const QUERY = gql`
@@ -33,6 +53,15 @@ export const QUERY = gql`
   }
 `
 
+const ARCHIVE_CARD_MUTATION = gql`
+  mutation ArchiveCardMutation($id: String!) {
+    archiveCard(id: $id) {
+      id
+      archivedAt
+    }
+  }
+`
+
 /**
  * Loading skeleton — masonry layout with shimmer placeholders of varying heights.
  * Uses the same CSS columns approach as the real grid so the skeleton
@@ -44,8 +73,8 @@ export const Loading = () => {
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
       <div className="masonry-grid">
-        {heights.map((h, i) => (
-          <div key={i} className="masonry-item">
+        {heights.map((h) => (
+          <div key={h} className="masonry-item">
             <div
               className="animate-pulse"
               style={{
@@ -66,11 +95,11 @@ export const Loading = () => {
  */
 export const Empty = () => (
   <div
-    className="flex flex-col items-center justify-center py-32 px-4"
+    className="flex flex-col items-center justify-center px-4 py-32"
     style={{ minHeight: '60vh' }}
   >
     <p
-      className="font-serif italic text-2xl"
+      className="font-serif text-2xl italic"
       style={{ color: 'var(--foreground-muted)' }}
     >
       Your mind, organized
@@ -80,51 +109,10 @@ export const Empty = () => (
 
 export const Failure = ({ error }: CellFailureProps) => (
   <div
-    className="text-center py-20 px-4"
+    className="px-4 py-20 text-center"
     style={{ color: 'var(--foreground-muted)' }}
   >
     <p className="text-sm">Error loading cards: {error?.message}</p>
-  </div>
-)
-
-/**
- * NoteCardVisual — warm gradient background for cards without images.
- * Renders the card content or title as the hero visual element,
- * giving note/text-only cards a distinctive visual presence in the grid.
- */
-const NoteCardVisual = ({
-  title,
-  content,
-}: {
-  title?: string | null
-  content?: string | null
-}) => (
-  <div
-    style={{
-      background:
-        'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 50%, #FFCC80 100%)',
-      padding: '24px 16px',
-      minHeight: 120,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}
-  >
-    <p
-      className="font-serif text-center"
-      style={{
-        fontSize: 16,
-        lineHeight: 1.5,
-        color: '#5D4037',
-        display: '-webkit-box',
-        WebkitLineClamp: 6,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-        wordBreak: 'break-word',
-      }}
-    >
-      {content || title || 'Note'}
-    </p>
   </div>
 )
 
@@ -137,166 +125,191 @@ export const Success = ({
   onPrevPage?: () => void
 }) => {
   const { cards, total, page, pageSize, hasMore } = data
+  const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
-  const totalPages = Math.ceil(total / pageSize)
+  const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
+  const [optimisticCards, setOptimisticCards] = useState<FeedCardRecord[]>([])
+  const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
+  const mergedCards = useMemo(
+    () => [
+      ...optimisticCards
+        .filter(
+          (optimisticCard) =>
+            !cards.some((serverCard) => serverCard.id === optimisticCard.id)
+        )
+        .map((card) => liveCards[card.id] ? mergeFeedCardRecord(card, liveCards[card.id]) : card),
+      ...cards.map((card) => {
+        const feedCard = card as FeedCardRecord
+        return liveCards[card.id]
+          ? mergeFeedCardRecord(feedCard, liveCards[card.id])
+          : feedCard
+      }),
+    ],
+    [cards, liveCards, optimisticCards]
+  )
+  const visibleTotal = Math.max(
+    0,
+    total + optimisticCards.length - hiddenCardIds.size
+  )
+  const totalPages = Math.max(1, Math.ceil(visibleTotal / pageSize))
+  const visibleCards = mergedCards.filter(
+    (card) => !hiddenCardIds.has(card.id) && !card.archivedAt && !card.deletedAt
+  )
 
-  /**
-   * Convert a GraphQL card object to the Card type expected by CardDetailModal.
-   * The GraphQL type uses `Prisma.JsonValue` for metadata and `string` for type,
-   * while the Card interface uses `CardMetadata` and `CardType`.
-   */
-  const toCard = (gqlCard: (typeof cards)[number]): Card => ({
-    id: gqlCard.id,
-    userId: gqlCard.userId,
-    type: gqlCard.type as Card['type'],
-    title: gqlCard.title ?? null,
-    content: gqlCard.content ?? null,
-    url: gqlCard.url ?? null,
-    imageUrl: gqlCard.imageUrl ?? null,
-    metadata: (gqlCard.metadata ?? {}) as Card['metadata'],
-    tags: gqlCard.tags ?? [],
-    createdAt: gqlCard.createdAt,
-    updatedAt: gqlCard.updatedAt,
-    deletedAt: gqlCard.deletedAt ?? null,
-    archivedAt: gqlCard.archivedAt ?? null,
-  })
+  useEffect(() => {
+    if (
+      selectedCard &&
+      !visibleCards.some((card) => card.id === selectedCard.id)
+    ) {
+      setSelectedCard(null)
+    }
+  }, [selectedCard, visibleCards])
+
+  useEffect(() => {
+    setOptimisticCards((current) =>
+      current.filter(
+        (optimisticCard) =>
+          !cards.some((serverCard) => serverCard.id === optimisticCard.id)
+      )
+    )
+  }, [cards])
+
+  const handleRealtimeCardUpdate = useCallback((updatedCard: FeedCardRecord) => {
+    setLiveCards((current) => ({
+      ...current,
+      [updatedCard.id]: updatedCard,
+    }))
+
+    setOptimisticCards((current) =>
+      current.map((card) =>
+        card.id === updatedCard.id
+          ? mergeFeedCardRecord(card, updatedCard)
+          : card
+      )
+    )
+
+    setSelectedCard((current) =>
+      current?.id === updatedCard.id ? toFeedCard(updatedCard) : current
+    )
+  }, [])
+
+  useRealtimeCardUpdates(handleRealtimeCardUpdate)
+
+  useEffect(() => {
+    const handleCardSaved = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<FeedCardRecord>>).detail
+      if (!detail?.id) {
+        return
+      }
+
+      const optimisticCard: FeedCardRecord = {
+        id: detail.id,
+        userId: detail.userId ?? null,
+        type: detail.type ?? 'website',
+        title: detail.title ?? null,
+        content: detail.content ?? null,
+        url: detail.url ?? null,
+        imageUrl: detail.imageUrl ?? null,
+        metadata: detail.metadata ?? {},
+        tags: detail.tags ?? [],
+        createdAt: detail.createdAt ?? new Date().toISOString(),
+        updatedAt: detail.updatedAt ?? detail.createdAt ?? new Date().toISOString(),
+        archivedAt: detail.archivedAt ?? null,
+        deletedAt: detail.deletedAt ?? null,
+      }
+
+      setOptimisticCards((current) => {
+        const next = current.filter((card) => card.id !== optimisticCard.id)
+        return [optimisticCard, ...next]
+      })
+    }
+
+    const handleCardsChanged = () => {
+      setOptimisticCards([])
+    }
+
+    window.addEventListener('card-saved', handleCardSaved)
+    window.addEventListener('cards-changed', handleCardsChanged)
+
+    return () => {
+      window.removeEventListener('card-saved', handleCardSaved)
+      window.removeEventListener('cards-changed', handleCardsChanged)
+    }
+  }, [])
+
+  const handleArchive = (id: string) => {
+    const previousSelectedCard = selectedCard
+    setHiddenCardIds((current) => new Set(current).add(id))
+
+    if (previousSelectedCard?.id === id) {
+      setSelectedCard(null)
+    }
+
+    void archiveCardMutation({ variables: { id } }).catch((error) => {
+      console.error('[CardsCell] Archive failed:', error)
+      setHiddenCardIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+      if (previousSelectedCard?.id === id) {
+        setSelectedCard(previousSelectedCard)
+      }
+    })
+  }
 
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* Card count */}
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-          {total} cards
+          {visibleTotal} cards
         </p>
       </div>
 
       {/* Masonry grid — 2 cols mobile, 3 cols desktop (CSS columns) */}
-      <div className="masonry-grid">
-        {cards.map((card) => {
-          const hasImage = !!card.imageUrl
-          const isNote =
-            card.type === 'NOTE' ||
-            card.type === 'note' ||
-            (!hasImage && !card.url)
+      {visibleCards.length === 0 ? (
+        <Empty />
+      ) : (
+        <div className="masonry-grid">
+          {visibleCards.map((card) => {
+            const feedCard = card as FeedCardRecord
 
-          return (
-            <div key={card.id} className="masonry-item">
-              <div
-                className="card-base cursor-pointer"
-                onClick={() => setSelectedCard(toCard(card))}
-              >
-                {/* Hero area: full-width image or note gradient */}
-                {hasImage ? (
-                  <img
-                    src={card.imageUrl!}
-                    alt={card.title || ''}
-                    loading="lazy"
-                    style={{
-                      width: '100%',
-                      display: 'block',
-                      borderRadius: '12px 12px 0 0',
-                      objectFit: 'cover',
-                    }}
-                  />
-                ) : isNote ? (
-                  <NoteCardVisual
-                    title={card.title}
-                    content={card.content}
-                  />
-                ) : null}
-
-                {/* Content area — compact padding, tight typography */}
-                <div style={{ padding: '8px 12px 12px' }}>
-                  {card.title && (
-                    <h3
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: 'var(--foreground)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        margin: '0 0 4px',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {card.title}
-                    </h3>
-                  )}
-
-                  {/* Summary: hidden on mobile, 2-line clamp on desktop */}
-                  {(card.metadata as any)?.summary && (
-                    <p
-                      className="hidden md:block"
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--foreground-muted)',
-                        lineHeight: 1.45,
-                        marginBottom: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {(card.metadata as any).summary}
-                      </span>
-                    </p>
-                  )}
-
-                  {/* Tag pills */}
-                  {card.tags && card.tags.length > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 4,
-                        marginTop: 4,
-                      }}
-                    >
-                      {card.tags.slice(0, 3).map((tag) => {
-                        const color = getTagColor(tag)
-                        return (
-                          <span
-                            key={tag}
-                            style={{
-                              fontSize: 10,
-                              padding: '4px 8px',
-                              borderRadius: 9999,
-                              backgroundColor: color.bg,
-                              color: color.text,
-                              lineHeight: 1,
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
+            return (
+              <div key={card.id} className="masonry-item">
+                <div
+                  className="card-base cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedCard(toFeedCard(feedCard))}
+                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedCard(toFeedCard(feedCard))
+                    }
+                  }}
+                >
+                  <FeedCardVisual card={feedCard} />
+                  <FeedCardBody card={feedCard} showSummary />
                 </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Pagination controls */}
       {totalPages > 1 && (
-        <div className="flex flex-col items-center gap-3 mt-8 pb-4">
+        <div className="mt-8 flex flex-col items-center gap-3 pb-4">
           <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            Page {page} of {totalPages} — showing {cards.length} of {total}
+            Page {page} of {totalPages} — showing {visibleCards.length} of{' '}
+            {visibleTotal}
           </p>
           <div className="flex items-center gap-2">
             {page > 1 && onPrevPage && (
               <button
                 onClick={onPrevPage}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 style={{
                   backgroundColor: 'var(--surface-card)',
                   color: 'var(--foreground)',
@@ -309,7 +322,7 @@ export const Success = ({
             {hasMore && onNextPage && (
               <button
                 onClick={onNextPage}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 style={{
                   backgroundColor: 'var(--foreground)',
                   color: 'var(--background)',
@@ -327,6 +340,7 @@ export const Success = ({
         card={selectedCard}
         isOpen={selectedCard !== null}
         onClose={() => setSelectedCard(null)}
+        onArchive={handleArchive}
       />
     </div>
   )

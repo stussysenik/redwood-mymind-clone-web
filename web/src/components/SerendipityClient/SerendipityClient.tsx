@@ -12,7 +12,7 @@ import { navigate } from '@redwoodjs/router';
 import { ChevronLeft, ChevronRight, Shuffle, Sparkles, ArrowLeft } from 'lucide-react';
 import type { Card } from 'src/lib/types';
 import { rowToCard, type CardRow } from 'src/lib/types';
-import { supabaseBrowser } from 'src/lib/supabase';
+import { getSupabaseBrowser } from 'src/lib/supabase';
 import { FocusCard } from 'src/components/FocusCard';
 import { CardDetailModal } from 'src/components/CardDetailModal';
 import { useSwipe } from 'src/hooks/useSwipe';
@@ -155,6 +155,8 @@ export function SerendipityClient({ initialCards }: SerendipityClientProps) {
 
 	// Realtime subscription for data sync (enrichment updates)
 	useEffect(() => {
+		const supabaseBrowser = getSupabaseBrowser();
+
 		if (!supabaseBrowser) return;
 
 		const channel = supabaseBrowser

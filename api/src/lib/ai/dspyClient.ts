@@ -8,6 +8,9 @@
  * @fileoverview DSPy microservice client
  */
 
+import type { CardType, DSPyTagsResponse as SharedDSPyTagsResponse } from 'src/lib/semantic';
+import { DSPyTagsResponseSchema, flattenDSPyTags } from 'src/lib/semantic';
+
 // =============================================================================
 // CONFIGURATION
 // =============================================================================
@@ -127,15 +130,7 @@ export interface TagsRequest {
  * Response from DSPy tag generation.
  * Structured hierarchical tags for cross-disciplinary discovery.
  */
-export interface TagsResponse {
-  tags: {
-    primary: string[];     // 1-2 essence tags: "bmw", "terence-tao", "breakdance"
-    contextual: string[];  // 1-2 subject tags: "automotive", "mathematics", "dance"
-    vibe: string;          // 1 abstract mood: "kinetic", "minimalist", "contemplative"
-  };
-  confidence: number;
-  reasoning?: string;
-}
+export type TagsResponse = SharedDSPyTagsResponse;
 
 // =============================================================================
 // CLIENT CLASS
@@ -261,7 +256,9 @@ class DSPyClient {
     if (!this.enabled) return null;
 
     try {
-      const response = await this.post<TagsResponse>('/generate/tags', req);
+      const response = DSPyTagsResponseSchema.parse(
+        await this.post<unknown>('/generate/tags', req)
+      );
       const tagCount = response.tags.primary.length + response.tags.contextual.length + (response.tags.vibe ? 1 : 0);
       console.log(`[DSPy] Tags generated (${tagCount} tags, confidence: ${response.confidence})`);
       return response;
@@ -524,7 +521,12 @@ export async function extractContentWithDSPy(
 export async function generateTagsWithDSPy(
   content: string,
   platform: DSPyPlatform,
-  options: { imageUrl?: string; title?: string; imageCount?: number } = {}
+  options: {
+    imageUrl?: string;
+    title?: string;
+    imageCount?: number;
+    contentType?: CardType;
+  } = {}
 ): Promise<{ tags: string[]; confidence: number }> {
   // Try DSPy first (O(1) optimized inference)
   const dspyResult = await dspyClient.generateTags({
@@ -536,15 +538,13 @@ export async function generateTagsWithDSPy(
   });
 
   if (dspyResult && dspyResult.confidence > 0.5) {
-    // Flatten hierarchical tags to array
-    const flatTags = [
-      ...dspyResult.tags.primary,
-      ...dspyResult.tags.contextual,
-      dspyResult.tags.vibe,
-    ].filter(Boolean);
+    const flatTags = flattenDSPyTags(
+      dspyResult,
+      options.contentType || 'article'
+    );
 
-    console.log(`[DSPy] Tags generated: [${flatTags.join(', ')}] (confidence: ${dspyResult.confidence})`);
-    return { tags: flatTags, confidence: dspyResult.confidence };
+    console.log(`[DSPy] Tags generated: [${flatTags.tags.join(', ')}] (confidence: ${flatTags.confidence})`);
+    return { tags: flatTags.tags, confidence: flatTags.confidence };
   }
 
   // Fallback to empty - GLM classification will handle tagging

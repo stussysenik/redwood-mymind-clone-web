@@ -5,13 +5,8 @@
  * ~350 tokens with platform detection and vibe vocabulary enforcement.
  */
 
-import type { CardType } from '../types'
 import type { ClientClassification } from './types'
-import { detectPlatformHint, BLOCKED_TAGS, validateTags } from '../tag-vocabulary'
-
-const VALID_TYPES: CardType[] = [
-  'article', 'image', 'note', 'product', 'book', 'video', 'audio', 'social', 'movie', 'website',
-]
+import { buildClientClassification, detectPlatformHint } from '../semantic'
 
 /**
  * Build the classification prompt for the local model.
@@ -46,7 +41,7 @@ YOUR RESPONSE (one JSON object):
 
 RULES:
 - type: article|image|note|product|book|video|audio|social|movie|website
-- tags: 5-10 lowercase hyphenated, covering entity+domain+aesthetic+format+mood+cultural-context+intent
+- tags: 3-5 lowercase hyphenated, covering entity+domain+aesthetic+format+mood+cultural-context+intent
 - NO generic: design, art, technology, web, content, cool, nice, beautiful, interesting
 - ${platformGuideline}`
 }
@@ -99,25 +94,9 @@ export function parseClassificationJSON(text: string): ClientClassification | nu
 function validateAndBuild(parsed: Record<string, unknown>): ClientClassification | null {
   if (!parsed || typeof parsed !== 'object') return null
 
-  const type = VALID_TYPES.includes(parsed.type as CardType) ? (parsed.type as CardType) : 'article'
-  const title = typeof parsed.title === 'string' && parsed.title.length > 0
-    ? parsed.title.slice(0, 100)
-    : null
-  if (!title) return null
-
-  const rawTags = Array.isArray(parsed.tags)
-    ? parsed.tags
-        .filter((t: unknown): t is string => typeof t === 'string')
-        .map((t: string) => t.toLowerCase().trim())
-        .filter((t: string) => t.length > 0)
-        .slice(0, 12)
-    : []
-
-  const tags = validateTags(rawTags)
-
-  const summary = typeof parsed.summary === 'string' && parsed.summary.length > 0
-    ? (parsed.summary as string).slice(0, 200)
-    : ''
-
-  return { type, title, tags, summary, source: 'local-ai' }
+  try {
+    return buildClientClassification(parsed)
+  } catch {
+    return null
+  }
 }

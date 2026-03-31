@@ -114,7 +114,7 @@ function truncate(s: string | null | undefined, max: number): string {
 // =============================================================================
 
 export function GraphClient({ nodes, links }: GraphClientProps) {
-	const [minWeight, setMinWeight] = useState(3);
+	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 
 	// Card detail modal state
@@ -403,13 +403,13 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 			// ---- ORPHAN NODES: hollow dashed rings ----
 			if (isOrphan && !isHovered) {
-				const r = 4;
+				const r = 6;
 				ctx.beginPath();
 				ctx.arc(x, y, r, 0, 2 * Math.PI);
 				ctx.setLineDash([2, 2]);
 				ctx.strokeStyle = color;
-				ctx.globalAlpha = inFocusMode ? 0.04 : 0.2;
-				ctx.lineWidth = 1;
+				ctx.globalAlpha = inFocusMode ? 0.12 : 0.35;
+				ctx.lineWidth = 1.25;
 				ctx.stroke();
 				ctx.setLineDash([]);
 				ctx.globalAlpha = 1;
@@ -419,7 +419,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 				ctx.fillStyle = color;
-				ctx.globalAlpha = inFocusMode ? 0.04 : 0.15;
+				ctx.globalAlpha = inFocusMode ? 0.14 : 0.28;
 				ctx.fillText(TYPE_INITIALS[type] || '?', x, y);
 				ctx.globalAlpha = 1;
 				return;
@@ -549,7 +549,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	);
 
 	const handleReset = useCallback(() => {
-		setMinWeight(3);
+		setMinWeight(1);
 		setFocusedNodeId(null);
 	}, []);
 

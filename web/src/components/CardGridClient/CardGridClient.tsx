@@ -558,7 +558,7 @@ export function CardGridClient({
           content: detail.content || null,
           imageUrl: detail.imageUrl || null,
           tags: detail.tags || [],
-          metadata: detail.metadata || { processing: true, enrichmentStage: 'processing' },
+          metadata: detail.metadata || { processing: true, enrichmentStage: 'queued' },
           createdAt: detail.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           deletedAt: null,

@@ -46,6 +46,184 @@ function toDSPyPlatform(platform: string): DSPyPlatform | null {
     : null
 }
 
+type ScrapedCardData = {
+  title?: string
+  description?: string
+  imageUrl?: string | null
+  images?: string[]
+  content?: string | null
+  author?: string
+  authorName?: string
+  authorHandle?: string
+  authorAvatar?: string
+  publishedAt?: string
+  domain?: string
+  url?: string
+  hashtags?: string[]
+  mentions?: string[]
+  needsMobileScreenshot?: boolean
+  engagement?: {
+    likes?: number
+    retweets?: number
+    replies?: number
+    views?: number
+  }
+}
+
+type CardSnapshot = {
+  title: string | null
+  content: string | null
+  imageUrl: string | null
+  url: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface ScrapedCardUpdate {
+  content?: string
+  title?: string
+  imageUrl?: string
+  metadata: Record<string, unknown>
+  analysisContent: string
+  analysisImageUrl: string | null
+  imageCount: number
+}
+
+function pickText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item) => pickText(item))
+    .filter((item): item is string => !!item)
+}
+
+function isGenericTitle(title: string | null): boolean {
+  if (!title) {
+    return true
+  }
+
+  const normalized = title.trim().toLowerCase()
+  return normalized === 'link' || normalized === 'saved link' || normalized === 'saved item'
+}
+
+function isModuleResolutionError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (
+      'code' in error
+        ? (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+        : /Cannot find module|ERR_MODULE_NOT_FOUND/.test(error.message)
+    )
+  )
+}
+
+async function importScraperModule() {
+  try {
+    return await import('../../lib/scraper/scraper.js')
+  } catch (error) {
+    if (!isModuleResolutionError(error)) {
+      throw error
+    }
+
+    return import('../../lib/scraper/scraper')
+  }
+}
+
+export function buildScrapedCardUpdate(
+  card: CardSnapshot,
+  scraped?: ScrapedCardData | null
+): ScrapedCardUpdate {
+  const currentMetadata = ((card.metadata as Record<string, unknown>) || {})
+  const currentTitle = pickText(card.title)
+  const currentContent = pickText(card.content)
+  const currentImageUrl = pickText(card.imageUrl)
+  const currentImages = toStringArray(currentMetadata.images)
+  const currentHashtags = toStringArray(currentMetadata.hashtags)
+  const currentMentions = toStringArray(currentMetadata.mentions)
+
+  const scrapedTitle = pickText(scraped?.title)
+  const scrapedContent = pickText(scraped?.content)
+  const scrapedDescription = pickText(scraped?.description)
+  const scrapedImageUrl = pickText(scraped?.imageUrl) || pickText(scraped?.images?.[0])
+  const scrapedImages = toStringArray(scraped?.images)
+
+  const shouldPromoteTitle =
+    !!scrapedTitle && (!currentTitle || isGenericTitle(currentTitle))
+  const shouldPromoteImage = !!scrapedImageUrl && !currentImageUrl
+
+  const mergedImages = scrapedImages.length > 0 ? scrapedImages : currentImages
+  const imageCount = Math.max(
+    typeof currentMetadata.slideCount === 'number' ? currentMetadata.slideCount : 0,
+    mergedImages.length,
+    scrapedImageUrl ? 1 : 0,
+    currentImageUrl ? 1 : 0
+  )
+
+  const metadata: Record<string, unknown> = {
+    ...currentMetadata,
+    scrapedAt: new Date().toISOString(),
+    sourceDomain:
+      scraped?.domain || (currentMetadata.sourceDomain as string | undefined) || undefined,
+    sourceUrl:
+      scraped?.url || card.url || (currentMetadata.sourceUrl as string | undefined) || undefined,
+    scrapedTitle: scrapedTitle || currentMetadata.scrapedTitle || undefined,
+    scrapedDescription: scrapedDescription || currentMetadata.scrapedDescription || undefined,
+    scrapedImageUrl: scrapedImageUrl || currentMetadata.scrapedImageUrl || undefined,
+    images: mergedImages,
+    author: pickText(scraped?.author) || (currentMetadata.author as string | undefined) || undefined,
+    authorName:
+      pickText(scraped?.authorName) || (currentMetadata.authorName as string | undefined) || undefined,
+    authorHandle:
+      pickText(scraped?.authorHandle) || (currentMetadata.authorHandle as string | undefined) || undefined,
+    authorAvatar:
+      pickText(scraped?.authorAvatar) || (currentMetadata.authorAvatar as string | undefined) || undefined,
+    publishedAt:
+      pickText(scraped?.publishedAt) || (currentMetadata.publishedAt as string | undefined) || undefined,
+    hashtags: scraped?.hashtags?.length ? toStringArray(scraped.hashtags) : currentHashtags,
+    mentions: scraped?.mentions?.length ? toStringArray(scraped.mentions) : currentMentions,
+    engagement: scraped?.engagement || currentMetadata.engagement || undefined,
+    needsMobileScreenshot:
+      scraped?.needsMobileScreenshot ?? currentMetadata.needsMobileScreenshot ?? undefined,
+  }
+
+  const result: ScrapedCardUpdate = {
+    metadata,
+    analysisContent:
+      scrapedContent ||
+      scrapedTitle ||
+      currentContent ||
+      currentTitle ||
+      card.url ||
+      'Saved item',
+    analysisImageUrl: scrapedImageUrl || currentImageUrl || null,
+    imageCount,
+  }
+
+  if (scrapedContent) {
+    result.content = scrapedContent
+  }
+
+  if (shouldPromoteTitle) {
+    result.title = scrapedTitle || undefined
+  }
+
+  if (shouldPromoteImage) {
+    result.imageUrl = scrapedImageUrl || undefined
+  }
+
+  return result
+}
+
 // =============================================================================
 // graphData RESOLVER (unchanged)
 // =============================================================================
@@ -56,6 +234,19 @@ export const graphData: QueryResolvers['graphData'] = async ({
   minWeight = 1,
 }) => {
   const userId = context.currentUser!.id
+  const graphCardLimit = (() => {
+    const raw = process.env.GRAPH_CARD_LIMIT
+    if (raw === '0') {
+      return undefined
+    }
+
+    const parsed = Number.parseInt(raw || '', 10)
+    if (!Number.isFinite(parsed)) {
+      return 1000
+    }
+
+    return Math.min(Math.max(parsed, 50), 5000)
+  })()
 
   // Fetch cards for graph
   const where: any = {
@@ -78,13 +269,13 @@ export const graphData: QueryResolvers['graphData'] = async ({
     }
     cards = await db.card.findMany({
       where,
-      take: 200,
+      take: graphCardLimit,
       orderBy: { createdAt: 'desc' },
     })
   } else {
     cards = await db.card.findMany({
       where,
-      take: 200,
+      take: graphCardLimit,
       orderBy: { createdAt: 'desc' },
     })
   }
@@ -159,7 +350,7 @@ export const enrichCard: MutationResolvers['enrichCard'] = async ({
   return {
     success: true,
     cardId,
-    stage: 'processing',
+    stage: 'queued',
     error: null,
   }
 }
@@ -179,11 +370,11 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       return
     }
 
-    const currentMetadata = (card.metadata as any) || {}
+    let currentMetadata = (card.metadata as any) || {}
 
     // Initialize timing tracking
     const platform = detectPlatform(card.url)
-    const imageCount = Math.max(
+    let imageCount = Math.max(
       currentMetadata.slideCount || 0,
       currentMetadata.images?.length || 0,
       card.imageUrl ? 1 : 0
@@ -196,6 +387,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       !!card.imageUrl,
       imageCount
     )
+    const initialStage = card.url ? 'scraping' : 'analyzing'
 
     // 2. Set processing state
     await db.card.update({
@@ -206,7 +398,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           processing: true,
           enrichmentError: undefined,
           enrichmentFailedAt: undefined,
-          enrichmentStage: 'scraping',
+          enrichmentStage: initialStage,
           enrichmentTiming: {
             startedAt: timing.startedAt,
             estimatedTotalMs: timing.estimatedTotalMs,
@@ -216,34 +408,56 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       },
     })
 
-    // 3. Scrape URL if content is missing
+    // 3. Scrape URL when the card is thin or still missing key metadata
     let contentToAnalyze = card.content
+    let analysisImageUrl = card.imageUrl
     let scrapeMs = 0
 
-    if (!contentToAnalyze && card.url) {
+    const shouldScrape =
+      !!card.url &&
+      (
+        !contentToAnalyze ||
+        contentToAnalyze.trim().length < 160 ||
+        !card.imageUrl ||
+        !card.title ||
+        isGenericTitle(card.title)
+      )
+
+    if (shouldScrape) {
       const scrapeStart = Date.now()
       try {
-        // Dynamic import — scraper module may not exist yet
-        const { scrapeUrl } = await import('src/lib/scraper/scraper')
+        const { scrapeUrl } = await importScraperModule()
         const scraped = await scrapeUrl(card.url)
-        contentToAnalyze = scraped.content
+        const scrapedUpdate = buildScrapedCardUpdate(card, scraped)
+        contentToAnalyze = scrapedUpdate.analysisContent
+        analysisImageUrl = scrapedUpdate.analysisImageUrl
+        imageCount = scrapedUpdate.imageCount
         scrapeMs = Date.now() - scrapeStart
 
-        if (contentToAnalyze) {
-          await db.card.update({
-            where: { id: cardId },
-            data: {
-              content: contentToAnalyze,
-              ...(scraped.title &&
-              (!card.title || card.title === 'Link')
-                ? { title: scraped.title }
-                : {}),
-              ...(!card.imageUrl && scraped.imageUrl
-                ? { imageUrl: scraped.imageUrl }
-                : {}),
-            },
-          })
+        const scrapePatch: Record<string, unknown> = {
+          metadata: scrapedUpdate.metadata,
         }
+
+        if (scrapedUpdate.content !== undefined) {
+          scrapePatch.content = scrapedUpdate.content
+        }
+        if (scrapedUpdate.title !== undefined) {
+          scrapePatch.title = scrapedUpdate.title
+        }
+        if (scrapedUpdate.imageUrl !== undefined) {
+          scrapePatch.imageUrl = scrapedUpdate.imageUrl
+        }
+
+        await db.card.update({
+          where: { id: cardId },
+          data: scrapePatch,
+        })
+
+        card = {
+          ...card,
+          ...scrapePatch,
+        }
+        currentMetadata = scrapedUpdate.metadata
       } catch (scrapeErr) {
         logger.warn(
           { cardId, err: scrapeErr },
@@ -284,7 +498,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     const classification = await classifyContent(
       card.url,
       contentToAnalyze,
-      card.imageUrl,
+      analysisImageUrl,
       imageCount
     )
     const classifyMs = Date.now() - classifyStart
@@ -308,6 +522,25 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     let summarySource: 'dspy' | 'glm' | 'fallback' = 'glm'
     let tagsSource: 'dspy' | 'glm' | 'fallback' = 'glm'
 
+    await db.card.update({
+      where: { id: cardId },
+      data: {
+        metadata: {
+          ...currentMetadata,
+          processing: true,
+          enrichmentStage: 'extracting',
+          enrichmentTiming: {
+            startedAt: timing.startedAt,
+            estimatedTotalMs: timing.estimatedTotalMs,
+            platform: timing.platform,
+            scrapeMs,
+            classifyMs,
+            stageUpdatedAt: Date.now(),
+          },
+        },
+      },
+    })
+
     if (dspyPlatform && contentToAnalyze) {
       try {
         const [dspySummary, dspyTags] = await Promise.all([
@@ -319,8 +552,9 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           }),
           generateTagsWithDSPy(contentToAnalyze, dspyPlatform, {
             title: classification.title,
-            imageUrl: card.imageUrl || undefined,
+            imageUrl: analysisImageUrl || undefined,
             imageCount,
+            contentType: classification.type,
           }),
         ])
 
@@ -409,6 +643,25 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           ? 'mixed'
           : 'glm'
 
+    await db.card.update({
+      where: { id: cardId },
+      data: {
+        metadata: {
+          ...currentMetadata,
+          processing: true,
+          enrichmentStage: 'finalizing',
+          enrichmentTiming: {
+            startedAt: timing.startedAt,
+            estimatedTotalMs: timing.estimatedTotalMs,
+            platform: timing.platform,
+            scrapeMs,
+            classifyMs,
+            stageUpdatedAt: Date.now(),
+          },
+        },
+      },
+    })
+
     // 11. Final update with all enriched data
     await db.card.update({
       where: { id: cardId },
@@ -430,7 +683,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           enrichmentSource,
           tagsSource,
           summarySource,
-          titleSource: finalTitle ? 'ai' : currentMetadata.titleSource || 'scraped',
+          titleSource: finalTitle ? 'glm' : currentMetadata.titleSource || 'scraped',
           embeddingProvider: embeddingProvenance.provider || currentMetadata.embeddingProvider,
           embeddingModel: embeddingProvenance.model || currentMetadata.embeddingModel,
           embeddingStored,
@@ -538,9 +791,9 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 export const captureScreenshot: MutationResolvers['captureScreenshot'] =
   async ({ url }) => {
     try {
-      // Dynamic import — module may not exist yet
+      // Use the emitted JS extension so the built ESM bundle resolves cleanly.
       const { captureWithPlaywright } = await import(
-        'src/lib/scraper/screenshotPlaywright'
+        '../../lib/scraper/screenshotPlaywright.js'
       )
       const result = await captureWithPlaywright(url)
 

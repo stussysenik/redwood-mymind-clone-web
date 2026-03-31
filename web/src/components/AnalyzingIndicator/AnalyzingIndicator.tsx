@@ -12,6 +12,11 @@
  */
 
 import { Loader2, Brain, Wand2, Sparkles } from 'lucide-react';
+import {
+	ENRICHMENT_PROGRESS_STAGES,
+	type EnrichmentProgressStage,
+	toProgressEnrichmentStage,
+} from 'src/lib/semantic';
 
 // =============================================================================
 // TYPES
@@ -50,13 +55,15 @@ interface AnalyzingIndicatorProps {
 // ANIMATION STAGES
 // =============================================================================
 
-const STAGES = [
-	{ name: 'queued', label: 'Queued', icon: Loader2 },
-	{ name: 'fetching', label: 'Fetching content', icon: Loader2 },
-	{ name: 'analyzing', label: 'Analyzing with AI', icon: Brain },
-	{ name: 'extracting', label: 'Extracting insights', icon: Wand2 },
-	{ name: 'finalizing', label: 'Generating tags', icon: Sparkles },
-];
+const STAGES = ENRICHMENT_PROGRESS_STAGES;
+
+const STAGE_ICONS: Record<EnrichmentProgressStage, typeof Loader2> = {
+	queued: Loader2,
+	scraping: Loader2,
+	analyzing: Brain,
+	extracting: Wand2,
+	finalizing: Sparkles,
+};
 
 // =============================================================================
 // COMPONENT
@@ -80,15 +87,16 @@ export function AnalyzingIndicator({
 }: AnalyzingIndicatorProps) {
 	// When a server stage is provided, auto-enable stage display
 	const effectiveShowStage = showStage || !!serverStage;
+	const normalizedStage = toProgressEnrichmentStage(serverStage);
 
 	// Determine stage: prefer server stage, fall back to progress-based, then default
-	const stageIndex = serverStage
-		? Math.max(0, STAGES.findIndex(s => s.name === serverStage))
+	const stageIndex = normalizedStage
+		? Math.max(0, STAGES.findIndex(s => s.name === normalizedStage))
 		: progress !== undefined
 			? Math.min(Math.floor(progress / (100 / STAGES.length)), STAGES.length - 1)
 			: 0;
 	const currentStage = STAGES[stageIndex];
-	const StageIcon = currentStage?.icon || Brain;
+	const StageIcon = STAGE_ICONS[currentStage?.name || 'analyzing'] || Brain;
 
 	const effectiveLabel = label || (effectiveShowStage ? currentStage?.label : 'Analyzing');
 

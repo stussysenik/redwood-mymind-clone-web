@@ -5,21 +5,29 @@
  * These mirror the source app's types exactly.
  */
 
+import type {
+  AnyEnrichmentStage as SharedAnyEnrichmentStage,
+  AnyTitleSource as SharedAnyTitleSource,
+  CardType as SharedCardType,
+  ClassificationResult as SharedClassificationResult,
+  ClientClassification as SharedClientClassification,
+  EnrichmentSource as SharedEnrichmentSource,
+  PreviewSource as SharedPreviewSource,
+  SummarySource as SharedSummarySource,
+  TagSource as SharedTagSource,
+  VectorBackend as SharedVectorBackend,
+} from 'src/lib/semantic'
+import {
+  normalizeCardType,
+  normalizeEnrichmentStage,
+  normalizeTitleSource,
+} from 'src/lib/semantic'
+
 // =============================================================================
 // CARD TYPES
 // =============================================================================
 
-export type CardType =
-  | 'article'
-  | 'image'
-  | 'note'
-  | 'product'
-  | 'book'
-  | 'video'
-  | 'audio'
-  | 'social'
-  | 'movie'
-  | 'website'
+export type CardType = SharedCardType
 
 export interface CardMetadata {
   summary?: string
@@ -72,34 +80,16 @@ export interface CardMetadata {
   carouselExtractionError?: string
 
   // Enrichment provenance
-  enrichmentStage?:
-    | 'pending'
-    | 'queued'
-    | 'scraping'
-    | 'fetching'
-    | 'analyzing'
-    | 'classifying'
-    | 'extracting'
-    | 'finalizing'
-    | 'complete'
-    | 'fallback'
-    | 'failed'
-  enrichmentSource?: 'dspy' | 'glm' | 'fallback' | 'mixed'
+  enrichmentStage?: SharedAnyEnrichmentStage
+  enrichmentSource?: SharedEnrichmentSource
   enrichmentConfidence?: number
-  tagsSource?: 'dspy' | 'glm' | 'fallback'
-  summarySource?: 'dspy' | 'glm' | 'fallback'
-  titleSource?: 'scraped' | 'dspy' | 'glm' | 'fallback'
+  tagsSource?: SharedTagSource
+  summarySource?: SharedSummarySource
+  titleSource?: SharedAnyTitleSource
   embeddingProvider?: string
   embeddingModel?: string
-  vectorBackend?: 'supabase' | 'pinecone'
-  previewSource?:
-    | 'instagram-api'
-    | 'twitter-api'
-    | 'scraper'
-    | 'playwright'
-    | 'microlink'
-    | 'user-upload'
-    | 'unknown'
+  vectorBackend?: SharedVectorBackend
+  previewSource?: SharedPreviewSource
   previewAspectRatio?: string
 
   // Social engagement
@@ -167,13 +157,8 @@ export interface SpaceWithCount extends Space {
 // AI TYPES
 // =============================================================================
 
-export interface ClassificationResult {
-  type: CardType
-  title: string
-  tags: string[]
-  summary: string
-  platform?: string
-}
+export type ClassificationResult = SharedClassificationResult
+export type ClientClassification = SharedClientClassification
 
 export interface ImageAnalysisResult {
   colors: string[]
@@ -203,13 +188,7 @@ export interface SaveCardRequest {
   imageUrl?: string
   tags?: string[]
   source?: SaveSource
-  clientClassification?: {
-    type: CardType
-    title: string
-    tags: string[]
-    summary: string
-    source: 'local-ai'
-  }
+  clientClassification?: ClientClassification
 }
 
 // =============================================================================
@@ -233,15 +212,24 @@ export interface CardRow {
 }
 
 export function rowToCard(row: CardRow): Card {
+  const metadata = (row.metadata || {}) as CardMetadata
+
   return {
     id: row.id,
     userId: row.user_id,
-    type: row.type as CardType,
+    type: normalizeCardType(row.type),
     title: row.title,
     content: row.content,
     url: row.url,
     imageUrl: row.image_url,
-    metadata: row.metadata as CardMetadata,
+    metadata: {
+      ...metadata,
+      enrichmentStage:
+        normalizeEnrichmentStage(metadata.enrichmentStage) ||
+        metadata.enrichmentStage,
+      titleSource:
+        normalizeTitleSource(metadata.titleSource) || metadata.titleSource,
+    },
     tags: row.tags || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,

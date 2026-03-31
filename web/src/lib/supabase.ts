@@ -1,8 +1,5 @@
-/**
- * Supabase browser client — stub module
- *
- * Components import this for realtime subscriptions.
- * Returns null in Storybook/test environments.
- */
+import { createClient } from './supabase-browser'
 
-export const supabaseBrowser = null as any
+export function getSupabaseBrowser() {
+  return createClient()
+}

@@ -7,10 +7,12 @@
  * @fileoverview Search input with mymind-inspired styling
  */
 
+import React from 'react';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { navigate, useLocation } from '@redwoodjs/router';
+import { useMutation } from '@redwoodjs/web';
 import { Search, X, PackagePlus, Loader2 } from 'lucide-react';
-import { useDebounce } from 'src/hooks/useDebounce';
+import { useDebounce } from '../../hooks/useDebounce';
 
 // =============================================================================
 // PROPS
@@ -34,7 +36,7 @@ export function SearchBar({
 	placeholder = 'Search your creative brain...',
 	onSearch
 }: SearchBarProps) {
-	const { pathname, search } = useLocation();
+	const { search } = useLocation();
 	const searchParams = new URLSearchParams(search);
 
 	const initialQuery = searchParams.get('q') ?? '';
@@ -43,6 +45,15 @@ export function SearchBar({
 	const [isFocused, setIsFocused] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
+
+	const [createSpace] = useMutation(gql`
+		mutation SearchBarCreateSpace($input: CreateSpaceInput!) {
+			createSpace(input: $input) {
+				id
+				name
+			}
+		}
+	`);
 
 	const debouncedQuery = useDebounce(query, 350);
 	const currentUrlQuery = searchParams.get('q') ?? '';
@@ -114,22 +125,21 @@ export function SearchBar({
 	};
 
 	const handleSaveSpace = async () => {
-		if (!query.trim()) return;
+		const normalizedQuery = query.trim().replace(/^#+/, '');
+		if (!normalizedQuery) return;
+
 		setIsSaving(true);
 		try {
-			// TODO: Replace with GraphQL mutation for saving a space from search
-			await fetch('/api/save', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					type: 'note',
-					title: `Space: ${query}`,
-					content: `Created from search "${query}"`,
-					tags: [query]
-				})
+			await createSpace({
+				variables: {
+					input: {
+						name: normalizedQuery,
+						query: normalizedQuery,
+						isSmart: true
+					}
+				}
 			});
-			// Trigger a re-fetch or navigation
-			navigate(pathname);
+			navigate('/spaces');
 		} catch (error) {
 			console.error('Failed to save space', error);
 		} finally {
@@ -205,6 +215,7 @@ export function SearchBar({
 							disabled={isSaving}
 							className="p-1 rounded-full text-[var(--foreground-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:opacity-50"
 							title="Save as Space"
+							type="button"
 						>
 							{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
 						</button>

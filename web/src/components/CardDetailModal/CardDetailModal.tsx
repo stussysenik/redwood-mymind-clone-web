@@ -43,8 +43,14 @@ import { useMutation, useQuery } from '@redwoodjs/web'
 import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
 import { useMediaQuery } from 'src/hooks/useMediaQuery'
 import { useSwipe } from 'src/hooks/useSwipe'
+import {
+  formatRemainingTime,
+  getEnrichmentProgress,
+} from 'src/lib/enrichment-timing'
+import { normalizeEnrichmentStage } from 'src/lib/semantic'
 import type { Card } from 'src/lib/types'
 import { ImageLightbox } from 'src/components/ImageLightbox/ImageLightbox'
+import { useToast } from 'src/components/Toast/Toast'
 
 // =============================================================================
 // GRAPHQL MUTATIONS
@@ -138,71 +144,6 @@ function isVideoUrl(url: string | null | undefined): boolean {
   )
 }
 
-// Enrichment timing helpers (inlined from enrichment-timing.ts)
-interface EnrichmentStageInfo {
-  name: string
-  label: string
-  icon: string
-  estimatedPercent: number
-}
-
-const ENRICHMENT_STAGES: EnrichmentStageInfo[] = [
-  { name: 'queued', label: 'Queued...', icon: '\u23F3', estimatedPercent: 5 },
-  { name: 'fetching', label: 'Fetching content...', icon: '\uD83D\uDD0D', estimatedPercent: 15 },
-  { name: 'analyzing', label: 'Analyzing with AI...', icon: '\uD83E\uDDE0', estimatedPercent: 45 },
-  { name: 'extracting', label: 'Extracting insights...', icon: '\u2728', estimatedPercent: 25 },
-  { name: 'finalizing', label: 'Finalizing...', icon: '\uD83D\uDCDD', estimatedPercent: 10 },
-]
-
-function getEnrichmentProgress(
-  elapsedMs: number,
-  estimatedTotalMs: number
-) {
-  const overallProgress = Math.min(elapsedMs / estimatedTotalMs, 0.95)
-  let accumulatedPercent = 0
-  let stageIndex = 0
-  let stageProgress = 0
-
-  for (let i = 0; i < ENRICHMENT_STAGES.length; i++) {
-    const stage = ENRICHMENT_STAGES[i]
-    const stageEnd = accumulatedPercent + stage.estimatedPercent / 100
-    if (overallProgress <= stageEnd) {
-      stageIndex = i
-      const stageStart = accumulatedPercent
-      const stageRange = stage.estimatedPercent / 100
-      stageProgress = (overallProgress - stageStart) / stageRange
-      break
-    }
-    accumulatedPercent = stageEnd
-    stageIndex = i
-  }
-
-  if (stageIndex >= ENRICHMENT_STAGES.length) {
-    stageIndex = ENRICHMENT_STAGES.length - 1
-  }
-
-  const remainingMs = Math.max(0, estimatedTotalMs - elapsedMs)
-
-  return {
-    stage: ENRICHMENT_STAGES[stageIndex],
-    stageIndex,
-    overallProgress,
-    stageProgress: Math.min(stageProgress, 1),
-    remainingMs,
-  }
-}
-
-function formatRemainingTime(ms: number): string {
-  if (ms < 1000) return 'Almost done...'
-  if (ms < 5000) return 'A few seconds...'
-  const seconds = Math.ceil(ms / 1000)
-  if (seconds < 60) return `~${seconds}s remaining`
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  if (remainingSeconds === 0) return `~${minutes}m remaining`
-  return `~${minutes}m ${remainingSeconds}s remaining`
-}
-
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -232,6 +173,7 @@ export function CardDetailModal({
   onArchive,
   availableSpaces = [],
 }: CardDetailModalProps) {
+  const { showConfirm, showToast } = useToast()
   // ---------------------------------------------------------------------------
   // GraphQL mutations
   // ---------------------------------------------------------------------------
@@ -301,11 +243,10 @@ export function CardDetailModal({
   })()
 
   const enrichmentStage =
-    card?.metadata?.enrichmentStage ||
-    (card?.metadata?.processing ? 'pending' : undefined)
+    normalizeEnrichmentStage(card?.metadata?.enrichmentStage) ||
+    (card?.metadata?.processing ? 'queued' : undefined)
   const enrichmentConfidence = card?.metadata?.enrichmentConfidence
   const hasFallbackEnrichment =
-    card?.metadata?.enrichmentStage === 'fallback' ||
     card?.metadata?.summarySource === 'fallback' ||
     card?.metadata?.tagsSource === 'fallback'
   const enrichmentTone = hasFallbackEnrichment
@@ -359,11 +300,13 @@ export function CardDetailModal({
 
     try {
       await enrichCard({ variables: { cardId: card.id } })
+      showToast('Re-analysis started', 'info')
 
       // Poll for enrichment completion (checks every 5s, up to 60s)
       const pollForUpdate = async (attempts = 0): Promise<void> => {
         if (attempts >= 12) {
           console.warn('[Re-analyze] Timed out waiting for enrichment')
+          showToast('Re-analysis is still running in the background', 'warning')
           return
         }
         await new Promise((r) => setTimeout(r, 5000))
@@ -371,12 +314,18 @@ export function CardDetailModal({
           const result = await refetchCard({ id: card.id })
           const updated = result.data?.card
           if (updated) {
-            const stage = updated.metadata?.enrichmentStage
+            const stage = normalizeEnrichmentStage(updated.metadata?.enrichmentStage)
             if (stage === 'complete' || stage === 'failed') {
               // Update local state with new data
               setTags(updated.tags || [])
               setSummary(decodeHtmlEntities(updated.metadata?.summary || ''))
               setTitle(decodeHtmlEntities(updated.title || ''))
+              showToast(
+                stage === 'complete'
+                  ? 'AI analysis updated'
+                  : 'Re-analysis failed. Existing data was preserved.',
+                stage === 'complete' ? 'success' : 'warning'
+              )
               return
             }
           }
@@ -388,10 +337,23 @@ export function CardDetailModal({
       await pollForUpdate()
     } catch (err) {
       console.error('[Re-analyze] Error:', err)
+      showToast('Could not start re-analysis', 'error')
     } finally {
       setIsReAnalyzing(false)
     }
-  }, [card, isReAnalyzing, enrichCard, refetchCard])
+  }, [card, isReAnalyzing, enrichCard, refetchCard, showToast])
+
+  const requestReAnalyze = useCallback(() => {
+    if (!card || isReAnalyzing) return
+
+    showConfirm(
+      'Re-analyze will replace AI-generated title, summary, and tags with a fresh pass. Continue?',
+      () => {
+        void handleReAnalyze()
+      },
+      'Re-analyze'
+    )
+  }, [card, handleReAnalyze, isReAnalyzing, showConfirm])
 
   // ---------------------------------------------------------------------------
   // Regenerate tags only
@@ -765,18 +727,39 @@ export function CardDetailModal({
               </button>
             </div>
 
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className={`p-3 rounded-full transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 ${
-                mobileView === 'visual'
-                  ? 'bg-black/30 hover:bg-black/40 active:bg-black/50 text-white'
-                  : 'bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600'
-              }`}
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {onArchive && !card.archivedAt && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onArchive(card.id)
+                    onClose()
+                  }}
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border transition-colors ${
+                    mobileView === 'visual'
+                      ? 'border-white/10 bg-black/30 text-white hover:bg-black/40 active:bg-black/50'
+                      : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+                  }`}
+                  title="Archive"
+                  aria-label="Archive"
+                >
+                  <Archive className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Close Button */}
+              <button
+                onClick={onClose}
+                className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors ${
+                  mobileView === 'visual'
+                    ? 'bg-black/30 hover:bg-black/40 active:bg-black/50 text-white'
+                    : 'bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600'
+                }`}
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1578,12 +1561,13 @@ export function CardDetailModal({
           </div>
 
           {/* Bottom Actions Bar - Sticky on mobile */}
-          <div className="p-4 md:p-6 border-t border-[var(--border)] flex items-center justify-center gap-3 md:gap-4 bg-[var(--surface-elevated)] shrink-0">
+          <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface-elevated)] p-4 md:p-6">
+            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4">
             {/* Re-enrich Button — labeled */}
             <button
-              onClick={handleReAnalyze}
+              onClick={requestReAnalyze}
               disabled={isReAnalyzing}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-full hover:bg-orange-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+              className="flex w-full items-center justify-center gap-1.5 rounded-full border border-gray-100 px-4 py-2.5 text-sm text-gray-400 transition-colors hover:border-[var(--accent-primary)]/30 hover:bg-orange-50 hover:text-[var(--accent-primary)] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
               title="Re-analyze with AI"
             >
               {isReAnalyzing ? (
@@ -1594,7 +1578,7 @@ export function CardDetailModal({
               <span className="font-medium">{isReAnalyzing ? 'Analyzing...' : 'Re-analyze'}</span>
             </button>
             {/* Add to Space Button */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setShowSpaceMenu(!showSpaceMenu)}
                 className="p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30"
@@ -1639,7 +1623,7 @@ export function CardDetailModal({
                   onArchive(card.id)
                   onClose()
                 }}
-                className="p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30"
+                className="shrink-0 p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30"
                 title="Archive"
               >
                 <Archive className="w-5 h-5" />
@@ -1650,7 +1634,7 @@ export function CardDetailModal({
                 e.stopPropagation()
                 onDelete?.(card.id)
               }}
-              className="p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-red-500 border border-gray-100 hover:border-red-200"
+              className="shrink-0 p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-red-500 border border-gray-100 hover:border-red-200"
               title="Delete (Trash)"
             >
               <Trash2 className="w-5 h-5" />
@@ -1668,6 +1652,7 @@ export function CardDetailModal({
                 <RotateCcw className="w-5 h-5" />
               </button>
             )}
+            </div>
           </div>
         </div>
       </div>

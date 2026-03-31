@@ -10,34 +10,18 @@
  * @fileoverview Classification pipeline engine
  */
 
-// =============================================================================
-// TYPES (inlined from source types to avoid cross-boundary dependency)
-// =============================================================================
-
-/**
- * Supported card types in the system.
- */
-export type CardType = 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'social' | 'movie' | 'website';
-
-/**
- * Result from the AI content classification function.
- */
-export interface ClassificationResult {
-	/** Detected content type */
-	type: CardType;
-	/** Extracted or generated title */
-	title: string;
-	/** AI-suggested tags (max 5) */
-	tags: string[];
-	/** Brief summary of the content */
-	summary: string;
-	/** Detected platform (e.g. twitter, mastodon, github) */
-	platform?: string;
-}
-
-import { getPlatformAwarePrompt, AESTHETIC_VOCABULARY } from './prompts/classification';
+import type { CardType, ClassificationResult } from 'src/lib/semantic';
+import {
+	BLOCKED_TAGS,
+	buildClassificationResult,
+	isAestheticTag,
+	sanitizeTags,
+} from 'src/lib/semantic';
+import { getPlatformAwarePrompt } from './prompts/classification';
 import { getInstagramPrompt } from './prompts/instagram';
 import { getTwitterPrompt, detectThreadIntent } from './prompts/twitter';
+
+export type { CardType, ClassificationResult } from 'src/lib/semantic';
 
 // =============================================================================
 // PIPELINE TYPES
@@ -90,15 +74,28 @@ const DEFAULT_CONFIG: PipelineConfig = {
 	maxTokens: 4000,
 };
 
-/**
- * Tags that indicate generic/low-quality classification.
- * If ALL tags are from this list, the result is rejected.
- */
-const GENERIC_TAG_BLOCKLIST = new Set([
-	'website', 'link', 'saved', 'explore', 'social', 'page', 'content',
-	'twitter', 'instagram', 'reddit', 'youtube', 'github', 'medium',
-	'substack', 'linkedin', 'bluesky', 'mastodon', 'tiktok',
-]);
+function isModuleResolutionError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		(
+			'code' in error
+				? (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+				: /Cannot find module|ERR_MODULE_NOT_FOUND/.test(error.message)
+		)
+	);
+}
+
+async function importGLMDeps() {
+	try {
+		return await import('./glmClient.js');
+	} catch (error) {
+		if (!isModuleResolutionError(error)) {
+			throw error;
+		}
+
+		return import('./glmClient');
+	}
+}
 
 // =============================================================================
 // VALIDATION GATE
@@ -122,16 +119,19 @@ export function validateClassification(result: ClassificationResult): Validation
 		return { valid: false, reason: 'Tags must be a non-empty array' };
 	}
 
-	// Tag quality: reject if ALL tags are generic
-	const nonGenericTags = result.tags.filter(t => !GENERIC_TAG_BLOCKLIST.has(t.toLowerCase()));
+	const cleanedTags = sanitizeTags(result.tags, { contentType: result.type });
+	if (cleanedTags.length === 0) {
+		return { valid: false, reason: 'Tags collapsed to an empty set after normalization' };
+	}
+
+	// Tag quality: reject only when no meaningful subject tag survives normalization.
+	const nonGenericTags = cleanedTags.filter(t => !isAestheticTag(t));
 	if (nonGenericTags.length === 0) {
-		return { valid: false, reason: `All tags are generic blocklisted: [${result.tags.join(', ')}]` };
+		return { valid: false, reason: `No subject tags survived normalization: [${result.tags.join(', ')}]` };
 	}
 
 	// Aesthetic check (warn only, don't reject)
-	const hasAesthetic = result.tags.some(t =>
-		(AESTHETIC_VOCABULARY as readonly string[]).includes(t.toLowerCase())
-	);
+	const hasAesthetic = cleanedTags.some(t => isAestheticTag(t));
 	if (!hasAesthetic) {
 		console.log('[Pipeline] Warning: No aesthetic tag found — consider adding one');
 	}
@@ -142,20 +142,8 @@ export function validateClassification(result: ClassificationResult): Validation
 /**
  * Normalizes tags: lowercase, hyphenate spaces, dedupe, cap at 5.
  */
-export function normalizeTags(tags: string[]): string[] {
-	const seen = new Set<string>();
-	const normalized: string[] = [];
-
-	for (const tag of tags) {
-		const clean = tag.toLowerCase().trim().replace(/\s+/g, '-');
-		if (clean && !seen.has(clean)) {
-			seen.add(clean);
-			normalized.push(clean);
-		}
-		if (normalized.length >= 5) break;
-	}
-
-	return normalized;
+export function normalizeTags(tags: string[], contentType: CardType = 'article'): string[] {
+	return sanitizeTags(tags, { contentType });
 }
 
 // =============================================================================
@@ -208,9 +196,9 @@ function detectPlatformFromUrl(url: string | null): string {
  * Requires callGLM and fetchImageAsBase64 to be injected.
  */
 function createGLMContentStrategy(
-	callGLM: typeof import('./glmClient').callGLM,
-	fetchImageAsBase64: typeof import('./glmClient').fetchImageAsBase64,
-	normalizeType: typeof import('./glmClient').normalizeType
+	callGLM: typeof import('./glmClient.js').callGLM,
+	fetchImageAsBase64: typeof import('./glmClient.js').fetchImageAsBase64,
+	normalizeType: typeof import('./glmClient.js').normalizeType
 ): ClassificationStrategy {
 	return async (input, config) => {
 		// Skip if no API key
@@ -315,13 +303,9 @@ function createGLMContentStrategy(
 			throw new Error('No JSON found in GLM response');
 		}
 
-		const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]) as ClassificationResult;
-
-		// Normalize
-		parsed.type = normalizeType(parsed.type);
-		parsed.tags = Array.isArray(parsed.tags) ? normalizeTags(parsed.tags) : [];
-
-		return parsed;
+		return buildClassificationResult(JSON.parse(jsonMatch[1] || jsonMatch[0]), {
+			normalizeType,
+		});
 	};
 }
 
@@ -335,8 +319,8 @@ function createGLMContentStrategy(
  * Designed to catch cases where vision times out but caption has useful content.
  */
 function createGLMTextOnlyStrategy(
-	callGLM: typeof import('./glmClient').callGLM,
-	normalizeType: typeof import('./glmClient').normalizeType
+	callGLM: typeof import('./glmClient.js').callGLM,
+	normalizeType: typeof import('./glmClient.js').normalizeType
 ): ClassificationStrategy {
 	return async (input, config) => {
 		const apiKey = process.env.ZHIPU_API_KEY;
@@ -406,11 +390,9 @@ function createGLMTextOnlyStrategy(
 			throw new Error('No JSON found in GLM text-only response');
 		}
 
-		const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]) as ClassificationResult;
-		parsed.type = normalizeType(parsed.type);
-		parsed.tags = Array.isArray(parsed.tags) ? normalizeTags(parsed.tags) : [];
-
-		return parsed;
+		return buildClassificationResult(JSON.parse(jsonMatch[1] || jsonMatch[0]), {
+			normalizeType,
+		});
 	};
 }
 
@@ -604,7 +586,7 @@ export function generateFallbackTags(
 	// Add URL path-derived tags for specificity
 	if (url) {
 		for (const pathTag of extractPathTags(url)) {
-			if (!seen.has(pathTag) && !GENERIC_TAG_BLOCKLIST.has(pathTag)) {
+			if (!seen.has(pathTag) && !BLOCKED_TAGS.has(pathTag)) {
 				seen.add(pathTag);
 				tags.push(pathTag);
 			}
@@ -616,7 +598,7 @@ export function generateFallbackTags(
 		const domainName = domain.split('.')[0].toLowerCase();
 		// Create a descriptive domain tag (e.g., 'github-project' not 'github')
 		if (domainName.length > 2 && domainName.length < 20 && !seen.has(domainName)) {
-			const domainTag = GENERIC_TAG_BLOCKLIST.has(domainName)
+			const domainTag = BLOCKED_TAGS.has(domainName)
 				? `${domainName}-content`
 				: domainName;
 			if (!seen.has(domainTag)) {
@@ -627,9 +609,7 @@ export function generateFallbackTags(
 	}
 
 	// GUARANTEE: Add an aesthetic tag (from AESTHETIC_VOCABULARY) — never generic
-	const hasAesthetic = tags.some(t =>
-		(AESTHETIC_VOCABULARY as readonly string[]).includes(t.toLowerCase())
-	);
+	const hasAesthetic = tags.some(t => isAestheticTag(t));
 	if (!hasAesthetic) {
 		// Pick aesthetic from domain mapping, or default to 'editorial'
 		let aesthetic = 'editorial';
@@ -676,7 +656,7 @@ export function generateFallbackTags(
 		break;
 	}
 
-	const finalTags = normalizeTags(tags.slice(0, 5));
+	const finalTags = sanitizeTags(tags, { contentType: type });
 
 	// Extract title
 	let fallbackTitle = title || 'Untitled';
@@ -742,9 +722,9 @@ export async function runClassificationPipeline(
 	input: ClassificationInput,
 	config: Partial<PipelineConfig> = {},
 	deps?: {
-		callGLM: typeof import('./glmClient').callGLM;
-		fetchImageAsBase64: typeof import('./glmClient').fetchImageAsBase64;
-		normalizeType: typeof import('./glmClient').normalizeType;
+		callGLM: typeof import('./glmClient.js').callGLM;
+		fetchImageAsBase64: typeof import('./glmClient.js').fetchImageAsBase64;
+		normalizeType: typeof import('./glmClient.js').normalizeType;
 	}
 ): Promise<{ result: ClassificationResult; trace: PipelineTrace }> {
 	const cfg = { ...DEFAULT_CONFIG, ...config };
@@ -752,7 +732,7 @@ export async function runClassificationPipeline(
 	const attempts: PipelineAttempt[] = [];
 
 	// Lazily import deps if not injected (avoids circular imports in tests)
-	const { callGLM, fetchImageAsBase64, normalizeType } = deps ?? await import('./glmClient');
+	const { callGLM, fetchImageAsBase64, normalizeType } = deps ?? await importGLMDeps();
 
 	const strategies: Array<{ name: string; fn: ClassificationStrategy; skipOnTimeout: boolean }> = [
 		{ name: 'glm-content', fn: createGLMContentStrategy(callGLM, fetchImageAsBase64, normalizeType), skipOnTimeout: true },
@@ -817,7 +797,7 @@ export async function runClassificationPipeline(
 				}
 
 				// Normalize tags one more time
-				result.tags = normalizeTags(result.tags);
+				result.tags = normalizeTags(result.tags, result.type);
 
 				const durationMs = Date.now() - attemptStart;
 				console.log(`[Pipeline] Success via ${name} in ${durationMs}ms — tags: [${result.tags.join(', ')}]`);

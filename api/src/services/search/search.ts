@@ -1,7 +1,10 @@
 import type { QueryResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
-import { logger } from 'src/lib/logger'
+
+const normalizeSearchToken = (value: string) => value.trim().replace(/^#+/, '')
+const normalizeTagToken = (value: string) =>
+  normalizeSearchToken(value).toLowerCase()
 
 export const searchCards: QueryResolvers['searchCards'] = async ({
   query,
@@ -23,14 +26,14 @@ export const searchCards: QueryResolvers['searchCards'] = async ({
   }
 
   if (tag) {
-    where.tags = { has: tag }
+    where.tags = { has: normalizeTagToken(tag) }
   }
 
   let cards
 
   if (query && query.trim()) {
     // Full-text search via raw SQL
-    const searchQuery = query.trim()
+    const searchQuery = normalizeSearchToken(query)
     const likePattern = `%${searchQuery}%`
 
     if (type) {
@@ -45,7 +48,11 @@ export const searchCards: QueryResolvers['searchCards'] = async ({
             @@ plainto_tsquery('english', ${searchQuery})
             OR title ILIKE ${likePattern}
             OR content ILIKE ${likePattern}
-            OR ${searchQuery} = ANY(tags)
+            OR EXISTS (
+              SELECT 1
+              FROM unnest(tags) AS tag_value
+              WHERE lower(tag_value) = ${normalizeTagToken(searchQuery)}
+            )
           )
         ORDER BY created_at DESC
         LIMIT ${limit}
@@ -61,7 +68,11 @@ export const searchCards: QueryResolvers['searchCards'] = async ({
             @@ plainto_tsquery('english', ${searchQuery})
             OR title ILIKE ${likePattern}
             OR content ILIKE ${likePattern}
-            OR ${searchQuery} = ANY(tags)
+            OR EXISTS (
+              SELECT 1
+              FROM unnest(tags) AS tag_value
+              WHERE lower(tag_value) = ${normalizeTagToken(searchQuery)}
+            )
           )
         ORDER BY created_at DESC
         LIMIT ${limit}

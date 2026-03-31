@@ -20,17 +20,18 @@ const SAVE_CARD_MUTATION = gql`
   mutation SaveCard($input: SaveCardInput!) {
     saveCard(input: $input) {
       id
+      userId
       title
+      content
       type
+      url
+      imageUrl
+      metadata
       tags
-    }
-  }
-`
-
-const ENRICH_CARD_MUTATION = gql`
-  mutation EnrichCard($cardId: String!) {
-    enrichCard(cardId: $cardId) {
-      success
+      createdAt
+      updatedAt
+      archivedAt
+      deletedAt
     }
   }
 `
@@ -54,7 +55,6 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const localAI = useLocalAI();
 	const { showToast } = useToast();
 	const [saveCard] = useMutation(SAVE_CARD_MUTATION);
-	const [enrichCard] = useMutation(ENRICH_CARD_MUTATION);
 
 	type SavePayload = {
 		type?: string;
@@ -192,12 +192,6 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 						});
 						if (result.data?.saveCard?.id) {
 							successCount++;
-							// Trigger enrichment in background (non-blocking)
-							enrichCard({
-								variables: { cardId: result.data.saveCard.id },
-							}).catch((err) =>
-								console.error(`[AddModal] Enrichment failed for ${links[i]}:`, err)
-							);
 						}
 					} catch (err) {
 						console.error(`[AddModal] Failed to save ${links[i]}:`, err);
@@ -272,11 +266,6 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			const savedCard = result.data?.saveCard;
 			if (!savedCard?.id) throw new Error('Failed to save');
 
-			// Trigger enrichment in background (non-blocking)
-			enrichCard({ variables: { cardId: savedCard.id } }).catch((err) =>
-				console.error('[AddModal] Enrichment failed:', err)
-			);
-
 			// MyMind-style vanish: animate out, card appears in timeline
 			posthog?.capture('card_saved', { mode, type: savedCard.type })
 			showToast('Saved to your mind', 'success')
@@ -284,11 +273,9 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			window.dispatchEvent(new CustomEvent('card-saved', {
 				detail: {
 					...savedCard,
-					url: payload.url,
-					content: payload.content,
-					imageUrl: payload.imageUrl,
-					metadata: { processing: true, enrichmentStage: 'processing' },
-					createdAt: new Date().toISOString(),
+					url: savedCard.url ?? payload.url,
+					content: savedCard.content ?? payload.content,
+					imageUrl: savedCard.imageUrl ?? payload.imageUrl,
 				}
 			}));
 		} catch (err) {
@@ -298,7 +285,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setBatchProgress(null);
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, enrichCard, vanishAndClose]);
+	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, vanishAndClose]);
 
 	// Keyboard & Paste — must be declared AFTER handleSubmit (const with useCallback isn't hoisted)
 	useEffect(() => {
