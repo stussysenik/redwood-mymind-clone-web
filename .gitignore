@@ -23,3 +23,5 @@ api/src/lib/generateGraphiQLHeader.*
 !.yarn/sdks
 !.yarn/versions
 .superpowers/
+playwright-report/
+test-results/

@@ -1625,6 +1625,7 @@ export function CardDetailModal({
                 }}
                 className="shrink-0 p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-[var(--accent-primary)] border border-gray-100 hover:border-[var(--accent-primary)]/30"
                 title="Archive"
+                aria-label="Archive"
               >
                 <Archive className="w-5 h-5" />
               </button>

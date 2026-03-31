@@ -215,6 +215,7 @@ export function SearchBar({
 							disabled={isSaving}
 							className="p-1 rounded-full text-[var(--foreground-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:opacity-50"
 							title="Save as Space"
+							aria-label="Save as Space"
 							type="button"
 						>
 							{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}

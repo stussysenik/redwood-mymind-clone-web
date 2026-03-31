@@ -1,28 +1,35 @@
-import { test, expect } from '@playwright/test'
+import type { TestUser } from './support/fixtures'
 
-async function login(page) {
-  const email = process.env.E2E_EMAIL
-  const password = process.env.E2E_PASSWORD
-  if (!email || !password) {
-    test.skip(true, 'E2E_EMAIL and E2E_PASSWORD env vars required')
-    return
-  }
-  await page.goto('/login')
-  await page.fill('input[type="email"]', email)
-  await page.fill('input[type="password"]', password)
-  await page.click('button:has-text("Sign In")')
-  await page.waitForURL('/', { timeout: 10000 })
+import { createCard, expect, login, test } from './support/fixtures'
+
+async function seedImageCard(testUser: TestUser, suffix: string) {
+  const imageUrl = `https://picsum.photos/seed/${suffix}/1200/800`
+  return createCard(testUser, {
+    title: `Lightbox ${suffix}`,
+    url: `https://example.com/lightbox/${suffix}`,
+    imageUrl,
+    metadata: {
+      images: [imageUrl],
+    },
+    tags: ['visual-test'],
+  })
 }
 
 test.describe('Image Lightbox', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
     await page.waitForLoadState('networkidle')
   })
 
-  test('lightbox opens on image click in card detail', async ({ page }) => {
-    // Click the first card image to open detail modal
-    const cardImage = page.locator('img[alt]').first()
+  test('lightbox opens on image click in card detail', async ({
+    page,
+    testUser,
+  }) => {
+    const card = await seedImageCard(testUser, `open-${Date.now()}`)
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const cardImage = page.locator(`img[alt="${card.title}"]`).first()
     await expect(cardImage).toBeVisible({ timeout: 5000 })
     await cardImage.click()
 
@@ -45,8 +52,12 @@ test.describe('Image Lightbox', () => {
     }
   })
 
-  test('lightbox zoom controls work', async ({ page }) => {
-    const cardImage = page.locator('img[alt]').first()
+  test('lightbox zoom controls work', async ({ page, testUser }) => {
+    const card = await seedImageCard(testUser, `zoom-${Date.now()}`)
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const cardImage = page.locator(`img[alt="${card.title}"]`).first()
     await expect(cardImage).toBeVisible({ timeout: 5000 })
     await cardImage.click()
 

@@ -1,22 +1,8 @@
-import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
-const MODAL_TEXTAREA = 'textarea[placeholder*="Save something"]'
+import { expect, login, saveLink, test } from './support/fixtures'
 
-async function login(page) {
-  const email = process.env.E2E_EMAIL
-  const password = process.env.E2E_PASSWORD
-  if (!email || !password) {
-    test.skip(true, 'E2E_EMAIL and E2E_PASSWORD env vars required')
-    return
-  }
-  await page.goto('/login')
-  await page.fill('input[type="email"]', email)
-  await page.fill('input[type="password"]', password)
-  await page.click('button:has-text("Sign In")')
-  await page.waitForURL('/', { timeout: 10000 })
-}
-
-async function ensureGraphSeed(page, label: string) {
+async function ensureGraphSeed(page: Page, label: string) {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
@@ -25,23 +11,15 @@ async function ensureGraphSeed(page, label: string) {
     return
   }
 
-  await page.getByRole('button', { name: /add new/i }).click()
-  await expect(page.locator(MODAL_TEXTAREA)).toBeVisible({ timeout: 3000 })
-  await page
-    .locator(MODAL_TEXTAREA)
-    .fill(`https://example.com/?graph=${encodeURIComponent(label)}`)
-  await page.getByRole('button', { name: /save to brain/i }).click()
-  await expect(page.locator(MODAL_TEXTAREA)).not.toBeVisible({
-    timeout: 3000,
-  })
+  await saveLink(page, `https://example.com/?graph=${encodeURIComponent(label)}`)
   await expect(page.locator('.card-base').first()).toBeVisible({
     timeout: 10000,
   })
 }
 
 test.describe('Graph Feature - Mobile', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
     await ensureGraphSeed(page, `mobile-${Date.now()}`)
     await page.goto('/graph')
     await page.waitForLoadState('networkidle')
@@ -69,8 +47,8 @@ test.describe('Graph Feature - Mobile', () => {
 })
 
 test.describe('Graph Feature - Desktop', () => {
-  test('graph loads and renders nodes', async ({ page }) => {
-    await login(page)
+  test('graph loads and renders nodes', async ({ page, testUser }) => {
+    await login(page, testUser)
     await ensureGraphSeed(page, `desktop-${Date.now()}`)
     await page.goto('/graph')
     await page.waitForLoadState('networkidle')

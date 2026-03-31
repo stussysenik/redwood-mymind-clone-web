@@ -1,35 +1,25 @@
-import { expect, test } from '@playwright/test'
+import {
+  createCard,
+  expect,
+  getCardById,
+  getCardByUrl,
+  login,
+  saveLink,
+  test,
+} from './support/fixtures'
 
-const MODAL_TEXTAREA = 'textarea[placeholder*="Save something"]'
 const STAGE_TEXT = /Queued|Fetching content|Analyzing|Extracting insights|Finalizing/
 const LATER_STAGE_TEXT = /Fetching content|Analyzing|Extracting insights|Finalizing/
 
-async function login(page) {
-  await page.goto('/login')
-  await page.waitForLoadState('networkidle')
-
-  const email = process.env.E2E_EMAIL
-  const password = process.env.E2E_PASSWORD
-
-  if (!email || !password) {
-    test.skip(true, 'E2E_EMAIL and E2E_PASSWORD env vars required')
-    return
-  }
-
-  await page.fill('input[type="email"]', email)
-  await page.fill('input[type="password"]', password)
-  await page.click('button:has-text("Sign In")')
-
-  await page.waitForURL('/', { timeout: 10000 })
-  await page.waitForLoadState('networkidle')
-}
-
 test.describe('Live telemetry and re-analysis confirmation', () => {
-  test('shows live processing status on mobile and guards re-analysis behind confirmation', async ({
-    page,
-  }, testInfo) => {
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
+  })
 
+  test('shows live processing status and screenshot fallback on mobile', async ({
+    page,
+    testUser,
+  }, testInfo) => {
     await expect(page.getByRole('button', { name: /add new/i })).toBeVisible({
       timeout: 10000,
     })
@@ -38,18 +28,16 @@ test.describe('Live telemetry and re-analysis confirmation', () => {
       fullPage: true,
     })
 
-    await page.getByRole('button', { name: /add new/i }).click()
-    await expect(page.locator(MODAL_TEXTAREA)).toBeVisible({ timeout: 3000 })
-
     const url = `https://example.com/?telemetry=${Date.now()}`
-    await page.locator(MODAL_TEXTAREA).fill(url)
-    await page.getByRole('button', { name: /save to brain/i }).click()
-    await expect(page.locator(MODAL_TEXTAREA)).not.toBeVisible({
-      timeout: 3000,
-    })
+    await saveLink(page, url)
 
     const firstCard = page.locator('.card-base').first()
     await expect(firstCard).toBeVisible({ timeout: 10000 })
+    await expect(firstCard.locator('[data-testid="feed-card-image"]').first()).toHaveAttribute(
+      'data-visual-kind',
+      'screenshot',
+      { timeout: 10000 }
+    )
     await expect(firstCard).toContainText(STAGE_TEXT, {
       timeout: 10000,
     })
@@ -57,6 +45,10 @@ test.describe('Live telemetry and re-analysis confirmation', () => {
       path: testInfo.outputPath('02-queued-state.png'),
       fullPage: true,
     })
+
+    await expect
+      .poll(() => getCardByUrl(testUser, url), { timeout: 10000 })
+      .not.toBeNull()
 
     await expect
       .poll(
@@ -81,8 +73,70 @@ test.describe('Live telemetry and re-analysis confirmation', () => {
       path: testInfo.outputPath('03-live-update.png'),
       fullPage: true,
     })
+  })
 
+  test('archives a newly saved card directly from the modal header', async ({
+    page,
+    testUser,
+  }, testInfo) => {
+    const url = `https://example.com/?archive=${Date.now()}`
+    await saveLink(page, url)
+
+    let cardId = ''
+    await expect
+      .poll(async () => {
+        const card = await getCardByUrl(testUser, url)
+        cardId = card?.id ?? ''
+        return !!card
+      }, { timeout: 10000 })
+      .toBe(true)
+
+    const firstCard = page.locator('.card-base').first()
+    await expect(firstCard).toBeVisible({ timeout: 10000 })
     await firstCard.click()
+
+    const archiveButton = page.getByRole('button', { name: 'Archive' }).first()
+    await expect(archiveButton).toBeVisible({ timeout: 10000 })
+    await page.screenshot({
+      path: testInfo.outputPath('04-archive-modal.png'),
+      fullPage: true,
+    })
+
+    await archiveButton.click()
+
+    await expect
+      .poll(async () => (await getCardById(testUser, cardId))?.archived_at ?? null, {
+        timeout: 10000,
+      })
+      .not.toBeNull()
+
+    await expect
+      .poll(async () => page.locator('.card-base').count(), {
+        timeout: 10000,
+      })
+      .toBe(0)
+  })
+
+  test('guards re-analysis behind confirmation', async ({
+    page,
+    testUser,
+  }, testInfo) => {
+    const seededCard = await createCard(testUser, {
+      title: `Re-analyze Seed ${Date.now()}`,
+      url: `https://example.com/reanalyze/${Date.now()}`,
+      metadata: {
+        summary: 'Seed summary for re-analysis coverage.',
+        enrichmentStage: 'complete',
+        summarySource: 'glm',
+        tagsSource: 'glm',
+      },
+      tags: ['seeded'],
+    })
+
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByText(seededCard.title ?? '').click()
     await page.getByRole('button', { name: 'Details' }).click()
 
     const reAnalyzeButton = page.getByTitle('Re-analyze with AI')
@@ -94,7 +148,7 @@ test.describe('Live telemetry and re-analysis confirmation', () => {
     )
     await expect(confirmText).toBeVisible({ timeout: 5000 })
     await page.screenshot({
-      path: testInfo.outputPath('04-reanalyze-confirm.png'),
+      path: testInfo.outputPath('05-reanalyze-confirm.png'),
       fullPage: true,
     })
 
@@ -109,7 +163,7 @@ test.describe('Live telemetry and re-analysis confirmation', () => {
       timeout: 10000,
     })
     await page.screenshot({
-      path: testInfo.outputPath('05-reanalyze-started.png'),
+      path: testInfo.outputPath('06-reanalyze-started.png'),
       fullPage: true,
     })
   })

@@ -1,31 +1,10 @@
-import { test, expect } from '@playwright/test'
+import { expect, login, saveLink, test } from './support/fixtures'
 
 const MODAL_TEXTAREA = 'textarea[placeholder*="Save something"]'
 
-async function login(page) {
-  await page.goto('/login')
-  await page.waitForLoadState('networkidle')
-
-  const email = process.env.E2E_EMAIL
-  const password = process.env.E2E_PASSWORD
-
-  if (!email || !password) {
-    test.skip(true, 'E2E_EMAIL and E2E_PASSWORD env vars required')
-    return
-  }
-
-  await page.fill('input[type="email"]', email)
-  await page.fill('input[type="password"]', password)
-  await page.click('button:has-text("Sign In")')
-
-  // Wait for redirect to home
-  await page.waitForURL('/', { timeout: 10000 })
-  await page.waitForLoadState('networkidle')
-}
-
 test.describe('Add Flow - MyMind-style vanish', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
   })
 
   test('add button opens the modal', async ({ page }) => {
@@ -58,9 +37,11 @@ test.describe('Add Flow - MyMind-style vanish', () => {
 })
 
 test.describe('Rapid Interaction Stress Test', () => {
-  test('save multiple cards rapidly without errors', async ({ page }) => {
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
+  })
 
+  test('save multiple cards rapidly without errors', async ({ page }) => {
     const urls = [
       'https://example.com/page1',
       'https://example.com/page2',
@@ -68,15 +49,7 @@ test.describe('Rapid Interaction Stress Test', () => {
     ]
 
     for (const url of urls) {
-      await page.getByRole('button', { name: /add new/i }).click()
-      const textarea = page.locator(MODAL_TEXTAREA)
-      await expect(textarea).toBeVisible({ timeout: 2000 })
-
-      await textarea.fill(url)
-      await page.waitForTimeout(100)
-      await page.locator('button:has-text("Save to Brain")').click()
-
-      await expect(textarea).not.toBeVisible({ timeout: 2000 })
+      await saveLink(page, url)
       await page.waitForTimeout(500)
     }
 
@@ -85,9 +58,12 @@ test.describe('Rapid Interaction Stress Test', () => {
 })
 
 test.describe('Mobile Touch Targets', () => {
-  test('all interactive elements meet 44px minimum', async ({ page, browserName }) => {
-    test.skip(browserName !== 'webkit', 'Mobile test for Safari only')
-    await login(page)
+  test.beforeEach(async ({ page, testUser }) => {
+    await login(page, testUser)
+  })
+
+  test('all interactive elements meet 44px minimum', async ({ page }, testInfo) => {
+    test.skip(!testInfo.project.name.startsWith('Mobile'), 'Mobile-only assertion')
 
     const addButton = page.locator('[title*="Add Item"]')
     if (await addButton.isVisible()) {

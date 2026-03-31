@@ -242,6 +242,8 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
         src={activeSource.src}
         alt={card.title || 'Card visual'}
         loading="lazy"
+        data-testid="feed-card-image"
+        data-visual-kind={activeSource.kind}
         style={{
           width: '100%',
           height: '100%',
