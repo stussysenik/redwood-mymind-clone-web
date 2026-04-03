@@ -11,8 +11,14 @@ import {
   classifyContent,
   generateFallbackTags,
 } from 'src/lib/ai/classificationPipeline'
-import { sanitizeGeneratedTags, stripGeneratedTagNoise } from 'src/lib/semantic'
 import {
+  normalizeTag,
+  normalizeTagList,
+  sanitizeGeneratedTags,
+  stripGeneratedTagNoise,
+} from 'src/lib/semantic'
+import {
+  extractTitleWithDSPy,
   generateSummaryWithDSPy,
   generateTagsWithDSPy,
   cleanMovieTitle,
@@ -22,8 +28,16 @@ import {
 import {
   embedDocument,
   getEmbeddingAvailability,
+  getEmbeddingCompatibility,
   getEmbeddingProvenance,
 } from 'src/lib/ai/embeddings'
+import { extractStoredLocalClassification } from 'src/lib/ai/localClassification'
+import {
+  buildHeuristicSourceTitle,
+  isWeakTitle,
+  pickBestTitleCandidate,
+  toPersistedTitleSource,
+} from 'src/lib/ai/titleOptimization'
 import { storeEmbedding, matchCards } from 'src/lib/vectorOperations'
 
 // =============================================================================
@@ -130,6 +144,24 @@ type ScrapedCardData = {
     replies?: number
     views?: number
   }
+  sourcePayloadBytes?: number
+  sourcePayloadKind?: 'html' | 'rendered-html' | 'api-json' | 'text'
+  sourceTextBytes?: number
+  sourceTextKind?:
+    | 'api-text'
+    | 'compressed-visible-html'
+    | 'rendered-visible-html'
+    | 'browser-acquired-text'
+  sourceTextCoverageTarget?: number
+  sourceEvidenceKinds?: string[]
+  blockerSignals?: string[]
+  renderedNetworkResponseCount?: number
+  renderedNetworkTextBytes?: number
+  recoverySource?: 'rendered-html' | 'aggressive-browser'
+  recoveryReason?: string
+  aggressiveRecoveryAttempted?: boolean
+  aggressiveRecoveryReason?: string
+  aggressiveRecoveryApplied?: boolean
 }
 
 type CardSnapshot = {
@@ -146,6 +178,7 @@ const REPAIRABLE_AI_TAG_SOURCES = new Set([
   'fallback',
   'kimi',
   'glm-content',
+  'local-ai',
   'rule-based',
 ])
 
@@ -207,9 +240,10 @@ export function mergeGeneratedCardTags(args: {
   const currentSource = pickText(args.metadata.tagsSource)
   const existingTags = REPAIRABLE_AI_TAG_SOURCES.has(currentSource || '')
     ? sanitizeGeneratedTags(args.currentTags, generatedTagOptions)
-    : args.currentTags
+    : normalizeTagList(args.currentTags)
+  const nextTags = normalizeTagList(args.nextTags)
 
-  return Array.from(new Set([...existingTags, ...args.nextTags]))
+  return Array.from(new Set([...existingTags, ...nextTags]))
 }
 
 function toStringArray(value: unknown): string[] {
@@ -242,6 +276,54 @@ function toNumberArray(value: unknown): number[] {
   )
 }
 
+function textByteLength(value: string | null): number {
+  return value ? Buffer.byteLength(value, 'utf8') : 0
+}
+
+function uniqueTextByteLength(values: Array<string | null | undefined>): number {
+  const uniqueValues = Array.from(
+    new Set(
+      values
+        .map((value) => pickText(value))
+        .filter((value): value is string => !!value)
+    )
+  )
+
+  return uniqueValues.reduce((total, value) => total + textByteLength(value), 0)
+}
+
+function pickNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function pickBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function resolveSavedPreviewKind(
+  previewSource: string | null,
+  currentImageUrl: string | null,
+  scrapedImageUrl: string | null
+): 'source-media' | 'fallback-screenshot' | 'existing-card-image' | 'none' {
+  if (previewSource === 'microlink' || previewSource === 'playwright') {
+    return 'fallback-screenshot'
+  }
+
+  if (previewSource) {
+    return 'source-media'
+  }
+
+  if (!currentImageUrl && scrapedImageUrl) {
+    return 'source-media'
+  }
+
+  if (currentImageUrl) {
+    return 'existing-card-image'
+  }
+
+  return 'none'
+}
+
 function isGenericTitle(title: string | null): boolean {
   if (!title) {
     return true
@@ -253,6 +335,110 @@ function isGenericTitle(title: string | null): boolean {
     normalized === 'saved link' ||
     normalized === 'saved item'
   )
+}
+
+function getExtractionMetrics(
+  metadata: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  if (
+    metadata?.extractionMetrics &&
+    typeof metadata.extractionMetrics === 'object' &&
+    !Array.isArray(metadata.extractionMetrics)
+  ) {
+    return metadata.extractionMetrics as Record<string, unknown>
+  }
+
+  return {}
+}
+
+export function shouldEscalateScrapeAcquisition(args: {
+  card: CardSnapshot
+  update: ScrapedCardUpdate
+}): string | null {
+  const extractionMetrics = getExtractionMetrics(args.update.metadata)
+  const blockerSignals = toStringArray(extractionMetrics.blockerSignals)
+  const sourceEvidenceKinds = toStringArray(extractionMetrics.sourceEvidenceKinds)
+  const coverageTargetMet = pickBoolean(extractionMetrics.coverageTargetMet)
+
+  if (pickBoolean(extractionMetrics.aggressiveRecoveryAttempted)) {
+    return null
+  }
+
+  if (
+    blockerSignals.length > 0 &&
+    (!sourceEvidenceKinds.includes('rendered-network') ||
+      coverageTargetMet === false ||
+      args.update.analysisContent.trim().length < 240)
+  ) {
+    return 'blocker-signals'
+  }
+
+  if (coverageTargetMet === false) {
+    return 'low-coverage'
+  }
+
+  const candidateTitle =
+    pickText(args.update.title) ||
+    pickText(args.update.metadata.scrapedTitle) ||
+    pickText(args.card.title)
+
+  if (isGenericTitle(candidateTitle) || args.update.analysisContent.trim().length < 160) {
+    return 'weak-analysis-content'
+  }
+
+  return null
+}
+
+export function isScrapedUpdateMateriallyBetter(
+  candidate: ScrapedCardUpdate,
+  baseline: ScrapedCardUpdate
+): boolean {
+  const candidateMetrics = getExtractionMetrics(candidate.metadata)
+  const baselineMetrics = getExtractionMetrics(baseline.metadata)
+  const candidateCoverage = pickNumber(candidateMetrics.textCoverageRatio) || 0
+  const baselineCoverage = pickNumber(baselineMetrics.textCoverageRatio) || 0
+  const candidateBlockers = toStringArray(candidateMetrics.blockerSignals).length
+  const baselineBlockers = toStringArray(baselineMetrics.blockerSignals).length
+  const candidateTitle =
+    pickText(candidate.title) || pickText(candidate.metadata.scrapedTitle)
+  const baselineTitle =
+    pickText(baseline.title) || pickText(baseline.metadata.scrapedTitle)
+
+  return (
+    candidateCoverage > baselineCoverage + 0.05 ||
+    candidateBlockers < baselineBlockers ||
+    (isGenericTitle(baselineTitle) && !isGenericTitle(candidateTitle)) ||
+    (!baseline.analysisImageUrl && !!candidate.analysisImageUrl)
+  )
+}
+
+export function annotateAggressiveRecoveryMetrics(
+  update: ScrapedCardUpdate,
+  args: {
+    attempted: boolean
+    reason?: string | null
+    applied: boolean
+  }
+): ScrapedCardUpdate {
+  if (!args.attempted) {
+    return update
+  }
+
+  const currentExtractionMetrics = getExtractionMetrics(update.metadata)
+
+  return {
+    ...update,
+    metadata: {
+      ...update.metadata,
+      extractionMetrics: {
+        ...currentExtractionMetrics,
+        aggressiveRecoveryAttempted: true,
+        aggressiveRecoveryReason:
+          args.reason || pickText(currentExtractionMetrics.aggressiveRecoveryReason),
+        aggressiveRecoveryApplied: args.applied,
+      },
+    },
+  }
 }
 
 function isModuleResolutionError(error: unknown): boolean {
@@ -281,6 +467,7 @@ export function buildScrapedCardUpdate(
   scraped?: ScrapedCardData | null
 ): ScrapedCardUpdate {
   const currentMetadata = (card.metadata as Record<string, unknown>) || {}
+  const currentExtractionMetrics = getExtractionMetrics(currentMetadata)
   const currentTitle = pickText(card.title)
   const currentContent = pickText(card.content)
   const currentImageUrl = pickText(card.imageUrl)
@@ -303,6 +490,66 @@ export function buildScrapedCardUpdate(
       ? buildMicrolinkScreenshotUrl(scraped?.url || card.url)
       : null
   const scrapedImageUrl = directScrapedImageUrl || fallbackPreviewUrl
+  const extractedTitleBytes = textByteLength(scrapedTitle)
+  const extractedDescriptionBytes = textByteLength(scrapedDescription)
+  const extractedContentBytes = textByteLength(scrapedContent)
+  const uniqueExtractedTextBytes = uniqueTextByteLength([
+    scrapedTitle,
+    scrapedDescription,
+    scrapedContent,
+  ])
+  const sourcePayloadBytes =
+    pickNumber(scraped?.sourcePayloadBytes) ??
+    pickNumber(currentExtractionMetrics.sourcePayloadBytes)
+  const sourceTextBytes =
+    pickNumber(scraped?.sourceTextBytes) ??
+    pickNumber(currentExtractionMetrics.sourceTextBytes)
+  const sourceTextCoverageTarget =
+    pickNumber(scraped?.sourceTextCoverageTarget) ??
+    pickNumber(currentExtractionMetrics.sourceTextCoverageTarget) ??
+    0.8
+  const sourcePayloadKind =
+    pickText(scraped?.sourcePayloadKind) ||
+    pickText(currentExtractionMetrics.sourcePayloadKind)
+  const sourceTextKind =
+    pickText(scraped?.sourceTextKind) ||
+    pickText(currentExtractionMetrics.sourceTextKind)
+  const sourceEvidenceKinds =
+    toStringArray(scraped?.sourceEvidenceKinds).length > 0
+      ? toStringArray(scraped?.sourceEvidenceKinds)
+      : toStringArray(currentExtractionMetrics.sourceEvidenceKinds)
+  const blockerSignals =
+    toStringArray(scraped?.blockerSignals).length > 0
+      ? toStringArray(scraped?.blockerSignals)
+      : toStringArray(currentExtractionMetrics.blockerSignals)
+  const renderedNetworkResponseCount =
+    pickNumber(scraped?.renderedNetworkResponseCount) ??
+    pickNumber(currentExtractionMetrics.renderedNetworkResponseCount)
+  const renderedNetworkTextBytes =
+    pickNumber(scraped?.renderedNetworkTextBytes) ??
+    pickNumber(currentExtractionMetrics.renderedNetworkTextBytes)
+  const aggressiveRecoveryAttempted =
+    pickBoolean(scraped?.aggressiveRecoveryAttempted) ??
+    pickBoolean(currentExtractionMetrics.aggressiveRecoveryAttempted)
+  const aggressiveRecoveryReason =
+    pickText(scraped?.aggressiveRecoveryReason) ||
+    pickText(currentExtractionMetrics.aggressiveRecoveryReason)
+  const aggressiveRecoveryApplied =
+    pickBoolean(scraped?.aggressiveRecoveryApplied) ??
+    pickBoolean(currentExtractionMetrics.aggressiveRecoveryApplied)
+  const coverageDenominatorBytes = sourceTextBytes ?? sourcePayloadBytes
+  const textCoverageRatio =
+    coverageDenominatorBytes && uniqueExtractedTextBytes > 0
+      ? Number((uniqueExtractedTextBytes / coverageDenominatorBytes).toFixed(4))
+      : undefined
+  const payloadTextDensityRatio =
+    sourcePayloadBytes && uniqueExtractedTextBytes > 0
+      ? Number((uniqueExtractedTextBytes / sourcePayloadBytes).toFixed(4))
+      : undefined
+  const coverageTargetMet =
+    typeof textCoverageRatio === 'number'
+      ? textCoverageRatio >= sourceTextCoverageTarget
+      : undefined
 
   const shouldPromoteTitle =
     !!scrapedTitle && (!currentTitle || isGenericTitle(currentTitle))
@@ -400,6 +647,64 @@ export function buildScrapedCardUpdate(
       scraped?.needsMobileScreenshot ??
       currentMetadata.needsMobileScreenshot ??
       undefined,
+    extractionMetrics: {
+      sourceDomain:
+        scraped?.domain ||
+        (currentMetadata.sourceDomain as string | undefined) ||
+        undefined,
+      sourceUrl:
+        scraped?.url ||
+        card.url ||
+        (currentMetadata.sourceUrl as string | undefined) ||
+        undefined,
+      extractedTextBytes: {
+        title: extractedTitleBytes,
+        description: extractedDescriptionBytes,
+        content: extractedContentBytes,
+        total:
+          extractedTitleBytes +
+          extractedDescriptionBytes +
+          extractedContentBytes,
+        uniqueTotal: uniqueExtractedTextBytes,
+      },
+      sourcePayloadBytes,
+      sourcePayloadKind,
+      sourceTextBytes,
+      sourceTextKind,
+      sourceEvidenceKinds:
+        sourceEvidenceKinds.length > 0 ? sourceEvidenceKinds : undefined,
+      blockerSignals: blockerSignals.length > 0 ? blockerSignals : undefined,
+      renderedNetworkResponseCount,
+      renderedNetworkTextBytes,
+      textCoverageRatio,
+      payloadTextDensityRatio,
+      sourceTextCoverageTarget,
+      coverageTargetMet,
+      extractedImageCount:
+        mergedImages.length || (scrapedImageUrl || currentImageUrl ? 1 : 0),
+      hashtagCount: scraped?.hashtags?.length || 0,
+      mentionCount: scraped?.mentions?.length || 0,
+      recoverySource:
+        pickText(scraped?.recoverySource) ||
+        pickText(currentExtractionMetrics.recoverySource),
+      recoveryReason:
+        pickText(scraped?.recoveryReason) ||
+        pickText(currentExtractionMetrics.recoveryReason),
+      aggressiveRecoveryAttempted,
+      aggressiveRecoveryReason,
+      aggressiveRecoveryApplied,
+      savedPreviewSource:
+        pickText(scraped?.previewSource) ||
+        (fallbackPreviewUrl ? 'microlink' : null) ||
+        pickText(currentMetadata.previewSource),
+      savedPreviewKind: resolveSavedPreviewKind(
+        pickText(scraped?.previewSource) ||
+          (fallbackPreviewUrl ? 'microlink' : null) ||
+          pickText(currentMetadata.previewSource),
+        currentImageUrl,
+        scrapedImageUrl
+      ),
+    },
   }
 
   const result: ScrapedCardUpdate = {
@@ -462,7 +767,10 @@ export const graphData: QueryResolvers['graphData'] = async ({
   }
 
   if (tag) {
-    where.tags = { has: tag }
+    const normalizedTag = normalizeTag(tag.replace(/^#+/, ''))
+    if (normalizedTag) {
+      where.tags = { has: normalizedTag }
+    }
   }
 
   let cards
@@ -650,7 +958,54 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       try {
         const { scrapeUrl } = await importScraperModule()
         const scraped = await scrapeUrl(card.url)
-        const scrapedUpdate = buildScrapedCardUpdate(card, scraped)
+        let scrapedUpdate = buildScrapedCardUpdate(card, scraped)
+        const aggressiveRecoveryReason = shouldEscalateScrapeAcquisition({
+          card,
+          update: scrapedUpdate,
+        })
+        let aggressiveRecoveryApplied = false
+
+        if (aggressiveRecoveryReason) {
+          try {
+            const aggressiveScraped = await scrapeUrl(card.url, {
+              aggressiveBrowserAcquisition: true,
+              recoveryReason: aggressiveRecoveryReason,
+            })
+            const aggressiveBaseCard = {
+              ...card,
+              title: scrapedUpdate.title ?? card.title,
+              content: scrapedUpdate.content ?? card.content,
+              imageUrl: scrapedUpdate.imageUrl ?? card.imageUrl,
+              metadata: scrapedUpdate.metadata,
+            }
+            const aggressiveUpdate = buildScrapedCardUpdate(
+              aggressiveBaseCard,
+              aggressiveScraped
+            )
+
+            if (isScrapedUpdateMateriallyBetter(aggressiveUpdate, scrapedUpdate)) {
+              scrapedUpdate = aggressiveUpdate
+              aggressiveRecoveryApplied = true
+            }
+          } catch (aggressiveScrapeErr) {
+            logger.warn(
+              { cardId, err: aggressiveScrapeErr, aggressiveRecoveryReason },
+              'Aggressive browser acquisition failed'
+            )
+          }
+        }
+
+        scrapedUpdate = annotateAggressiveRecoveryMetrics(scrapedUpdate, {
+          attempted: !!aggressiveRecoveryReason,
+          reason: aggressiveRecoveryReason,
+          applied: aggressiveRecoveryApplied,
+        })
+        if (aggressiveRecoveryReason) {
+          logger.info(
+            { cardId, aggressiveRecoveryReason, aggressiveRecoveryApplied },
+            'Aggressive browser acquisition evaluated'
+          )
+        }
         contentToAnalyze = scrapedUpdate.analysisContent
         analysisImageUrl = scrapedUpdate.analysisImageUrl
         imageCount = scrapedUpdate.imageCount
@@ -716,16 +1071,25 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     })
 
     // 5. Run AI classification
+    const localClassification = extractStoredLocalClassification(currentMetadata)
+    const shouldUseLocalClassification = !!localClassification
     const classifyStart = Date.now()
-    const classification = await classifyContent(
-      card.url,
-      contentToAnalyze,
-      analysisImageUrl,
-      imageCount
-    )
+    const classification = shouldUseLocalClassification
+      ? localClassification
+      : await classifyContent(
+          card.url,
+          contentToAnalyze,
+          analysisImageUrl,
+          imageCount
+        )
     const classifyMs = Date.now() - classifyStart
     logger.info(
-      { cardId, classifyMs, type: classification.type },
+      {
+        cardId,
+        classifyMs,
+        type: classification.type,
+        source: shouldUseLocalClassification ? 'local-ai' : 'glm',
+      },
       'Classification complete'
     )
 
@@ -741,8 +1105,10 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     let finalTags: string[] = Array.isArray(classification.tags)
       ? classification.tags
       : []
-    let summarySource: 'dspy' | 'glm' | 'fallback' = 'glm'
-    let tagsSource: 'dspy' | 'glm' | 'fallback' = 'glm'
+    let summarySource: 'dspy' | 'glm' | 'fallback' | 'local-ai' =
+      shouldUseLocalClassification ? 'local-ai' : 'glm'
+    let tagsSource: 'dspy' | 'glm' | 'fallback' | 'local-ai' =
+      shouldUseLocalClassification ? 'local-ai' : 'glm'
 
     await db.card.update({
       where: { id: cardId },
@@ -763,7 +1129,14 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       },
     })
 
-    if (dspyPlatform && contentToAnalyze) {
+    const shouldRunRemoteRefinement =
+      !!dspyPlatform &&
+      !!contentToAnalyze &&
+      (!shouldUseLocalClassification ||
+        process.env.ENABLE_REMOTE_REFINEMENT_FOR_LOCAL_CLASSIFICATION ===
+          'true')
+
+    if (shouldRunRemoteRefinement && dspyPlatform) {
       try {
         const [dspySummary, dspyTags] = await Promise.all([
           generateSummaryWithDSPy(contentToAnalyze, dspyPlatform, {
@@ -805,6 +1178,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     // 7. Generate embedding and store it
     const hadStoredEmbedding = currentMetadata.embeddingStored === true
     const embeddingAvailability = getEmbeddingAvailability()
+    const embeddingCompatibility = getEmbeddingCompatibility()
     let embeddingStored = hadStoredEmbedding
     let embeddingStatus: 'stored' | 'skipped' | 'failed' = hadStoredEmbedding
       ? 'stored'
@@ -827,10 +1201,18 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       typeof currentMetadata.embeddingModel === 'string'
         ? currentMetadata.embeddingModel
         : undefined
+    let embeddingDimension =
+      typeof currentMetadata.embeddingDimension === 'number'
+        ? currentMetadata.embeddingDimension
+        : (embeddingCompatibility.configuredDimension ?? undefined)
 
     if (!embeddingAvailability.configured) {
       logger.info(
-        { cardId, reason: embeddingAvailability.reason },
+        {
+          cardId,
+          reason: embeddingAvailability.reason,
+          compatibility: embeddingCompatibility,
+        },
         'Embedding skipped: provider unavailable'
       )
     } else {
@@ -857,7 +1239,16 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
         vectorBackend = 'supabase'
         embeddingProvider = provenance.provider || embeddingProvider
         embeddingModel = provenance.model || embeddingModel
-        logger.info({ cardId }, 'Embedding stored via pgvector')
+        embeddingDimension = provenance.dimension || embeddingDimension
+        logger.info(
+          {
+            cardId,
+            provider: embeddingProvider,
+            model: embeddingModel,
+            dimension: embeddingDimension,
+          },
+          'Embedding stored via pgvector'
+        )
       } catch (embErr) {
         embeddingStatus = 'failed'
         embeddingError = getErrorMessage(
@@ -865,7 +1256,12 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           'Embedding generation/storage failed'
         )
         logger.warn(
-          { cardId, err: embErr, reason: embeddingError },
+          {
+            cardId,
+            err: embErr,
+            reason: embeddingError,
+            compatibility: embeddingCompatibility,
+          },
           'Embedding generation/storage failed'
         )
       }
@@ -874,6 +1270,8 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
     // 8. Determine final title
     const shouldUpdateTitle = !currentMetadata.titleEditedAt
     let finalTitle: string | undefined
+    let titleTraceCandidates: ReturnType<typeof pickBestTitleCandidate>['candidates'] = []
+    let selectedTitleSource: string | null = null
 
     if (shouldUpdateTitle) {
       const platformsWithExplicitTitles = [
@@ -890,7 +1288,75 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
         detectedPlatform.toLowerCase()
       )
       const existingTitleIsGood =
-        card.title && card.title !== 'Link' && card.title.length > 3
+        !!card.title && !isWeakTitle(card.title)
+
+      let dspyTitleCandidate: { title: string; confidence: number } | null = null
+      const titleOptimizationContent = [
+        pickText(currentMetadata.scrapedTitle),
+        pickText(currentMetadata.scrapedDescription),
+        contentToAnalyze,
+        finalSummary,
+      ]
+        .filter((value): value is string => !!value)
+        .join('\n\n')
+
+      if (
+        dspyPlatform &&
+        titleOptimizationContent.length > 20 &&
+        (!existingTitleIsGood || isWeakTitle(classification.title))
+      ) {
+        try {
+          dspyTitleCandidate = await extractTitleWithDSPy(
+            titleOptimizationContent,
+            pickText(currentMetadata.authorHandle) ||
+              pickText(currentMetadata.authorName) ||
+              pickText(currentMetadata.author) ||
+              '',
+            dspyPlatform
+          )
+        } catch (titleErr) {
+          logger.warn({ cardId, err: titleErr }, 'DSPy title optimization failed')
+        }
+      }
+
+      const titleSelection = pickBestTitleCandidate([
+        {
+          title: card.title,
+          source: 'existing',
+        },
+        {
+          title: pickText(currentMetadata.scrapedTitle),
+          source: 'scraped',
+        },
+        {
+          title: localClassification?.title,
+          source: 'local-ai',
+        },
+        {
+          title: classification.title,
+          source: shouldUseLocalClassification ? 'local-ai' : 'classification',
+        },
+        {
+          title: dspyTitleCandidate?.title,
+          source: 'dspy',
+          confidence: dspyTitleCandidate?.confidence,
+        },
+        {
+          title: buildHeuristicSourceTitle({
+            content: titleOptimizationContent,
+            summary: finalSummary,
+            url: card.url,
+            author:
+              pickText(currentMetadata.authorHandle) ||
+              pickText(currentMetadata.authorName) ||
+              pickText(currentMetadata.author),
+          }),
+          source: 'heuristic',
+        },
+      ])
+
+      titleTraceCandidates = titleSelection.candidates
+      selectedTitleSource = titleSelection.selected?.source || null
 
       if (hasExplicitTitle && existingTitleIsGood) {
         if (isMoviePlatform(detectedPlatform) && card.title) {
@@ -899,7 +1365,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
         }
         // else keep existing title (don't set finalTitle)
       } else {
-        finalTitle = classification.title
+        finalTitle = titleSelection.selected?.title || classification.title
       }
     }
 
@@ -916,12 +1382,18 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 
     // 10. Calculate total timing
     const totalMs = Date.now() - timing.startedAt
+    const sourceSet = new Set([summarySource, tagsSource])
+    const uniformSource = Array.from(sourceSet)[0] as
+      | typeof summarySource
+      | typeof tagsSource
     const enrichmentSource =
-      summarySource === 'dspy' && tagsSource === 'dspy'
-        ? 'dspy'
-        : summarySource === 'dspy' || tagsSource === 'dspy'
-          ? 'mixed'
-          : 'glm'
+      sourceSet.size > 1
+        ? 'mixed'
+        : uniformSource === 'dspy'
+          ? 'dspy'
+          : uniformSource === 'local-ai'
+            ? 'local-ai'
+            : 'glm'
 
     await db.card.update({
       where: { id: cardId },
@@ -963,13 +1435,35 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           tagsSource,
           summarySource,
           titleSource: finalTitle
-            ? 'glm'
+            ? toPersistedTitleSource(
+                (selectedTitleSource as
+                  | Parameters<typeof toPersistedTitleSource>[0]
+                  | null) ||
+                  (shouldUseLocalClassification ? 'local-ai' : 'classification')
+              )
             : currentMetadata.titleSource || 'scraped',
+          titleDiagnostics:
+            titleTraceCandidates.length > 0
+              ? {
+                  selected: finalTitle || card.title || classification.title,
+                  selectedSource:
+                    selectedTitleSource ||
+                    (finalTitle ? currentMetadata.titleSource : 'existing'),
+                  candidates: titleTraceCandidates.slice(0, 5),
+                }
+              : currentMetadata.titleDiagnostics,
           embeddingProvider,
           embeddingModel,
+          embeddingDimension,
           embeddingStored,
           embeddingStatus,
           embeddingError,
+          embeddingCompatibilityStatus: embeddingCompatibility.status,
+          embeddingCompatibilityReason:
+            embeddingError || embeddingCompatibility.reason,
+          embeddingExpectedDimension: embeddingCompatibility.expectedDimension,
+          embeddingConfiguredDimension:
+            embeddingCompatibility.configuredDimension,
           vectorBackend,
           enrichedAt: new Date().toISOString(),
           enrichmentTiming: {
@@ -1132,10 +1626,16 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
   async ({ limit = 100 }) => {
     const userId = context.currentUser!.id
     const embeddingAvailability = getEmbeddingAvailability()
+    const embeddingCompatibility = getEmbeddingCompatibility()
 
     if (!embeddingAvailability.configured) {
       logger.info(
-        { userId, limit, reason: embeddingAvailability.reason },
+        {
+          userId,
+          limit,
+          reason: embeddingAvailability.reason,
+          compatibility: embeddingCompatibility,
+        },
         'Embedding backfill skipped: provider unavailable'
       )
       return 0
@@ -1206,6 +1706,13 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
               embeddingError: null,
               embeddingProvider: provenance.provider,
               embeddingModel: provenance.model,
+              embeddingDimension: provenance.dimension,
+              embeddingCompatibilityStatus: embeddingCompatibility.status,
+              embeddingCompatibilityReason: null,
+              embeddingExpectedDimension:
+                embeddingCompatibility.expectedDimension,
+              embeddingConfiguredDimension:
+                embeddingCompatibility.configuredDimension,
               vectorBackend: 'supabase',
               embeddingBackfilledAt: new Date().toISOString(),
             },
@@ -1228,11 +1735,23 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
               embeddingStored: meta.embeddingStored === true,
               embeddingStatus: 'failed',
               embeddingError: errorMessage,
+              embeddingCompatibilityStatus: embeddingCompatibility.status,
+              embeddingCompatibilityReason:
+                errorMessage || embeddingCompatibility.reason,
+              embeddingExpectedDimension:
+                embeddingCompatibility.expectedDimension,
+              embeddingConfiguredDimension:
+                embeddingCompatibility.configuredDimension,
             },
           },
         })
         logger.warn(
-          { cardId: card.id, err, reason: errorMessage },
+          {
+            cardId: card.id,
+            err,
+            reason: errorMessage,
+            compatibility: embeddingCompatibility,
+          },
           'Failed to backfill embedding for card'
         )
       }

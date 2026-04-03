@@ -6,6 +6,7 @@
 @import './lib/themes/skins/material.css';
 @import './lib/themes/skins/brutalist.css';
 @import './lib/themes/skins/glassmorphic.css';
+@import './lib/themes/skins/native.css';
 
 /**
  * START --- SETUP TAILWINDCSS EDIT
@@ -18,7 +19,7 @@
  */
 
 /**
- * MyMind Clone - Global Styles (RedwoodJS)
+ * BYOA - Global Styles (RedwoodJS)
  *
  * Mobile-first design system with Golden Ratio spacing,
  * Riso color palette, and physics-based animations.

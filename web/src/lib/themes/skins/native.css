@@ -1,0 +1,121 @@
+/**
+ * Skin: Native
+ *
+ * System-native, zero rendering overhead. No transforms, no blur,
+ * no shadows, no spring physics. Pure HTML speed feel.
+ * Pairs with the BYOA theme for McMaster-Carr density.
+ */
+
+[data-skin="native"] {
+  /* ── Cards ── */
+  & .card-base {
+    border-radius: 3px;
+    border: 1px solid var(--border-default);
+    box-shadow: none;
+  }
+
+  & .card-base:hover {
+    transform: none;
+    border-color: var(--accent-primary);
+    box-shadow: none;
+  }
+
+  /* ── Feed card shell (kill gradient border trick) ── */
+  & .feed-card-shell {
+    border-radius: 3px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: none;
+  }
+
+  & .feed-card-shell::after {
+    display: none;
+  }
+
+  & .feed-card-shell:hover {
+    border-color: var(--accent-primary);
+  }
+
+  /* ── Masonry items ── */
+  & .masonry-item {
+    margin-bottom: 8px;
+  }
+
+  /* ── Surface chips / tags ── */
+  & .surface-chip {
+    border-radius: 2px;
+    border: 1px solid var(--border-default);
+    background: transparent;
+  }
+
+  & .surface-chip:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-emphasis);
+  }
+
+  & .surface-chip-active {
+    border-radius: 2px;
+    border: 1px solid var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+    box-shadow: none;
+  }
+
+  /* ── Inputs ── */
+  & .surface-input {
+    border-radius: 2px;
+    border: 1px solid var(--border-default);
+  }
+
+  & .surface-input:hover {
+    border-color: var(--border-emphasis);
+  }
+
+  & .surface-input:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: none;
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+  }
+
+  /* ── Buttons ── */
+  & .tactile-btn {
+    border-radius: 2px;
+    box-shadow: none;
+  }
+
+  & .tactile-btn:hover {
+    transform: none;
+    box-shadow: none;
+    background: var(--surface-hover);
+  }
+
+  & .tactile-btn:active {
+    transform: none;
+    background: var(--surface-active);
+  }
+
+  & .hover-lift {
+    border-radius: 2px;
+  }
+
+  & .hover-lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* ── Shell / elevated surfaces ── */
+  & .surface-shell {
+    border-radius: 3px;
+    border: 1px solid var(--border-default);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  & .surface-card-elevated {
+    border-radius: 3px;
+    border: 1px solid var(--border-default);
+    box-shadow: none;
+  }
+}

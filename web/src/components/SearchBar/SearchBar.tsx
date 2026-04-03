@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - SearchBar Component
+ * BYOA - SearchBar Component
  *
  * Serif italic search input matching mymind.com aesthetic.
  * "Search my mind..." placeholder in elegant serif typography.
@@ -33,7 +33,7 @@ interface SearchBarProps {
  * Search bar with serif italic placeholder.
  */
 export function SearchBar({
-	placeholder = 'Search your creative brain...',
+	placeholder = 'Search...',
 	onSearch
 }: SearchBarProps) {
 	const { search } = useLocation();
@@ -148,7 +148,16 @@ export function SearchBar({
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === 'Escape') {
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+			e.preventDefault();
+			e.currentTarget.select();
+		} else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+			e.preventDefault();
+			startTransition(() => {
+				navigate(searchHref);
+			});
+			onSearch?.(query.trim());
+		} else if (e.key === 'Escape') {
 			handleClear();
 			(e.target as HTMLInputElement).blur();
 		} else if (e.key === 'Enter' && !e.shiftKey) {

@@ -1,15 +1,14 @@
 /**
- * MyMind Clone - Add Modal Component
+ * BYOA - Add Modal Component
  *
  * "Smart Input" modal for adding new items.
  * Auto-detects URLs, text notes, and handles image drops/pastes fluidly.
- * Designed for "addictive loop" with minimal friction.
  *
  * @fileoverview Modal for adding new cards (Smart Input)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp } from 'lucide-react';
+import { X, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp, Check, AlertCircle, RotateCcw } from 'lucide-react';
 import { useMutation } from '@redwoodjs/web';
 import { getPlatformInfo } from 'src/lib/platforms';
 import { useLocalAI } from 'src/lib/local-ai';
@@ -42,9 +41,33 @@ const SAVE_CARD_MUTATION = gql`
 
 type Mode = 'auto' | 'link' | 'note' | 'image';
 
+type LinkSaveStatus = 'pending' | 'saving' | 'done' | 'failed';
+
 interface AddModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+}
+
+/**
+ * Concurrency-limited parallel executor.
+ * Runs `fn` for each item with at most `concurrency` in-flight at once.
+ * Teaches: this is the "pool" pattern — useful anywhere you need to
+ * parallelize network calls without overwhelming the server.
+ */
+async function promisePool<T>(
+	items: T[],
+	concurrency: number,
+	fn: (item: T) => Promise<void>
+): Promise<void> {
+	const executing = new Set<Promise<void>>();
+	for (const item of items) {
+		const p = fn(item).finally(() => executing.delete(p));
+		executing.add(p);
+		if (executing.size >= concurrency) {
+			await Promise.race(executing);
+		}
+	}
+	await Promise.all(executing);
 }
 
 // =============================================================================
@@ -75,8 +98,8 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isVanishing, setIsVanishing] = useState(false);
 
-	// Batch link upload state
-	const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
+	// Batch link upload state — per-link status tracking for parallel saves
+	const [batchLinks, setBatchLinks] = useState<Map<string, LinkSaveStatus> | null>(null);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,6 +159,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setError(null);
 			setMode('auto');
 			setSaveStatus('idle');
+			setBatchLinks(null);
 		}
 	}, [isOpen]);
 
@@ -178,35 +202,62 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		setError(null);
 
 		try {
-			// BATCH MODE: Multiple links detected
+			// BATCH MODE: Multiple links detected — parallel with per-link progress
 			if (isMultiMode) {
 				const links = detectedLinks;
-				setBatchProgress({ current: 0, total: links.length });
 
-				let successCount = 0;
-				for (let i = 0; i < links.length; i++) {
-					setBatchProgress({ current: i + 1, total: links.length });
+				// Initialize all links as pending
+				const statusMap = new Map<string, LinkSaveStatus>(
+					links.map((url) => [url, 'pending'])
+				);
+				setBatchLinks(new Map(statusMap));
+
+				const updateStatus = (url: string, status: LinkSaveStatus) => {
+					statusMap.set(url, status);
+					setBatchLinks(new Map(statusMap));
+				};
+
+				// Run saves in parallel, 3 at a time
+				await promisePool(links, 3, async (url) => {
+					updateStatus(url, 'saving');
 					try {
 						const result = await saveCard({
-							variables: { input: { url: links[i], type: 'website' } },
+							variables: { input: { url, type: 'website' } },
 						});
 						if (result.data?.saveCard?.id) {
-							successCount++;
+							updateStatus(url, 'done');
+							// Fire per-card event so each card appears immediately in the grid
+							window.dispatchEvent(new CustomEvent('card-saved', {
+								detail: result.data.saveCard,
+							}));
+						} else {
+							updateStatus(url, 'failed');
 						}
 					} catch (err) {
-						console.error(`[AddModal] Failed to save ${links[i]}:`, err);
+						console.error(`[AddModal] Failed to save ${url}:`, err);
+						updateStatus(url, 'failed');
 					}
-				}
+				});
 
-				setBatchProgress(null);
-				if (successCount === 0) {
+				const doneCount = [...statusMap.values()].filter((s) => s === 'done').length;
+				const failedCount = [...statusMap.values()].filter((s) => s === 'failed').length;
+
+				if (doneCount === 0) {
 					throw new Error('Failed to save any links');
 				}
 
-				// MyMind-style vanish: animate out then close
-				showToast(`Saved ${successCount} cards to your mind`, 'success')
+				if (failedCount > 0) {
+					// Keep modal open so user can retry failed links
+					showToast(`Saved ${doneCount} of ${links.length} cards`, 'success');
+					setIsSubmitting(false);
+					setSaveStatus('idle');
+					return;
+				}
+
+				// All succeeded — vanish
+				showToast(`Saved ${doneCount} cards`, 'success');
+				setBatchLinks(null);
 				vanishAndClose();
-				window.dispatchEvent(new CustomEvent('cards-changed'));
 				return;
 			}
 
@@ -236,10 +287,15 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
 			// Race local AI classification against 3s timeout (non-blocking)
 			let clientClassification: unknown = undefined;
-			if (localAI.isReady && payload.url) {
+			const localClassificationUrl =
+				payload.url || (payload.content ? 'local://note' : null);
+			const localClassificationContent =
+				payload.content || payload.title || payload.url || finalContent;
+
+			if (localAI.isReady && localClassificationUrl && localClassificationContent) {
 				try {
 					const classification = await Promise.race([
-						localAI.classify(payload.url, payload.url),
+						localAI.classify(localClassificationUrl, localClassificationContent),
 						new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
 					]);
 					if (classification) {
@@ -268,7 +324,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
 			// MyMind-style vanish: animate out, card appears in timeline
 			posthog?.capture('card_saved', { mode, type: savedCard.type })
-			showToast('Saved to your mind', 'success')
+			showToast('Saved', 'success')
 			vanishAndClose();
 			window.dispatchEvent(new CustomEvent('card-saved', {
 				detail: {
@@ -282,16 +338,76 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setError(err instanceof Error ? err.message : 'Something went wrong');
 		} finally {
 			setIsSubmitting(false);
-			setBatchProgress(null);
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [content, mode, imageFile, imagePreview, isSubmitting, isMultiMode, detectedLinks, localAI.isReady, saveCard, vanishAndClose]);
 
+	// Retry only the failed links from the last batch
+	const handleRetryFailed = useCallback(async () => {
+		if (!batchLinks) return;
+		const failedUrls = [...batchLinks.entries()]
+			.filter(([, s]) => s === 'failed')
+			.map(([url]) => url);
+		if (failedUrls.length === 0) return;
+
+		setIsSubmitting(true);
+		setError(null);
+
+		// Copy current map, reset failed to pending
+		const statusMap = new Map(batchLinks);
+		for (const url of failedUrls) {
+			statusMap.set(url, 'pending');
+		}
+		setBatchLinks(new Map(statusMap));
+
+		const updateStatus = (url: string, status: LinkSaveStatus) => {
+			statusMap.set(url, status);
+			setBatchLinks(new Map(statusMap));
+		};
+
+		await promisePool(failedUrls, 3, async (url) => {
+			updateStatus(url, 'saving');
+			try {
+				const result = await saveCard({
+					variables: { input: { url, type: 'website' } },
+				});
+				if (result.data?.saveCard?.id) {
+					updateStatus(url, 'done');
+					window.dispatchEvent(new CustomEvent('card-saved', {
+						detail: result.data.saveCard,
+					}));
+				} else {
+					updateStatus(url, 'failed');
+				}
+			} catch (err) {
+				console.error(`[AddModal] Retry failed for ${url}:`, err);
+				updateStatus(url, 'failed');
+			}
+		});
+
+		setIsSubmitting(false);
+
+		const stillFailed = [...statusMap.values()].filter((s) => s === 'failed').length;
+		const doneCount = [...statusMap.values()].filter((s) => s === 'done').length;
+
+		if (stillFailed === 0) {
+			showToast(`All ${doneCount} cards saved`, 'success');
+			setBatchLinks(null);
+			vanishAndClose();
+		} else {
+			showToast(`${doneCount} saved, ${stillFailed} still failing`, 'success');
+		}
+	}, [batchLinks, saveCard, showToast, vanishAndClose]);
+
 	// Keyboard & Paste — must be declared AFTER handleSubmit (const with useCallback isn't hoisted)
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onClose();
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				onClose();
+			}
 			if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+				e.preventDefault();
 				handleSubmit();
 			}
 		};
@@ -370,6 +486,24 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								ref={textareaRef}
 								value={content}
 								onChange={(e) => setContent(e.target.value)}
+								onKeyDown={(e) => {
+									if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+										e.preventDefault()
+										e.currentTarget.select()
+										return
+									}
+
+									if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+										e.preventDefault()
+										void handleSubmit()
+										return
+									}
+
+									if (e.key === 'Escape') {
+										e.preventDefault()
+										onClose()
+									}
+								}}
 								onPaste={(e) => {
 									const items = e.clipboardData?.items
 									if (items) {
@@ -399,8 +533,8 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								disabled={isSubmitting}
 							/>
 
-							{/* Batch Mode Badge */}
-							{isMultiMode && !batchProgress && (
+							{/* Batch Mode Badge — shown before saving starts */}
+							{isMultiMode && !batchLinks && (
 								<div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-badge-pulse">
 									<Upload className="w-4 h-4" />
 									<span className="text-sm font-medium">{detectedLinks.length} links detected - will save all</span>
@@ -408,21 +542,73 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								</div>
 							)}
 
-							{/* Batch Progress */}
-							{batchProgress && (
-								<div className="mt-4 rounded-lg border border-[var(--border-default)] bg-[var(--surface-secondary)] p-3">
-									<div className="flex items-center justify-between mb-2">
-										<span className="text-sm font-medium text-[var(--foreground)]">
-											Saving {batchProgress.current} of {batchProgress.total}...
-										</span>
-										<Loader2 className="w-4 h-4 animate-spin text-[var(--accent-primary)]" />
-									</div>
-									<div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
-										<div
-											className="h-full bg-[var(--accent-primary)] transition-all duration-300"
-											style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-										/>
-									</div>
+							{/* Per-link batch progress list */}
+							{batchLinks && (
+								<div className="mt-4 rounded-lg border border-[var(--border-default)] bg-[var(--surface-secondary)] p-3 space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+									{(() => {
+										const entries = [...batchLinks.entries()];
+										const doneCount = entries.filter(([, s]) => s === 'done').length;
+										const failedCount = entries.filter(([, s]) => s === 'failed').length;
+										const savingCount = entries.filter(([, s]) => s === 'saving').length;
+										return (
+											<>
+												<div className="flex items-center justify-between mb-2">
+													<span className="text-xs font-medium text-[var(--foreground-muted)]">
+														{doneCount}/{entries.length} saved
+														{savingCount > 0 && ` \u00b7 ${savingCount} in flight`}
+														{failedCount > 0 && ` \u00b7 ${failedCount} failed`}
+													</span>
+													{savingCount > 0 && (
+														<Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-primary)]" />
+													)}
+												</div>
+												{entries.map(([url, status]) => {
+													let domain: string;
+													try { domain = new URL(url).hostname.replace(/^www\./, ''); }
+													catch { domain = url.slice(0, 40); }
+													return (
+														<div key={url} className="flex items-center gap-2 text-sm leading-snug">
+															{status === 'pending' && (
+																<div className="w-4 h-4 rounded-full border border-[var(--border-default)]" />
+															)}
+															{status === 'saving' && (
+																<Loader2 className="w-4 h-4 animate-spin text-[var(--accent-primary)] shrink-0" />
+															)}
+															{status === 'done' && (
+																<Check className="w-4 h-4 text-emerald-500 shrink-0" />
+															)}
+															{status === 'failed' && (
+																<AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+															)}
+															<span className={`truncate ${
+																status === 'done' ? 'text-[var(--foreground-muted)]' :
+																status === 'failed' ? 'text-red-500' :
+																status === 'saving' ? 'text-[var(--foreground)]' :
+																'text-[var(--foreground-muted)]'
+															}`}>
+																{domain}
+															</span>
+														</div>
+													);
+												})}
+												{/* Retry button when batch is done with failures */}
+												{failedCount > 0 && savingCount === 0 && (
+													<button
+														onClick={handleRetryFailed}
+														disabled={isSubmitting}
+														className="
+															mt-2 flex items-center gap-1.5 text-sm font-medium
+															text-[var(--accent-primary)] hover:text-[var(--accent-primary-hover)]
+															transition-colors duration-150
+														"
+													>
+														<RotateCcw className="w-3.5 h-3.5" />
+														Retry {failedCount} failed
+													</button>
+												)}
+											</>
+										);
+									})()}
 								</div>
 							)}
 

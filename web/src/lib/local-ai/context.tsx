@@ -1,7 +1,7 @@
 /**
  * Local AI React Context
  *
- * Provides in-browser AI classification via Gemma 3 1B + WebGPU/WASM.
+ * Provides in-browser AI classification via Gemma 4 + WebGPU/WASM.
  * - Lazy init via requestIdleCallback (zero First Paint impact)
  * - Persists enabled state to localStorage
  * - Worker auto-detects WebGPU vs WASM fallback
@@ -45,8 +45,8 @@ interface LocalAIContextValue {
   dispose: () => void
 }
 
-const STORAGE_KEY = 'mymind-local-ai-enabled'
-const MODEL_CACHED_KEY = 'mymind-local-ai-model-cached'
+const STORAGE_KEY = 'byoa-local-ai-enabled'
+const MODEL_CACHED_KEY = 'byoa-local-ai-model-cached'
 const CLASSIFY_TIMEOUT_MS = 8000
 const SUCCESS_DISMISS_MS = 3000
 

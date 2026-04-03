@@ -49,8 +49,8 @@ import {
 } from 'src/lib/enrichment-timing'
 import {
   getBrowserImageUrl,
-  getBrowserImageUrls,
   getFallbackScreenshotUrl,
+  getTrustedCardVisualSources,
 } from 'src/lib/imageProxy'
 import { normalizeEnrichmentStage } from 'src/lib/semantic'
 import type { Card } from 'src/lib/types'
@@ -232,20 +232,16 @@ export function CardDetailModal({
   // ---------------------------------------------------------------------------
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
-  const images = (() => {
-    const metaImages = card?.metadata?.images as string[] | undefined
-    if (metaImages?.length) {
-      if (
-        card?.imageUrl &&
-        metaImages[0] &&
-        !metaImages[0].includes('supabase')
-      ) {
-        return getBrowserImageUrls([card.imageUrl, ...metaImages.slice(1)])
-      }
-      return getBrowserImageUrls(metaImages)
+  const images = getTrustedCardVisualSources(
+    {
+      imageUrl: card?.imageUrl,
+      url: card?.url,
+      metadata: card?.metadata,
+    },
+    {
+      includeGeneratedScreenshot: false,
     }
-    return getBrowserImageUrls(card?.imageUrl ? [card.imageUrl] : [])
-  })()
+  ).map((source) => source.src)
   const authorAvatarUrl = getBrowserImageUrl(
     typeof card?.metadata?.authorAvatar === 'string'
       ? card.metadata.authorAvatar

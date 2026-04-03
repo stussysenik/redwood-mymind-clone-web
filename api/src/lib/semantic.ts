@@ -305,19 +305,36 @@ export const DSPyTagsResponseSchema = z.object({
 
 export type DSPyTagsResponse = z.infer<typeof DSPyTagsResponseSchema>
 
-export const ENRICHMENT_SOURCE_VALUES = ['dspy', 'glm', 'fallback', 'mixed'] as const
+export const ENRICHMENT_SOURCE_VALUES = [
+  'dspy',
+  'glm',
+  'fallback',
+  'local-ai',
+  'mixed',
+] as const
 export const EnrichmentSourceSchema = z.enum(ENRICHMENT_SOURCE_VALUES)
 export type EnrichmentSource = z.infer<typeof EnrichmentSourceSchema>
 
-export const TAG_SOURCE_VALUES = ['dspy', 'glm', 'fallback'] as const
+export const TAG_SOURCE_VALUES = ['dspy', 'glm', 'fallback', 'local-ai'] as const
 export const TagSourceSchema = z.enum(TAG_SOURCE_VALUES)
 export type TagSource = z.infer<typeof TagSourceSchema>
 
-export const SUMMARY_SOURCE_VALUES = ['dspy', 'glm', 'fallback'] as const
+export const SUMMARY_SOURCE_VALUES = [
+  'dspy',
+  'glm',
+  'fallback',
+  'local-ai',
+] as const
 export const SummarySourceSchema = z.enum(SUMMARY_SOURCE_VALUES)
 export type SummarySource = z.infer<typeof SummarySourceSchema>
 
-export const TITLE_SOURCE_VALUES = ['scraped', 'dspy', 'glm', 'fallback'] as const
+export const TITLE_SOURCE_VALUES = [
+  'scraped',
+  'dspy',
+  'glm',
+  'fallback',
+  'local-ai',
+] as const
 export const TitleSourceSchema = z.enum(TITLE_SOURCE_VALUES)
 export type TitleSource = z.infer<typeof TitleSourceSchema>
 export type LegacyTitleSource = 'ai'

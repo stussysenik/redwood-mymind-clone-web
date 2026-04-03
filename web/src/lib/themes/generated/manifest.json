@@ -10,8 +10,15 @@
     ]
   },
   {
+    "name": "byoa",
+    "label": "BYOA / Build Your Own Algorithm",
+    "colorMode": "light",
+    "category": "custom",
+    "preview": "#0055FF"
+  },
+  {
     "name": "default",
-    "label": "MyMind (Default)",
+    "label": "Classic",
     "colorMode": "light",
     "category": "custom",
     "preview": "#FF6B4A"

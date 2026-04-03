@@ -4,13 +4,14 @@ import { navigate, routes } from '@redwoodjs/router'
 import { Metadata } from '@redwoodjs/web'
 import { useAuth } from 'src/auth'
 import { useLocalAI } from 'src/lib/local-ai'
+import { LOCAL_AI_RUNTIME } from 'src/lib/local-ai/config'
 import { Sun, Moon, Monitor, Brain, Download, LogOut } from 'lucide-react'
 
 type Theme = 'light' | 'dark' | 'system'
 
 function getStoredTheme(): Theme {
   if (typeof window === 'undefined') return 'system'
-  return (localStorage.getItem('mymind-theme') as Theme) || 'system'
+  return (localStorage.getItem('byoa-theme') as Theme) || 'system'
 }
 
 function applyTheme(theme: Theme) {
@@ -33,7 +34,7 @@ const SettingsPage = () => {
 
   useEffect(() => {
     applyTheme(theme)
-    localStorage.setItem('mymind-theme', theme)
+    localStorage.setItem('byoa-theme', theme)
   }, [theme])
 
   // Listen for system theme changes when in system mode
@@ -122,7 +123,7 @@ const SettingsPage = () => {
                     Browser AI Classification
                   </p>
                   <p className="text-[11px]" style={{ color: 'var(--foreground-muted)' }}>
-                    Gemma 3 running locally — ~700MB download
+                    {LOCAL_AI_RUNTIME.modelLabel} running locally — {LOCAL_AI_RUNTIME.downloadLabel}
                   </p>
                 </div>
               </div>
@@ -151,7 +152,7 @@ const SettingsPage = () => {
               {localAI.status === 'loading' && (
                 <>
                   <Download className="h-3 w-3 animate-pulse" />
-                  Downloading model... {Math.round(localAI.downloadProgress * 100)}%
+                  Downloading model... {Math.round(localAI.downloadProgress)}%
                 </>
               )}
               {localAI.status === 'error' && (

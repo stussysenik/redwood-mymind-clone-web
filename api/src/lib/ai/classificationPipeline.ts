@@ -20,6 +20,7 @@ import {
 import { getPlatformAwarePrompt } from './prompts/classification';
 import { getInstagramPrompt } from './prompts/instagram';
 import { getTwitterPrompt, detectThreadIntent } from './prompts/twitter';
+import { buildHeuristicSourceTitle, isWeakTitle } from './titleOptimization';
 
 export type { CardType, ClassificationResult } from 'src/lib/semantic';
 
@@ -660,18 +661,14 @@ export function generateFallbackTags(
 
 	// Extract title
 	let fallbackTitle = title || 'Untitled';
-	if (fallbackTitle === 'Untitled') {
-		if (content) {
-			const firstLine = content.split('\n')[0];
-			fallbackTitle = firstLine.slice(0, 60).trim() || 'Untitled';
-		} else if (url) {
-			try {
-				const urlPath = new URL(url).pathname;
-				fallbackTitle = urlPath.split('/').pop()?.replace(/[-_]/g, ' ') || domain;
-			} catch {
-				fallbackTitle = url.slice(0, 60);
-			}
-		}
+	if (isWeakTitle(fallbackTitle)) {
+		fallbackTitle =
+			buildHeuristicSourceTitle({
+				content,
+				summary: content,
+				url,
+				author: null,
+			}) || fallbackTitle;
 	}
 
 	// Generate summary

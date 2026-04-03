@@ -59,6 +59,64 @@
   h1, h2, h3, h4, h5, h6 { text-transform: uppercase; letter-spacing: 0.05em; } hr, [class*='separator'] { border: none; border-top: 2px dashed #000000; }
 }
 
+[data-theme="byoa"] {
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F5F5F5;
+  --surface-card: #FFFFFF;
+  --surface-elevated: #f7f7f7;
+  --surface-floating: rgba(255, 255, 255, 0.88);
+  --surface-soft: rgba(17, 17, 17, 0.04);
+  --surface-hover: rgba(17, 17, 17, 0.06);
+  --surface-active: rgba(17, 17, 17, 0.1);
+  --surface-accent: rgba(0, 85, 255, 0.12);
+  --surface-accent-strong: rgba(0, 85, 255, 0.18);
+  --surface-success: rgba(34, 197, 94, 0.12);
+  --surface-warning: rgba(245, 158, 11, 0.14);
+  --surface-danger: rgba(239, 68, 68, 0.14);
+  --surface-overlay: rgba(0, 0, 0, 0.6);
+  --header-backdrop: rgba(255, 255, 255, 0.78);
+  --card-action-bg: rgba(255, 255, 255, 0.92);
+  --glow-accent: rgba(0, 85, 255, 0.14);
+  --border-subtle: rgba(0, 0, 0, 0.07);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-emphasis: rgba(0, 0, 0, 0.24);
+  --platform-border-width: 3px;
+  --scrollbar-thumb: rgba(17, 17, 17, 0.15);
+  --scrollbar-thumb-hover: rgba(17, 17, 17, 0.24);
+  --shimmer-base: rgba(17, 17, 17, 0.05);
+  --shimmer-highlight: rgba(255, 255, 255, 0.72);
+  --shadow-xs: none;
+  --shadow-xl: none;
+  --radius-full: 9999px;
+  --background: #FFFFFF;
+  --background-secondary: #F5F5F5;
+  --foreground: #111111;
+  --foreground-muted: #666666;
+  --card-bg: #FFFFFF;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.24);
+  --accent-primary: #0055FF;
+  --accent-hover: #0044CC;
+  --accent-light: rgba(0, 85, 255, 0.08);
+  --tag-green: #007A3D;
+  --tag-red: #CC0000;
+  --tag-blue: #0055FF;
+  --tag-orange: #CC6600;
+  --tag-purple: #6633CC;
+  --tag-pink: #CC0066;
+  --tag-cyan: #007799;
+  --tag-amber: #CC8800;
+  --font-serif: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+}
+
 [data-theme="default"] {
   --surface-primary: #F7F6F3;
   --surface-secondary: #EFEEEB;

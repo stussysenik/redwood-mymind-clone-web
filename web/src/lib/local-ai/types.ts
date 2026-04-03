@@ -6,7 +6,7 @@
 
 import type { CardType } from '../types'
 
-/** Result from in-browser Gemma 3 1B classification */
+/** Result from in-browser Gemma 4 classification */
 export interface ClientClassification {
   type: CardType
   title: string

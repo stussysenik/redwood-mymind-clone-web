@@ -11,13 +11,13 @@ function isInstagramUrl(url: string): boolean {
 }
 
 export default async () => {
-  const urls = process.argv
-    .slice(2)
-    .filter((value) => /^https?:\/\//i.test(value))
+  const rawArgs = process.argv.slice(2)
+  const aggressive = rawArgs.includes('--aggressive')
+  const urls = rawArgs.filter((value) => /^https?:\/\//i.test(value))
 
   if (urls.length === 0) {
     console.error(
-      'Usage: yarn rw exec diagnoseVisualExtraction -- <url> [more urls]'
+      'Usage: yarn rw exec diagnoseVisualExtraction -- [--aggressive] <url> [more urls]'
     )
     process.exitCode = 1
     return
@@ -27,9 +27,13 @@ export default async () => {
     console.log(`\n=== ${url} ===`)
 
     try {
-      const scraped = await scrapeUrl(url)
+      const scraped = await scrapeUrl(url, {
+        aggressiveBrowserAcquisition: aggressive,
+        recoveryReason: aggressive ? 'diagnostic-aggressive' : undefined,
+      })
       const report: Record<string, unknown> = {
         url,
+        aggressive,
         scraped: {
           title: scraped.title,
           domain: scraped.domain,
@@ -38,6 +42,18 @@ export default async () => {
           mediaTypes: scraped.mediaTypes || [],
           videoPositions: scraped.videoPositions || [],
           previewSource: scraped.previewSource || null,
+          sourcePayloadBytes: scraped.sourcePayloadBytes || null,
+          sourcePayloadKind: scraped.sourcePayloadKind || null,
+          sourceTextBytes: scraped.sourceTextBytes || null,
+          sourceTextKind: scraped.sourceTextKind || null,
+          sourceTextCoverageTarget: scraped.sourceTextCoverageTarget || null,
+          sourceEvidenceKinds: scraped.sourceEvidenceKinds || null,
+          blockerSignals: scraped.blockerSignals || null,
+          renderedNetworkResponseCount:
+            scraped.renderedNetworkResponseCount || null,
+          renderedNetworkTextBytes: scraped.renderedNetworkTextBytes || null,
+          recoverySource: scraped.recoverySource || null,
+          recoveryReason: scraped.recoveryReason || null,
           fallbackPreview:
             scraped.imageUrl || !url.startsWith('http')
               ? null

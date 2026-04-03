@@ -23,7 +23,7 @@ import {
   getEnrichmentProgress,
   getProcessingState,
 } from 'src/lib/enrichment-timing'
-import { getBrowserImageUrl, getFallbackScreenshotUrl } from 'src/lib/imageProxy'
+import { getTrustedCardVisualSources } from 'src/lib/imageProxy'
 import { ENRICHMENT_PROGRESS_STAGES, toProgressEnrichmentStage } from 'src/lib/semantic'
 import type { Card, CardMetadata, CardType } from 'src/lib/types'
 
@@ -138,34 +138,11 @@ function getVisualBadges(card: FeedCardRecord): string[] {
 function getVisualSources(
   card: FeedCardRecord
 ): Array<{ src: string; kind: 'image' | 'screenshot' }> {
-  const sources: Array<{ src: string; kind: 'image' | 'screenshot' }> = []
-  const seen = new Set<string>()
-  const pushSource = (
-    src: string | null | undefined,
-    kind: 'image' | 'screenshot'
-  ) => {
-    const browserUrl = getBrowserImageUrl(src)
-    if (!browserUrl) return
-    const trimmed = browserUrl.trim()
-    if (!trimmed || seen.has(trimmed)) return
-    seen.add(trimmed)
-    sources.push({ src: trimmed, kind })
+  if (isNoteCard(card)) {
+    return []
   }
 
-  pushSource(card.imageUrl, 'image')
-
-  const metaImages = Array.isArray(card.metadata?.images)
-    ? card.metadata.images
-    : []
-  for (const image of metaImages) {
-    pushSource(image, 'image')
-  }
-
-  if (!isNoteCard(card)) {
-    pushSource(getFallbackScreenshotUrl(card.url), 'screenshot')
-  }
-
-  return sources
+  return getTrustedCardVisualSources(card)
 }
 
 function renderGradient(
@@ -503,6 +480,75 @@ export function FeedCardBody({
 
       <FeedCardStatus card={card} />
       <FeedCardTags card={card} />
+    </div>
+  )
+}
+
+/**
+ * Dense row — McMaster-Carr style single-line item.
+ * No images, no cards. Just type icon, title, domain, and date on one line
+ * with a bottom border separator and a hover highlight.
+ */
+export function FeedCardDenseRow({
+  card,
+  onOpen,
+}: {
+  card: FeedCardRecord
+  onOpen: () => void
+}) {
+  const TypeIcon = TYPE_ICONS[normalizeCardType(card.type)] ?? Globe
+  const domain = getDomainLabel(card.url)
+  const dateLabel = new Date(card.createdAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: '2-digit',
+  })
+
+  return (
+    <div
+      className="group flex w-full cursor-pointer items-center gap-3 border-b px-3 py-2 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+      role="button"
+      tabIndex={0}
+      aria-label={
+        card.title
+          ? `Open ${card.type} card: ${card.title}`
+          : `Open ${card.type} card`
+      }
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+      style={{
+        borderColor: 'var(--border-subtle)',
+      }}
+    >
+      <TypeIcon
+        className="h-4 w-4 shrink-0"
+        style={{ color: 'var(--foreground-muted)' }}
+      />
+      <span
+        className="min-w-0 flex-1 truncate text-sm"
+        style={{ color: 'var(--foreground)' }}
+      >
+        {card.title || 'Untitled'}
+      </span>
+      {domain && (
+        <span
+          className="hidden shrink-0 font-mono text-xs sm:inline"
+          style={{ color: 'var(--foreground-muted)' }}
+        >
+          {domain}
+        </span>
+      )}
+      <span
+        className="shrink-0 font-mono text-xs tabular-nums"
+        style={{ color: 'var(--foreground-muted)' }}
+      >
+        {dateLabel}
+      </span>
     </div>
   )
 }

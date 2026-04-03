@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Add Button Component
+ * BYOA - Add Button Component
  *
  * Floating action button for adding new items.
  * Opens AddModal on click.
@@ -15,17 +15,30 @@ import { AddModal } from 'src/components/AddModal';
 // COMPONENT
 // =============================================================================
 
+function isEditableTarget(target: EventTarget | null): boolean {
+        return (
+                target instanceof HTMLElement &&
+                (target.isContentEditable ||
+                        target.tagName === 'INPUT' ||
+                        target.tagName === 'TEXTAREA' ||
+                        target.tagName === 'SELECT')
+        );
+}
+
 /**
  * Floating action button that opens the add modal.
  */
 export function AddButton() {
         const [isModalOpen, setIsModalOpen] = useState(false);
 
-        // Global keyboard shortcut (Cmd+A or Cmd+I)
+        // Global keyboard shortcut stays off common editing keys.
         useEffect(() => {
                 const handleKeyDown = (e: KeyboardEvent) => {
-                        // Check for Cmd/Ctrl + A or Cmd/Ctrl + I
-                        if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'i')) {
+                        if (
+                                (e.metaKey || e.ctrlKey) &&
+                                e.key.toLowerCase() === 'i' &&
+                                !isEditableTarget(e.target)
+                        ) {
                                 e.preventDefault();
                                 setIsModalOpen(true);
                         }
@@ -51,7 +64,7 @@ export function AddButton() {
           active:scale-95
         "
                                 aria-label="Add new item"
-                                title="Add Item (Cmd+A)"
+                                title="Add Item (Cmd+I)"
                         >
                                 <Plus className="h-6 w-6" strokeWidth={2.5} />
                         </button>

@@ -8,6 +8,7 @@
 
 import { Brain } from "lucide-react";
 import { useLocalAI } from "src/lib/local-ai";
+import { LOCAL_AI_RUNTIME } from "src/lib/local-ai/config";
 
 export function LocalAIToggle() {
   const { status, enabled, setEnabled, downloadProgress, downloadStatus } = useLocalAI();
@@ -40,7 +41,7 @@ export function LocalAIToggle() {
           </span>
           <p className="text-xs text-[var(--foreground-muted)]">
             {!enabled &&
-              "Classify saves with Gemma 3 running locally in your browser. ~700MB download on first use — nothing is sent to a server or stored on your device."}
+              `Classify saves with ${LOCAL_AI_RUNTIME.modelLabel} running locally in your browser. ${LOCAL_AI_RUNTIME.downloadLabel} on first use — nothing is sent to a server or stored on your device.`}
             {enabled && isLoading && downloadStatus}
             {enabled && isReady && "Ready — classifies content instantly"}
             {enabled && isError && (

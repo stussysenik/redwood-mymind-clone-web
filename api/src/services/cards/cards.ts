@@ -4,21 +4,33 @@ import { db } from 'src/lib/db'
 import { createEnrichmentTiming } from 'src/lib/enrichmentTiming'
 import { logger } from 'src/lib/logger'
 import { detectPlatform } from 'src/lib/platforms'
-import { stripGeneratedTagNoise } from 'src/lib/semantic'
+import { buildInitialLocalClassificationState, normalizeLocalClassification } from 'src/lib/ai/localClassification'
+import { normalizeTagList, stripGeneratedTagNoise } from 'src/lib/semantic'
 import { enrichCardPipeline } from 'src/services/enrichment/enrichment'
 
-function sanitizeCardTags<T extends { tags?: string[] | null; metadata?: unknown; url?: string | null }>(
-  card: T
-): T {
+function normalizePersistedTags(tags: string[] | null | undefined): string[] {
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return normalizeTagList(tags)
+}
+
+function sanitizeCardTags<
+  T extends { tags?: string[] | null; metadata?: unknown; url?: string | null },
+>(card: T): T {
   const metadata =
-    card.metadata && typeof card.metadata === 'object' && !Array.isArray(card.metadata)
+    card.metadata &&
+    typeof card.metadata === 'object' &&
+    !Array.isArray(card.metadata)
       ? (card.metadata as Record<string, unknown>)
       : {}
 
   return {
     ...card,
     tags: stripGeneratedTagNoise(card.tags || [], {
-      platform: typeof metadata.platform === 'string' ? metadata.platform : null,
+      platform:
+        typeof metadata.platform === 'string' ? metadata.platform : null,
       url: card.url || null,
       authorHandle:
         typeof metadata.authorHandle === 'string'
@@ -120,13 +132,17 @@ export const randomCards: QueryResolvers['randomCards'] = async ({
 
 export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
   const userId = context.currentUser!.id
-  const clientMetadata =
-    input.clientClassification &&
-    typeof input.clientClassification === 'object' &&
-    !Array.isArray(input.clientClassification)
-      ? (input.clientClassification as Record<string, unknown>)
-      : {}
-  const contentLength = (input.content?.length || 0) + (input.title?.length || 0)
+  const clientClassification = normalizeLocalClassification(
+    input.clientClassification
+  )
+  const initialLocalState = buildInitialLocalClassificationState({
+    inputType: input.type,
+    inputTitle: input.title,
+    inputTags: input.tags,
+    clientClassification,
+  })
+  const contentLength =
+    (input.content?.length || 0) + (initialLocalState.title?.length || 0)
   const timing = createEnrichmentTiming(
     input.url ? detectPlatform(input.url) : input.type || 'generic',
     contentLength,
@@ -136,14 +152,14 @@ export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
   const card = await db.card.create({
     data: {
       userId,
-      type: input.type || 'website',
-      title: input.title || null,
+      type: initialLocalState.type || input.type || 'website',
+      title: initialLocalState.title || null,
       content: input.content || null,
       url: input.url || null,
       imageUrl: input.imageUrl || null,
-      tags: input.tags || [],
+      tags: normalizePersistedTags(initialLocalState.tags),
       metadata: {
-        ...clientMetadata,
+        ...initialLocalState.metadata,
         processing: true,
         enrichmentStage: 'queued',
         enrichmentTiming: {
@@ -177,10 +193,13 @@ export const updateCard: MutationResolvers['updateCard'] = async ({
   if (input.title !== undefined) data.title = input.title
   if (input.content !== undefined) data.content = input.content
   if (input.type !== undefined) data.type = input.type
-  if (input.tags !== undefined) data.tags = input.tags
+  if (input.tags !== undefined) data.tags = normalizePersistedTags(input.tags)
   if (input.imageUrl !== undefined) data.imageUrl = input.imageUrl
   if (input.metadata !== undefined) {
-    data.metadata = { ...(existing.metadata as any), ...(input.metadata as any) }
+    data.metadata = {
+      ...(existing.metadata as any),
+      ...(input.metadata as any),
+    }
   }
 
   return db.card.update({ where: { id }, data })
@@ -228,9 +247,7 @@ export const unarchiveCard: MutationResolvers['unarchiveCard'] = async ({
   })
 }
 
-export const restoreCard: MutationResolvers['restoreCard'] = async ({
-  id,
-}) => {
+export const restoreCard: MutationResolvers['restoreCard'] = async ({ id }) => {
   const userId = context.currentUser!.id
   const existing = await db.card.findFirst({ where: { id, userId } })
   if (!existing) throw new Error('Card not found')

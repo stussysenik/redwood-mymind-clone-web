@@ -1,7 +1,7 @@
 /**
  * Local AI Prompt
  *
- * Few-shot classification prompt for Gemma 3 1B IT.
+ * Few-shot classification prompt for Gemma 4.
  * ~350 tokens with platform detection and vibe vocabulary enforcement.
  */
 

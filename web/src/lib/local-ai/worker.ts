@@ -1,7 +1,7 @@
 /**
  * Local AI Web Worker
  *
- * Runs Gemma 3 1B IT inference off the main thread via Transformers.js + WebGPU.
+ * Runs Gemma 4 inference off the main thread via Transformers.js + WebGPU.
  * Uses singleton pattern: pipeline created once, reused for all classify calls.
  *
  * Message protocol:
@@ -11,14 +11,15 @@
  */
 
 import { pipeline, env } from '@huggingface/transformers'
+import { LOCAL_AI_RUNTIME } from './config'
 import { buildLocalClassificationMessage, parseClassificationJSON } from './prompt'
 import type { WorkerInMessage, WorkerOutMessage } from './types'
 
 // Disable local model check — always fetch from HF CDN
 env.allowLocalModels = false
 
-const MODEL_ID = 'onnx-community/gemma-3-1b-it-ONNX-GQA'
-const MODEL_VERSION = 'gemma-3-1b-v2' // bump when changing model or transformers.js version
+const MODEL_ID = LOCAL_AI_RUNTIME.modelId
+const MODEL_VERSION = LOCAL_AI_RUNTIME.modelVersion
 
 // Singleton pipeline — typed as `any` because @huggingface/transformers
 // pipeline() returns a union type too complex for TS to represent

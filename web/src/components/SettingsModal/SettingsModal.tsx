@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { X, Moon, Sun, Monitor, Check } from 'lucide-react'
 
-import { useTheme, type Theme } from 'src/lib/theme/ThemeProvider'
+import { NO_PACK, useTheme, type Theme } from 'src/lib/theme/ThemeProvider'
 import type { ThemeInfo } from 'src/lib/themes'
 
 interface SettingsModalProps {
@@ -119,8 +119,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const customThemes = availableThemes.filter((t) => t.category === 'custom')
   const daisyThemes = availableThemes.filter((t) => t.category === 'daisyui')
 
-  // Colors section is de-emphasized when a non-default theme pack is active
-  const colorsOpacity = themePack !== 'default' ? 0.45 : 1
+  // Colors and base mode only apply when the Classic/base pack is active.
+  const colorsOpacity = themePack !== NO_PACK ? 0.45 : 1
 
   const modal = (
     <div
@@ -306,12 +306,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   >
                     Base Mode
                   </h3>
-                  {themePack !== 'default' && (
+                  {themePack !== NO_PACK && (
                     <span
                       className="text-[10px]"
                       style={{ color: 'var(--foreground-muted)' }}
                     >
-                      Only applies with Default pack
+                      Only applies with Classic
                     </span>
                   )}
                 </div>

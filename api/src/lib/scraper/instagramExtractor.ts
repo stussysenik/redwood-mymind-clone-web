@@ -356,10 +356,10 @@ function isContentImage(url: string): boolean {
 // =============================================================================
 
 export const INSTAFIX_MIRRORS = [
-	'eeinstagram.com',    // FixEmbeds — works, returns OG tags + description
+	'eeinstagram.com',    // FixEmbeds — most reliable surviving mirror
+	'instagramez.com',    // EmbedEZ — newer, reportedly reliable
 	'zzinstagram.com',    // Load balancer across multiple backends (absolute URLs)
-	'toinstagram.com',    // InstaFix by Tonchik (relative URLs)
-	'ddinstagram.com',    // Original InstaFix (currently DOWN, may recover)
+	// ddinstagram.com archived April 2, 2026 — removed
 ];
 
 /**
@@ -509,10 +509,11 @@ export async function fetchViaGraphQL(
 	targetKind: InstagramMediaKind,
 ): Promise<InstagramPostData | null> {
 	// Try multiple doc_ids (Instagram rotates these every 2-4 weeks)
-	const docIds = [
-		'10015901848480474',  // ahmedrangel/instagram-media-scraper (2025-2026)
-		'8845758582119845',   // scrapfly.io guide (2025)
-	];
+	// Configurable via env var to update without redeploy
+	const docIds = (process.env.INSTAGRAM_DOC_IDS || '10015901848480474,8845758582119845')
+		.split(',')
+		.map((id) => id.trim())
+		.filter(Boolean);
 
 	for (const docId of docIds) {
 		try {
@@ -911,34 +912,44 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 		return !isLikelyTruncated(candidate, slideHint);
 	};
 
-	// Layer 1: GraphQL API (richest data when accessible)
-	const graphqlResult = await fetchViaGraphQL(shortcode, targetKind);
+	// Layer 1+2: Run GraphQL and InstaFix in parallel (independent strategies)
+	// Cuts latency from ~10s sequential to ~5s parallel
+	const [graphqlSettled, instaFixSettled] = await Promise.allSettled([
+		fetchViaGraphQL(shortcode, targetKind),
+		fetchViaInstaFix(shortcode, targetKind),
+	]);
+
+	const graphqlResult = graphqlSettled.status === 'fulfilled' ? graphqlSettled.value : null;
+	const instaFixResult = instaFixSettled.status === 'fulfilled' ? instaFixSettled.value : null;
+
 	if (graphqlResult) {
 		console.log(`[Instagram] GraphQL success: ${graphqlResult.images.length} images, author="${graphqlResult.authorHandle}"`);
 		if (registerCandidate(graphqlResult)) {
 			return bestResult;
 		}
-		console.log('[Instagram] GraphQL may be truncated, probing additional strategies');
 	}
 
-	// Layer 2: InstaFix mirrors (works from datacenter IPs)
-	const instaFixResult = await fetchViaInstaFix(shortcode, targetKind);
 	if (instaFixResult) {
 		console.log(`[Instagram] InstaFix success: ${instaFixResult.images.length} images, author="${instaFixResult.authorHandle}"`);
 		if (registerCandidate(instaFixResult)) {
 			return bestResult;
 		}
-		console.log('[Instagram] InstaFix may be truncated, trying embed parser');
 	}
 
-	// Layer 3: Static Embed HTML parsing
+	// Accept partial results from Layer 1+2 if we have at least 3 images
+	// (InstaFix caps at 3 for some mirrors — good enough vs falling through to embed/OG)
+	if (bestResult && (bestResult as InstagramPostData).images.length >= 3) {
+		console.log(`[Instagram] Accepting partial result with ${(bestResult as InstagramPostData).images.length} images (skipping slower fallbacks)`);
+		return bestResult;
+	}
+
+	// Layer 3: Static Embed HTML parsing (only if Layer 1+2 gave insufficient results)
 	const embedResult = await fetchViaEmbedHTML(shortcode, targetKind);
 	if (embedResult) {
 		console.log(`[Instagram] Embed HTML success: ${embedResult.images.length} images`);
 		if (registerCandidate(embedResult)) {
 			return bestResult;
 		}
-		console.log('[Instagram] Embed parser still appears truncated, keeping best candidate');
 	}
 
 	// Return best multi-image result instead of degrading to single-image fallbacks.

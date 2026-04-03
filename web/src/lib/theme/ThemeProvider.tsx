@@ -35,14 +35,34 @@ interface ThemeContextValue {
   availableSkins: SkinInfo[]
 }
 
-const STORAGE_KEY = 'mymind-theme'
+const STORAGE_KEY = 'byoa-theme'
 const DEFAULT_THEME: Theme = 'light'
 
-const PACK_STORAGE_KEY = 'mymind-theme-pack'
-const DEFAULT_PACK = 'default'
+const PACK_STORAGE_KEY = 'byoa-theme-pack'
+export const DEFAULT_PACK = 'byoa'
+/** The sentinel value meaning "no custom theme pack, just light/dark" */
+export const NO_PACK = 'default'
 
-const SKIN_STORAGE_KEY = 'mymind-skin'
-const DEFAULT_SKIN = 'default'
+const SKIN_STORAGE_KEY = 'byoa-skin'
+export const DEFAULT_SKIN = 'native'
+/** The sentinel value meaning "no skin override" */
+export const NO_SKIN = 'default'
+
+// Migrate old localStorage keys from mymind-* to byoa-*
+if (typeof localStorage !== 'undefined') {
+  const migrations: [string, string][] = [
+    ['mymind-theme', 'byoa-theme'],
+    ['mymind-theme-pack', 'byoa-theme-pack'],
+    ['mymind-skin', 'byoa-skin'],
+  ]
+  for (const [oldKey, newKey] of migrations) {
+    const old = localStorage.getItem(oldKey)
+    if (old && !localStorage.getItem(newKey)) {
+      localStorage.setItem(newKey, old)
+      localStorage.removeItem(oldKey)
+    }
+  }
+}
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
@@ -97,7 +117,7 @@ export function ThemeProvider({
       }
 
       const root = document.documentElement
-      if (pack === DEFAULT_PACK) {
+      if (pack === NO_PACK) {
         // Remove theme pack — fall back to light/dark system
         const resolved = computeResolvedTheme(theme)
         root.setAttribute('data-theme', resolved)
@@ -133,7 +153,7 @@ export function ThemeProvider({
       localStorage.setItem(SKIN_STORAGE_KEY, newSkin)
     }
     const root = document.documentElement
-    if (newSkin === DEFAULT_SKIN) {
+    if (newSkin === NO_SKIN) {
       root.removeAttribute('data-skin')
     } else {
       root.setAttribute('data-skin', newSkin)
@@ -152,7 +172,7 @@ export function ThemeProvider({
       setResolvedTheme(resolved)
 
       // Only apply light/dark to DOM when no custom pack is active
-      if (themePack === DEFAULT_PACK) {
+      if (themePack === NO_PACK) {
         applyTheme(resolved)
       }
     },
@@ -177,7 +197,7 @@ export function ThemeProvider({
     const storedSkin = localStorage.getItem(SKIN_STORAGE_KEY) || DEFAULT_SKIN
     setSkinState(storedSkin)
     const root = document.documentElement
-    if (storedSkin !== DEFAULT_SKIN) {
+    if (storedSkin !== NO_SKIN) {
       root.setAttribute('data-skin', storedSkin)
     } else {
       root.removeAttribute('data-skin')
@@ -187,7 +207,7 @@ export function ThemeProvider({
     const storedPack = localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK
     setThemePackState(storedPack)
 
-    if (storedPack !== DEFAULT_PACK) {
+    if (storedPack !== NO_PACK) {
       root.setAttribute('data-theme', storedPack)
       const themeInfo = getTheme(storedPack)
       if (themeInfo) {
@@ -220,7 +240,7 @@ export function ThemeProvider({
         const resolved = getSystemTheme()
         setResolvedTheme(resolved)
         // Only update DOM when no custom pack is active
-        if (themePack === DEFAULT_PACK) {
+        if (themePack === NO_PACK) {
           applyTheme(resolved)
         }
       }
@@ -262,8 +282,8 @@ export function useTheme() {
 export const themeScript = `
 (function() {
   try {
-    var pack = localStorage.getItem('${PACK_STORAGE_KEY}');
-    if (pack && pack !== '${DEFAULT_PACK}') {
+    var pack = localStorage.getItem('${PACK_STORAGE_KEY}') || '${DEFAULT_PACK}';
+    if (pack !== '${NO_PACK}') {
       document.documentElement.setAttribute('data-theme', pack);
     } else {
       var theme = localStorage.getItem('${STORAGE_KEY}');
@@ -272,6 +292,10 @@ export const themeScript = `
                      window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', resolved);
       document.documentElement.style.colorScheme = resolved;
+    }
+    var skin = localStorage.getItem('${SKIN_STORAGE_KEY}') || '${DEFAULT_SKIN}';
+    if (skin !== '${NO_SKIN}') {
+      document.documentElement.setAttribute('data-skin', skin);
     }
   } catch (e) {}
 })();

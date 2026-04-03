@@ -15,10 +15,24 @@
  */
 
 import * as cheerio from 'cheerio';
-import { extractTitleWithDSPy, extractAssetsWithDSPy, extractContentWithDSPy } from 'src/lib/ai/dspyClient';
+import { extractTitleWithDSPy } from 'src/lib/ai/dspyClient';
 import { extractInstagramPost } from './instagramExtractor';
 import { extractTweet } from './twitterExtractor';
-import { decodeHtmlEntities } from 'src/lib/textUtils';
+import {
+	buildHighFidelityHtmlTextSnapshot,
+	buildSourceTextSnapshotFromSegments,
+	detectSourceBlockerSignals,
+	measureSourceTextBytesFromSegments,
+	SOURCE_TEXT_COVERAGE_TARGET,
+	type SourceBlockerSignal,
+} from './sourceText';
+
+type SourceEvidenceKind =
+	| 'static-html'
+	| 'rendered-html'
+	| 'rendered-network'
+	| 'api-json'
+	| 'text';
 
 export interface ScrapedContent {
 	title: string;
@@ -51,6 +65,26 @@ export interface ScrapedContent {
 		replies?: number;
 		views?: number;
 	};
+	sourcePayloadBytes?: number;
+	sourcePayloadKind?: 'html' | 'rendered-html' | 'api-json' | 'text';
+	sourceTextBytes?: number;
+	sourceTextKind?:
+		| 'api-text'
+		| 'compressed-visible-html'
+		| 'rendered-visible-html'
+		| 'browser-acquired-text';
+	sourceTextCoverageTarget?: number;
+	sourceEvidenceKinds?: SourceEvidenceKind[];
+	blockerSignals?: SourceBlockerSignal[];
+	renderedNetworkResponseCount?: number;
+	renderedNetworkTextBytes?: number;
+	recoverySource?: 'rendered-html' | 'aggressive-browser';
+	recoveryReason?: string;
+}
+
+export interface ScrapeUrlOptions {
+	aggressiveBrowserAcquisition?: boolean;
+	recoveryReason?: string;
 }
 
 /**
@@ -75,8 +109,370 @@ function extractMentions(text: string): string[] {
 	return unique.slice(0, 10); // Limit to 10 mentions
 }
 
+function measureSourcePayloadBytes(payload: unknown): number | undefined {
+	try {
+		if (typeof payload === 'string') {
+			return Buffer.byteLength(payload, 'utf8');
+		}
 
-export async function scrapeUrl(url: string): Promise<ScrapedContent> {
+		if (payload == null) {
+			return undefined;
+		}
+
+		return Buffer.byteLength(JSON.stringify(payload), 'utf8');
+	} catch {
+		return undefined;
+	}
+}
+
+function measureSourceTextBytes(
+	...values: Array<string | null | undefined>
+): number | undefined {
+	return measureSourceTextBytesFromSegments(values);
+}
+
+function dedupeStringArray<T extends string>(
+	values: Array<T | null | undefined>
+): T[] {
+	return Array.from(
+		new Set(
+			values.filter(
+				(value): value is T => typeof value === 'string' && value.length > 0
+			)
+		)
+	);
+}
+
+function inferSourceEvidenceKinds(
+	payloadKind: ScrapedContent['sourcePayloadKind'] | undefined
+): SourceEvidenceKind[] | undefined {
+	switch (payloadKind) {
+		case 'html':
+			return ['static-html'];
+		case 'rendered-html':
+			return ['rendered-html'];
+		case 'api-json':
+			return ['api-json'];
+		case 'text':
+			return ['text'];
+		default:
+			return undefined;
+	}
+}
+
+function isModuleResolutionError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		(
+			'code' in error
+				? (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+				: /Cannot find module|ERR_MODULE_NOT_FOUND/.test(error.message)
+		)
+	);
+}
+
+async function importRenderedContentModule() {
+	try {
+		return await import('./renderedContent.js');
+	} catch (error) {
+		if (!isModuleResolutionError(error)) {
+			throw error;
+		}
+
+		return import('./' + 'renderedContent');
+	}
+}
+
+function isWeakFallbackTitle(title: string | null | undefined): boolean {
+	if (!title) return true;
+
+	const normalized = title.trim().toLowerCase();
+	return (
+		normalized === 'untitled' ||
+		normalized === 'link' ||
+		normalized === 'saved item' ||
+		normalized === 'saved link' ||
+		normalized === 'website' ||
+		normalized === 'instagram post' ||
+		normalized === 'twitter post' ||
+		normalized === 'tiktok video' ||
+		/^https?:\/\//.test(normalized)
+	);
+}
+
+function withSourceTextMetrics(
+	result: ScrapedContent,
+	options: {
+		payload?: unknown;
+		payloadKind?: ScrapedContent['sourcePayloadKind'];
+		sourceTextSegments?: Array<string | null | undefined>;
+		sourceTextKind?: ScrapedContent['sourceTextKind'];
+		sourceEvidenceKinds?: SourceEvidenceKind[];
+		blockerSignals?: SourceBlockerSignal[];
+		renderedNetworkResponseCount?: number;
+		renderedNetworkTextBytes?: number;
+	}
+): ScrapedContent {
+	const sourceTextBytes = measureSourceTextBytes(
+		...(options.sourceTextSegments || [result.title, result.description, result.content])
+	);
+	const sourceEvidenceKinds =
+		options.sourceEvidenceKinds?.length
+			? dedupeStringArray(options.sourceEvidenceKinds)
+			: inferSourceEvidenceKinds(options.payloadKind);
+
+	return {
+		...result,
+		sourcePayloadBytes: measureSourcePayloadBytes(options.payload),
+		sourcePayloadKind: options.payloadKind,
+		sourceTextBytes,
+		sourceTextKind: sourceTextBytes
+			? (options.sourceTextKind || 'api-text')
+			: undefined,
+		sourceTextCoverageTarget: sourceTextBytes
+			? SOURCE_TEXT_COVERAGE_TARGET
+			: undefined,
+		sourceEvidenceKinds,
+		blockerSignals: options.blockerSignals?.length
+			? dedupeStringArray(options.blockerSignals)
+			: undefined,
+		renderedNetworkResponseCount: options.renderedNetworkResponseCount,
+		renderedNetworkTextBytes: options.renderedNetworkTextBytes,
+	};
+}
+
+function buildGenericHtmlScrape(
+	url: string,
+	html: string,
+	payloadKind: Extract<ScrapedContent['sourcePayloadKind'], 'html' | 'rendered-html'>,
+	options: {
+		extraSourceSegments?: Array<string | null | undefined>;
+		sourceEvidenceKinds?: SourceEvidenceKind[];
+		blockerSignals?: SourceBlockerSignal[];
+		renderedNetworkResponseCount?: number;
+		renderedNetworkTextBytes?: number;
+	} = {}
+): ScrapedContent {
+	const parsedUrl = new URL(url);
+	const $ = cheerio.load(html);
+
+	const title =
+		$('meta[property="og:title"]').attr('content') ||
+		$('title').first().text() ||
+		$('h1').first().text() ||
+		url;
+
+	const description =
+		$('meta[property="og:description"]').attr('content') ||
+		$('meta[name="description"]').attr('content') ||
+		'';
+
+	let imageUrl =
+		$('meta[property="og:image"]').attr('content') ||
+		$('meta[property="twitter:image"]').attr('content') ||
+		null;
+
+	if (imageUrl && !imageUrl.startsWith('http')) {
+		imageUrl = new URL(imageUrl, url).toString();
+	}
+
+	const author =
+		$('meta[name="author"]').attr('content') ||
+		$('meta[property="article:author"]').attr('content') ||
+		$('meta[property="profile:username"]').attr('content');
+
+	const titleAuthorMatch = !author && title ? title.match(/^(.+?)\s\(@[^)]+\)$/) : null;
+	const finalAuthor = author || (titleAuthorMatch ? titleAuthorMatch[1] : undefined);
+
+	let publishedAt =
+		$('meta[property="article:published_time"]').attr('content') ||
+		$('meta[property="og:published_time"]').attr('content') ||
+		$('meta[name="date"]').attr('content') ||
+		$('meta[name="pubdate"]').attr('content') ||
+		$('meta[name="publish-date"]').attr('content') ||
+		$('time').first().attr('datetime') ||
+		$('time').first().attr('content');
+
+	if (!publishedAt) {
+		try {
+			const jsonLd = $('script[type="application/ld+json"]').first().html();
+			if (jsonLd) {
+				const parsed = JSON.parse(jsonLd);
+				const graph = Array.isArray(parsed) ? parsed : (parsed['@graph'] || [parsed]);
+				const article = graph.find((item: any) =>
+					['Article', 'BlogPosting', 'NewsArticle', 'TechArticle'].includes(item['@type'])
+				);
+				if (article && article.datePublished) {
+					publishedAt = article.datePublished;
+				}
+			}
+		} catch {
+			// Ignore JSON-LD parse issues.
+		}
+	}
+
+	const htmlSnapshot = buildHighFidelityHtmlTextSnapshot(html, { title, description });
+	const content =
+		buildSourceTextSnapshotFromSegments([
+			htmlSnapshot,
+			...(options.extraSourceSegments || []),
+		]) ||
+		description ||
+		title;
+	const blockerSignals = dedupeStringArray<SourceBlockerSignal>([
+		...detectSourceBlockerSignals([title, description, content]),
+		...(options.blockerSignals || []),
+	]);
+	const sourceTextKind =
+		payloadKind === 'rendered-html'
+			? options.extraSourceSegments?.some((value) => !!value)
+				? 'browser-acquired-text'
+				: 'rendered-visible-html'
+			: 'compressed-visible-html';
+
+	return withSourceTextMetrics(
+		{
+			title,
+			description,
+			imageUrl,
+			content,
+			author: finalAuthor,
+			publishedAt,
+			domain: parsedUrl.hostname,
+			url,
+		},
+		{
+			payload: html,
+			payloadKind,
+			sourceTextSegments: [title, description, content],
+			sourceTextKind,
+			sourceEvidenceKinds:
+				options.sourceEvidenceKinds ||
+				(payloadKind === 'rendered-html' ? ['rendered-html'] : ['static-html']),
+			blockerSignals,
+			renderedNetworkResponseCount: options.renderedNetworkResponseCount,
+			renderedNetworkTextBytes: options.renderedNetworkTextBytes,
+		}
+	);
+}
+
+function shouldAttemptRenderedRecovery(
+	result: ScrapedContent | null | undefined
+): boolean {
+	if (!result) return true;
+	if (result.sourceTextKind === 'api-text') return false;
+
+	const sourceTextBytes = result.sourceTextBytes || 0;
+	return (
+		sourceTextBytes < 400 ||
+		isWeakFallbackTitle(result.title) ||
+		(result.blockerSignals?.length || 0) > 0
+	);
+}
+
+function mergeRenderedRecovery(
+	base: ScrapedContent | null,
+	recovered: ScrapedContent,
+	reason: string,
+	recoverySource: ScrapedContent['recoverySource']
+): ScrapedContent {
+	if (!base) {
+		return {
+			...recovered,
+			recoverySource,
+			recoveryReason: reason,
+		};
+	}
+
+	const baseTextBytes = measureSourceTextBytes(
+		base.title,
+		base.description,
+		base.content
+	) || 0;
+	const recoveredTextBytes = measureSourceTextBytes(
+		recovered.title,
+		recovered.description,
+		recovered.content
+	) || 0;
+
+	const recoveredIsBetter =
+		recoveredTextBytes > baseTextBytes * 1.2 ||
+		(isWeakFallbackTitle(base.title) && !isWeakFallbackTitle(recovered.title)) ||
+		((base.blockerSignals?.length || 0) > (recovered.blockerSignals?.length || 0)) ||
+		(!base.imageUrl && !!recovered.imageUrl);
+
+	if (!recoveredIsBetter) {
+		return base;
+	}
+
+	return {
+		...base,
+		...recovered,
+		images: recovered.images?.length ? recovered.images : base.images,
+		mediaTypes: recovered.mediaTypes?.length ? recovered.mediaTypes : base.mediaTypes,
+		videoPositions: recovered.videoPositions?.length
+			? recovered.videoPositions
+			: base.videoPositions,
+		engagement: base.engagement || recovered.engagement,
+		authorAvatar: base.authorAvatar || recovered.authorAvatar,
+		previewSource: recovered.previewSource || base.previewSource,
+		sourceEvidenceKinds: dedupeStringArray([
+			...(base.sourceEvidenceKinds || []),
+			...(recovered.sourceEvidenceKinds || []),
+		]),
+		blockerSignals:
+			recovered.blockerSignals?.length
+				? recovered.blockerSignals
+				: base.blockerSignals,
+		renderedNetworkResponseCount:
+			recovered.renderedNetworkResponseCount ||
+			base.renderedNetworkResponseCount,
+		renderedNetworkTextBytes:
+			recovered.renderedNetworkTextBytes || base.renderedNetworkTextBytes,
+		recoverySource,
+		recoveryReason: reason,
+	};
+}
+
+async function recoverWeakScrapeWithRenderedHtml(
+	url: string,
+	base: ScrapedContent | null,
+	reason: string,
+	recoverySource: ScrapedContent['recoverySource'] = 'rendered-html'
+): Promise<ScrapedContent | null> {
+	try {
+		const { extractRenderedPageContent } = await importRenderedContentModule();
+		const rendered = await extractRenderedPageContent(url);
+		if (!rendered.success || !rendered.html) {
+			return base;
+		}
+
+		return mergeRenderedRecovery(
+			base,
+			buildGenericHtmlScrape(url, rendered.html, 'rendered-html', {
+				extraSourceSegments: [rendered.networkTextSnapshot],
+				sourceEvidenceKinds: rendered.evidenceKinds,
+				blockerSignals: rendered.blockerSignals,
+				renderedNetworkResponseCount: rendered.networkResponseCount,
+				renderedNetworkTextBytes: rendered.networkTextBytes,
+			}),
+			reason,
+			recoverySource
+		);
+	} catch (error) {
+		console.warn(
+			`[Scraper] Rendered recovery failed for ${url}:`,
+			error instanceof Error ? error.message : error
+		);
+		return base;
+	}
+}
+
+
+export async function scrapeUrl(
+	url: string,
+	options: ScrapeUrlOptions = {}
+): Promise<ScrapedContent> {
 	try {
 		const parsedUrl = new URL(url);
 		const domain = parsedUrl.hostname.replace('www.', '');
@@ -119,7 +515,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						authorHandle = handleMatch ? handleMatch[1] : '';
 					}
 
-					return {
+					return withSourceTextMetrics({
 						title: oembed.title || 'YouTube Video',
 						description: `Video by ${authorName}`,
 						imageUrl,
@@ -129,7 +525,16 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						authorHandle,
 						domain: 'youtube.com',
 						url,
-					};
+					}, {
+						payload: oembed,
+						payloadKind: 'api-json',
+						sourceTextSegments: [
+							oembed.title,
+							`Video by ${authorName}`,
+							`YouTube video: "${oembed.title}" by ${authorName}`,
+						],
+						sourceTextKind: 'api-text',
+					});
 				}
 				console.warn('[Scraper] YouTube oEmbed failed, falling back to HTML scraping');
 			} catch (oembedErr) {
@@ -160,7 +565,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						// DSPy not available, use standard format
 					}
 
-					return {
+					return withSourceTextMetrics({
 						title,
 						description: tweet.text,
 						imageUrl: tweet.images[0] ?? null,
@@ -181,7 +586,16 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 							replies: tweet.replies,
 							views: tweet.views,
 						},
-					};
+					}, {
+						payload: tweet,
+						payloadKind: 'api-json',
+						sourceTextSegments: [
+							title,
+							tweet.text,
+							tweet.quotedTweet?.text || null,
+						],
+						sourceTextKind: 'api-text',
+					});
 				}
 				console.warn('[Scraper] Twitter API extraction failed, falling back to HTML scrape');
 			} catch (twitterErr) {
@@ -215,7 +629,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						// DSPy not available, use local extraction
 					}
 
-					return {
+					return withSourceTextMetrics({
 						title,
 						description: igPost.caption,
 						imageUrl: igPost.images[0],
@@ -231,19 +645,15 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						authorAvatar: igPost.authorAvatar,
 						domain: 'instagram.com',
 						url,
-					};
+					}, {
+						payload: igPost,
+						payloadKind: 'api-json',
+						sourceTextSegments: [title, igPost.caption],
+						sourceTextKind: 'api-text',
+					});
 				}
 
-				// All strategies failed - return minimal data
 				console.warn('[Scraper] Instagram: All extraction strategies failed');
-				return {
-					title: 'Instagram Post',
-					description: '',
-					imageUrl: null,
-					content: '',
-					domain: 'instagram.com',
-					url,
-				};
 			} catch (igErr) {
 				console.warn('[Scraper] Instagram error:', igErr);
 			}
@@ -273,7 +683,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 					const authorName = oembed.author_name || 'Unknown';
 					const authorHandle = oembed.author_unique_id || '';
 
-					return {
+					return withSourceTextMetrics({
 						title: oembed.title || 'TikTok Video',
 						description: `Video by @${authorHandle || authorName}`,
 						imageUrl: oembed.thumbnail_url || null,
@@ -283,7 +693,15 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						authorHandle,
 						domain: 'tiktok.com',
 						url,
-					};
+					}, {
+						payload: oembed,
+						payloadKind: 'api-json',
+						sourceTextSegments: [
+							oembed.title,
+							`Video by @${authorHandle || authorName}`,
+						],
+						sourceTextKind: 'api-text',
+					});
 				}
 				console.warn('[Scraper] TikTok oEmbed failed, falling back to HTML');
 			} catch (tiktokErr) {
@@ -402,7 +820,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 						console.log(`[Scraper] Reddit: ${postType} post by ${author} in ${subreddit}`);
 
-						return {
+						return withSourceTextMetrics({
 							title: `${title}`,
 							description: `${subreddit} • ${score} points • ${numComments} comments`,
 							imageUrl,
@@ -414,7 +832,17 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 							domain: 'reddit.com',
 							url,
 							publishedAt: postData.created_utc ? new Date(postData.created_utc * 1000).toISOString() : undefined,
-						};
+						}, {
+							payload: data,
+							payloadKind: 'api-json',
+							sourceTextSegments: [
+								title,
+								postTitle,
+								selftext,
+								`${subreddit} • ${score} points • ${numComments} comments`,
+							],
+							sourceTextKind: 'api-text',
+						});
 					}
 				}
 				console.warn('[Scraper] Reddit JSON API failed, falling back to HTML');
@@ -474,7 +902,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 						console.log(`[Scraper] IMDB: ${title} (${year}) - Rating: ${rating}`);
 
-						return {
+						return withSourceTextMetrics({
 							title: year ? `${title} (${year})` : title,
 							description,
 							imageUrl,
@@ -483,19 +911,29 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 							domain: 'imdb.com',
 							url,
 							hashtags: genre.map((g: string) => g.toLowerCase().replace(/\s+/g, '-')),
-						};
+						}, {
+							payload: html,
+							payloadKind: 'html',
+							sourceTextSegments: [title, description, director || null],
+							sourceTextKind: 'compressed-visible-html',
+						});
 					}
 
 					if (ogTitle) {
 						console.log('[Scraper] IMDB: Using OG tags fallback');
-						return {
+						return withSourceTextMetrics({
 							title: ogTitle,
 							description: ogDescription || '',
 							imageUrl: ogImage || null,
 							content: ogDescription || '',
 							domain: 'imdb.com',
 							url,
-						};
+						}, {
+							payload: html,
+							payloadKind: 'html',
+							sourceTextSegments: [ogTitle, ogDescription || ''],
+							sourceTextKind: 'compressed-visible-html',
+						});
 					}
 				}
 				console.warn('[Scraper] IMDB fetch failed, falling back to generic');
@@ -594,7 +1032,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 						console.log(`[Scraper] Letterboxd: ${title} (${year}) - Dir: ${director}`);
 
-						return {
+						return withSourceTextMetrics({
 							title: year ? `${title} (${year})` : title,
 							description: movieData.description || ogDescription || '',
 							imageUrl: posterUrl,
@@ -603,13 +1041,22 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 							domain: 'letterboxd.com',
 							url,
 							hashtags: genre.map((g: string) => g.toLowerCase().replace(/\s+/g, '-')),
-						};
+						}, {
+							payload: html,
+							payloadKind: 'html',
+							sourceTextSegments: [
+								title,
+								movieData.description || ogDescription || '',
+								director || null,
+							],
+							sourceTextKind: 'compressed-visible-html',
+						});
 					}
 
 					const title = filmTitle || ogTitle || 'Letterboxd Film';
 					console.log(`[Scraper] Letterboxd fallback: ${title}`);
 
-					return {
+					return withSourceTextMetrics({
 						title: filmYear ? `${title} (${filmYear})` : title,
 						description: ogDescription || '',
 						imageUrl: posterUrl || null,
@@ -617,7 +1064,12 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						author: directorName,
 						domain: 'letterboxd.com',
 						url,
-					};
+					}, {
+						payload: html,
+						payloadKind: 'html',
+						sourceTextSegments: [title, ogDescription || '', directorName || null],
+						sourceTextKind: 'compressed-visible-html',
+					});
 				}
 				console.warn('[Scraper] Letterboxd fetch failed, falling back to generic');
 			} catch (letterboxdErr) {
@@ -687,7 +1139,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 					console.log(`[Scraper] Amazon: "${title.slice(0, 50)}..." - ASIN: ${asin}`);
 
-					return {
+					return withSourceTextMetrics({
 						title,
 						description,
 						imageUrl: imageUrl || null,
@@ -696,7 +1148,12 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						domain: 'amazon.com',
 						url,
 						hashtags: rating ? [`rating-${rating}`] : [],
-					};
+					}, {
+						payload: html,
+						payloadKind: 'html',
+						sourceTextSegments: [title, description],
+						sourceTextKind: 'compressed-visible-html',
+					});
 				}
 				console.warn('[Scraper] Amazon fetch failed, falling back to generic');
 			} catch (amazonErr) {
@@ -779,7 +1236,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 					console.log(`[Scraper] Goodreads: "${title}" - Rating: ${ratingValue}`);
 
-					return {
+					return withSourceTextMetrics({
 						title,
 						description: description.slice(0, 500),
 						imageUrl: imageUrl || null,
@@ -788,7 +1245,12 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						domain: 'goodreads.com',
 						url,
 						hashtags: genres.slice(0, 5),
-					};
+					}, {
+						payload: html,
+						payloadKind: 'html',
+						sourceTextSegments: [title, description, authorName || null],
+						sourceTextKind: 'compressed-visible-html',
+					});
 				}
 				console.warn('[Scraper] Goodreads fetch failed, falling back to generic');
 			} catch (goodreadsErr) {
@@ -851,7 +1313,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 					console.log(`[Scraper] StoryGraph: "${title}"`);
 
-					return {
+					return withSourceTextMetrics({
 						title,
 						description: description.slice(0, 500),
 						imageUrl: imageUrl || null,
@@ -860,7 +1322,12 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						domain: 'storygraph.com',
 						url,
 						hashtags: moods.slice(0, 5),
-					};
+					}, {
+						payload: html,
+						payloadKind: 'html',
+						sourceTextSegments: [title, description, authorName || null],
+						sourceTextKind: 'compressed-visible-html',
+					});
 				}
 				console.warn('[Scraper] StoryGraph fetch failed, falling back to generic');
 			} catch (storygraphErr) {
@@ -908,7 +1375,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 						console.log(`[Scraper] Wikipedia: "${finalTitle}" - ${description.length} chars`);
 
-						return {
+						return withSourceTextMetrics({
 							title: finalTitle,
 							description: description.slice(0, 300),
 							imageUrl: imageUrl || null,
@@ -917,7 +1384,12 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 							domain: 'wikipedia.org',
 							url,
 							hashtags: wikiData.type ? [wikiData.type.toLowerCase()] : [],
-						};
+						}, {
+							payload: wikiData,
+							payloadKind: 'api-json',
+							sourceTextSegments: [finalTitle, description],
+							sourceTextKind: 'api-text',
+						});
 					}
 				}
 				console.warn('[Scraper] Wikipedia API failed, falling back to HTML');
@@ -939,7 +1411,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 			const title = 'Perplexity AI Search';
 			const description = 'AI-powered search result with cited sources. View the screenshot for the full answer.';
 
-			return {
+			return withSourceTextMetrics({
 				title,
 				description,
 				imageUrl: null,
@@ -949,7 +1421,11 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 				url,
 				hashtags: ['ai-search', 'research'],
 				needsMobileScreenshot: true,
-			};
+			}, {
+				payloadKind: 'text',
+				sourceTextSegments: [title, description],
+				sourceTextKind: 'api-text',
+			});
 		}
 
 
@@ -969,137 +1445,74 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 		const response = await fetch(url, { headers });
 
-		if (!response.ok) {
-			console.warn(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-			return {
+			if (!response.ok) {
+				console.warn(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+				const recovered = await recoverWeakScrapeWithRenderedHtml(
+					url,
+					null,
+					options.recoveryReason || `http-${response.status}`,
+					options.aggressiveBrowserAcquisition ? 'aggressive-browser' : 'rendered-html'
+				);
+				if (recovered) {
+					return recovered;
+			}
+
+			return withSourceTextMetrics({
 				title: url,
 				description: '',
 				imageUrl: null,
 				content: '',
 				domain: parsedUrl.hostname,
 				url,
-			};
-		}
-
-		const html = await response.text();
-		const $ = cheerio.load(html);
-
-		// Extract Metadata
-		const title =
-			$('meta[property="og:title"]').attr('content') ||
-			$('title').first().text() ||
-			$('h1').first().text() ||
-			url;
-
-		const description =
-			$('meta[property="og:description"]').attr('content') ||
-			$('meta[name="description"]').attr('content') ||
-			'';
-
-		let imageUrl =
-			$('meta[property="og:image"]').attr('content') ||
-			$('meta[property="twitter:image"]').attr('content') ||
-			null;
-
-		// Convert relative URLs to absolute
-		if (imageUrl && !imageUrl.startsWith('http')) {
-			imageUrl = new URL(imageUrl, url).toString();
-		}
-
-		const author =
-			$('meta[name="author"]').attr('content') ||
-			$('meta[property="article:author"]').attr('content') ||
-			$('meta[property="profile:username"]').attr('content');
-
-		// Try to extract author from title if it matches "Name (@handle)" pattern
-		const titleAuthorMatch = !author && title ? title.match(/^(.+?)\s\(@[^)]+\)$/) : null;
-		const finalAuthor = author || (titleAuthorMatch ? titleAuthorMatch[1] : undefined);
-
-		// Extract Date
-		let publishedAt =
-			$('meta[property="article:published_time"]').attr('content') ||
-			$('meta[property="og:published_time"]').attr('content') ||
-			$('meta[name="date"]').attr('content') ||
-			$('meta[name="pubdate"]').attr('content') ||
-			$('meta[name="publish-date"]').attr('content') ||
-			$('time').first().attr('datetime') ||
-			$('time').first().attr('content');
-
-		// Try JSON-LD if meta tags failed
-		if (!publishedAt) {
-			try {
-				const jsonLd = $('script[type="application/ld+json"]').first().html();
-				if (jsonLd) {
-					const parsed = JSON.parse(jsonLd);
-					const graph = Array.isArray(parsed) ? parsed : (parsed['@graph'] || [parsed]);
-					const article = graph.find((item: any) =>
-						['Article', 'BlogPosting', 'NewsArticle', 'TechArticle'].includes(item['@type'])
-					);
-					if (article && article.datePublished) {
-						publishedAt = article.datePublished;
-					}
-				}
-			} catch (e) {
-				// JSON-LD parse error, ignore
+			}, {
+				payloadKind: 'text',
+				sourceTextSegments: [url],
+				sourceTextKind: 'api-text',
+			});
 			}
-		}
 
-		// Extract Main Content
-		$('script, style, nav, footer, header, aside, .ad, .ads, .advertisement, [role="alert"]').remove();
-
-		let content = '';
-		const article = $('article');
-		if (article.length > 0) {
-			content = article.text();
-		} else {
-			const main = $('main');
-			if (main.length > 0) {
-				content = main.text();
-			} else {
-				content = $('body').text();
+			const html = await response.text();
+			let result = buildGenericHtmlScrape(url, html, 'html');
+			if (options.aggressiveBrowserAcquisition || shouldAttemptRenderedRecovery(result)) {
+				result =
+					(await recoverWeakScrapeWithRenderedHtml(
+						url,
+						result,
+						options.recoveryReason ||
+							(options.aggressiveBrowserAcquisition
+								? 'aggressive-browser-acquisition'
+								: 'weak-static-html'),
+						options.aggressiveBrowserAcquisition
+							? 'aggressive-browser'
+							: 'rendered-html'
+					)) || result;
 			}
-		}
 
-		// Clean up excessive whitespace
-		content = content.replace(/\s+/g, ' ').trim();
-
-		// Check for Mastodon/SPA raw HTML dumps
-		if (content.startsWith('<') || content.includes('function()') || content.includes('window.__')) {
-			console.log('[Scraper] Detected raw HTML/script in content, falling back to description');
-			content = description || title;
-		} else if (url.includes('mathstodon.xyz') || url.includes('mastodon')) {
-			if (content.includes('Mastodon is the best way to keep up') || content.length < 100) {
-				content = description || content;
-			}
-		}
-
-		// Allow fallback to OG description if main content is too short
-		if (content.length < 50 && description.length > 50) {
-			content = description;
-		}
-
-		content = content.slice(0, 5000); // Limit to 5k chars for AI context window
-
-		return {
-			title,
-			description,
-			imageUrl,
-			content,
-			author: finalAuthor,
-			publishedAt,
-			domain: parsedUrl.hostname,
-			url,
-		};
+		return result;
 
 	} catch (error) {
 		console.error('Error scraping URL:', error);
-		return {
+			const recovered = await recoverWeakScrapeWithRenderedHtml(
+				url,
+				null,
+				options.recoveryReason || 'exception',
+				options.aggressiveBrowserAcquisition ? 'aggressive-browser' : 'rendered-html'
+			);
+		if (recovered) {
+			return recovered;
+		}
+
+		return withSourceTextMetrics({
 			title: url,
 			description: '',
 			imageUrl: null,
 			content: '',
 			domain: new URL(url).hostname,
 			url,
-		};
+		}, {
+			payloadKind: 'text',
+			sourceTextSegments: [url],
+			sourceTextKind: 'api-text',
+		});
 	}
 }
