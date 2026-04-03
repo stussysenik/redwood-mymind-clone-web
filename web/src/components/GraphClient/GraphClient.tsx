@@ -16,10 +16,13 @@ import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
 import { GraphFilterPanel } from 'src/components/GraphFilterPanel/GraphFilterPanel';
 import { GraphDetailPanel } from 'src/components/GraphDetailPanel/GraphDetailPanel';
 import type { ConnectionItem } from 'src/components/GraphDetailPanel/GraphDetailPanel';
+import { GraphListView } from 'src/components/GraphListView/GraphListView';
 import { GraphTooltip } from 'src/components/GraphTooltip/GraphTooltip';
+import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle';
+import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode';
 import type { GraphNode } from 'src/lib/graph';
 import type { Card } from 'src/lib/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Network, Rows3 } from 'lucide-react';
 
 // =============================================================================
 // GRAPHQL — fetch a single card for the detail modal
@@ -124,6 +127,31 @@ function getLinkEndpointId(endpoint: unknown): string | null {
 	return null;
 }
 
+function drawRoundedRect(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	radius: number
+) {
+	if (typeof ctx.roundRect === 'function') {
+		ctx.roundRect(x, y, width, height, radius);
+		return;
+	}
+
+	const safeRadius = Math.min(radius, width / 2, height / 2);
+	ctx.moveTo(x + safeRadius, y);
+	ctx.lineTo(x + width - safeRadius, y);
+	ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+	ctx.lineTo(x + width, y + height - safeRadius);
+	ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+	ctx.lineTo(x + safeRadius, y + height);
+	ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+	ctx.lineTo(x, y + safeRadius);
+	ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+}
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -131,6 +159,11 @@ function getLinkEndpointId(endpoint: unknown): string | null {
 export function GraphClient({ nodes, links }: GraphClientProps) {
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+	const [viewMode, setViewMode] = usePersistedViewMode(
+		'mymind_graph_view_mode',
+		['graph', 'list'] as const,
+		'graph'
+	);
 	const [ForceGraphCanvas, setForceGraphCanvas] = useState<ComponentType<any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 	const [graphLoadError, setGraphLoadError] = useState<string | null>(null);
 
@@ -168,7 +201,16 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		import('react-force-graph-2d')
 			.then((mod) => {
 				if (!isActive) return;
-				setForceGraphCanvas(() => mod.default);
+				const GraphRenderer =
+					(mod.default as ComponentType<any> | undefined) ||
+					((mod as unknown as { ForceGraph2D?: ComponentType<any> }).ForceGraph2D ??
+						null);
+
+				if (!GraphRenderer) {
+					throw new Error('Graph renderer export not found');
+				}
+
+				setForceGraphCanvas(() => GraphRenderer);
 				setGraphLoadError(null);
 			})
 			.catch((error) => {
@@ -424,6 +466,12 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		return () => window.removeEventListener('keydown', onKeyDown);
 	}, [focusedNodeId, selectedCardId, closeFocus]);
 
+	useEffect(() => {
+		if (graphLoadError && viewMode === 'graph') {
+			setViewMode('list');
+		}
+	}, [graphLoadError, setViewMode, viewMode]);
+
 	// -------------------------------------------------------------------------
 	// CANVAS RENDERING
 	// -------------------------------------------------------------------------
@@ -578,7 +626,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				ctx.fillStyle = dark ? '#1A1A2E' : '#F7F6F3';
 				ctx.globalAlpha = 0.9;
 				ctx.beginPath();
-				ctx.roundRect(lx - pw / 2, ly - ph / 2, pw, ph, 4);
+				drawRoundedRect(ctx, lx - pw / 2, ly - ph / 2, pw, ph, 4);
 				ctx.fill();
 
 				ctx.fillStyle = dark ? '#C4B5A0' : '#6B5D4F';
@@ -600,6 +648,13 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	const isReady = dimensions.width > 10 && dimensions.height > 10;
 	const hasFilteredLinks = graphData.links.length > 0;
+	const showGraphCanvas = viewMode === 'graph';
+
+	useEffect(() => {
+		if (viewMode === 'graph' && graphLoadError) {
+			setViewMode('list');
+		}
+	}, [graphLoadError, setViewMode, viewMode]);
 
 	// Focused node metadata for the detail panel
 	const focusedNodeMeta = focusedNodeId
@@ -612,8 +667,46 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		: null;
 
 	return (
-		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }}>
-			{!isReady || !ForceGraphCanvas ? (
+		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: viewMode === 'list' ? 'auto' : (isMobile ? 'manipulation' : 'none') }}>
+			<div className="absolute right-4 top-4 z-50">
+				<ViewModeToggle
+					value={viewMode}
+					onChange={setViewMode}
+					ariaLabel="Graph page view"
+					options={[
+						{
+							value: 'graph',
+							label: 'Graph',
+							icon: <Network className="h-4 w-4" />,
+						},
+						{
+							value: 'list',
+							label: 'List',
+							icon: <Rows3 className="h-4 w-4" />,
+						},
+					]}
+				/>
+			</div>
+			{viewMode === 'graph' && !hasFilteredLinks && (
+				<div className="absolute left-4 top-4 z-40 max-w-[320px] rounded-[18px] px-3.5 py-3 text-xs"
+					style={{
+						backgroundColor: 'var(--surface-floating)',
+						border: '1px solid var(--border-subtle)',
+						boxShadow: 'var(--shadow-sm)',
+						color: 'var(--foreground-muted)',
+					}}
+				>
+					No shared-tag edges yet. The graph still renders every card, and list
+					view stays available as a denser fallback while tags improve.
+				</div>
+			)}
+			{viewMode === 'list' ? (
+				<GraphListView
+					nodes={graphData.nodes}
+					links={graphData.links}
+					onCardOpen={setSelectedCardId}
+				/>
+			) : !isReady || !ForceGraphCanvas ? (
 				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
 					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
 				</div>
@@ -628,18 +721,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 						</p>
 					</div>
 				</div>
-			) : !hasFilteredLinks ? (
-				<div className="flex h-full items-center justify-center px-6 text-center">
-					<div>
-						<p className="text-sm font-medium text-[var(--foreground)]">
-							No connected cards match the current filter
-						</p>
-						<p className="mt-2 text-sm text-[var(--foreground-muted)]">
-							Lower the minimum connection weight or save more cards with overlapping tags.
-						</p>
-					</div>
-				</div>
-			) : (
+			) : showGraphCanvas ? (
 				<ForceGraphCanvas
 					ref={fgRef}
 					graphData={graphData}
@@ -668,19 +750,21 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					d3AlphaDecay={isMobile ? 0.05 : 0.01}
 					d3VelocityDecay={0.4}
 				/>
+			) : null}
+
+			{viewMode === 'graph' && (
+				<GraphFilterPanel
+					minWeight={minWeight}
+					onMinWeightChange={setMinWeight}
+					nodeCount={graphData.nodes.length}
+					edgeCount={graphData.links.length}
+					orphanCount={orphanCount}
+					onReset={handleReset}
+				/>
 			)}
 
-			<GraphFilterPanel
-				minWeight={minWeight}
-				onMinWeightChange={setMinWeight}
-				nodeCount={graphData.nodes.length}
-				edgeCount={graphData.links.length}
-				orphanCount={orphanCount}
-				onReset={handleReset}
-			/>
-
 			{/* Focus mode hint */}
-			{!focusedNodeId && hasFilteredLinks && (
+			{viewMode === 'graph' && !focusedNodeId && hasFilteredLinks && (
 				<div
 					className="absolute top-4 left-1/2 -translate-x-1/2 text-[11px] select-none pointer-events-none"
 					style={{ color: 'var(--foreground-muted)' }}
@@ -690,7 +774,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 			)}
 
 			{/* Detail panel — replaces the old info bar */}
-			{focusedNodeId && focusedNodeMeta && (
+			{viewMode === 'graph' && focusedNodeId && focusedNodeMeta && (
 				<GraphDetailPanel
 					nodeTitle={focusedNodeMeta.title}
 					nodeType={focusedNodeMeta.type}
@@ -702,7 +786,9 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				/>
 			)}
 
-			<GraphTooltip node={hoveredNode} position={tooltipPos} connectedNames={connectedNames} />
+			{viewMode === 'graph' && (
+				<GraphTooltip node={hoveredNode} position={tooltipPos} connectedNames={connectedNames} />
+			)}
 
 			{/* Card detail modal overlay — opens when a card is clicked in the graph */}
 			{selectedCardId && (

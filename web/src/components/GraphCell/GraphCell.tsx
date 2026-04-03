@@ -66,7 +66,7 @@ export const Success = ({
 }: CellSuccessProps<GraphDataQuery, GraphDataQueryVariables>) => {
   const { nodes, links } = graphData
 
-  if (nodes.length === 0 || links.length === 0) return <Empty />
+  if (nodes.length === 0) return <Empty />
 
   return (
     <div

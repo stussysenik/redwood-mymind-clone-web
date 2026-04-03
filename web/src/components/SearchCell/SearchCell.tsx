@@ -3,9 +3,9 @@ import {
   useEffect,
   useMemo,
   useState,
-  type KeyboardEvent,
 } from 'react'
 
+import { LayoutGrid, Rows3 } from 'lucide-react'
 import type { SearchCardsQuery, SearchCardsQueryVariables } from 'types/graphql'
 
 import {
@@ -16,11 +16,12 @@ import {
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
 import {
-  FeedCardBody,
-  FeedCardVisual,
   toFeedCard,
   type FeedCardRecord,
 } from 'src/components/FeedCellShared/FeedCellShared'
+import { FeedCollectionView } from 'src/components/FeedCollectionView/FeedCollectionView'
+import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle'
+import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode'
 import {
   mergeFeedCardRecord,
   useRealtimeCardUpdates,
@@ -101,6 +102,11 @@ export const Success = ({
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
+  const [viewMode, setViewMode] = usePersistedViewMode(
+    'mymind_search_view_mode',
+    ['grid', 'list'] as const,
+    'grid'
+  )
   const visibleTotal = Math.max(0, total - hiddenCardIds.size)
   const visibleTotalLabel = new Intl.NumberFormat().format(visibleTotal)
   const visibleCards = useMemo(
@@ -192,41 +198,32 @@ export const Success = ({
             results
           </span>
         </div>
+        <ViewModeToggle
+          value={viewMode}
+          onChange={setViewMode}
+          ariaLabel="Search view"
+          options={[
+            {
+              value: 'grid',
+              label: 'Grid',
+              icon: <LayoutGrid className="h-4 w-4" />,
+            },
+            {
+              value: 'list',
+              label: 'List',
+              icon: <Rows3 className="h-4 w-4" />,
+            },
+          ]}
+        />
       </div>
       {visibleCards.length === 0 ? (
         <Empty />
       ) : (
-        <div className="masonry-grid">
-          {visibleCards.map((card) => (
-            <div key={card.id} className="masonry-item">
-              <div
-                className="card-base feed-card-shell cursor-pointer"
-                role="button"
-                tabIndex={0}
-                aria-label={
-                  card.title
-                    ? `Open ${card.type} result: ${card.title}`
-                    : `Open ${card.type} result`
-                }
-                onClick={() =>
-                  setSelectedCard(toFeedCard(card as FeedCardRecord))
-                }
-                onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    setSelectedCard(toFeedCard(card as FeedCardRecord))
-                  }
-                }}
-              >
-                <FeedCardVisual card={card as FeedCardRecord} />
-                <FeedCardBody
-                  card={card as FeedCardRecord}
-                  showSummary
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+        <FeedCollectionView
+          cards={visibleCards as FeedCardRecord[]}
+          viewMode={viewMode}
+          onOpenCard={(card) => setSelectedCard(toFeedCard(card))}
+        />
       )}
 
       <CardDetailModal

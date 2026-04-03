@@ -3,10 +3,9 @@ import {
   useEffect,
   useMemo,
   useState,
-  type KeyboardEvent,
 } from 'react'
 
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, LayoutGrid, Rows3 } from 'lucide-react'
 import type { SpaceQuery, SpaceQueryVariables } from 'types/graphql'
 
 import { Link, routes } from '@redwoodjs/router'
@@ -18,11 +17,12 @@ import {
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
 import {
-  FeedCardBody,
-  FeedCardVisual,
   toFeedCard,
   type FeedCardRecord,
 } from 'src/components/FeedCellShared/FeedCellShared'
+import { FeedCollectionView } from 'src/components/FeedCollectionView/FeedCollectionView'
+import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle'
+import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode'
 import {
   mergeFeedCardRecord,
   useRealtimeCardUpdates,
@@ -128,6 +128,11 @@ export const Success = ({
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
+  const [viewMode, setViewMode] = usePersistedViewMode(
+    'mymind_space_view_mode',
+    ['grid', 'list'] as const,
+    'grid'
+  )
   const cards = space?.cards || []
   const visibleCards = useMemo(
     () =>
@@ -204,43 +209,78 @@ export const Success = ({
       </Link>
 
       {/* Space header */}
-      <div className="mb-6">
-        <h1
-          className="font-serif text-2xl"
-          style={{ color: 'var(--foreground)' }}
-        >
-          {space.name}
-        </h1>
-        <div className="mt-2 flex items-center gap-3">
-          {space.query && (
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1
+            className="font-serif text-2xl"
+            style={{ color: 'var(--foreground)' }}
+          >
+            {space.name}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {space.query && (
+              <span
+                className="rounded-full px-2.5 py-1 text-xs"
+                style={{
+                  backgroundColor: 'var(--surface-accent)',
+                  color: 'var(--accent-primary)',
+                }}
+              >
+                #{space.query}
+              </span>
+            )}
+            {space.isSmart && (
+              <span
+                className="rounded-full px-2 py-0.5 text-xs"
+                style={{
+                  backgroundColor: 'var(--surface-soft)',
+                  color: 'var(--foreground-muted)',
+                }}
+              >
+                Smart
+              </span>
+            )}
             <span
-              className="rounded-full px-2.5 py-1 text-xs"
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
               style={{
-                backgroundColor: 'var(--surface-accent)',
-                color: 'var(--accent-primary)',
-              }}
-            >
-              #{space.query}
-            </span>
-          )}
-          {space.isSmart && (
-            <span
-              className="rounded-full px-2 py-0.5 text-xs"
-              style={{
-                backgroundColor: 'var(--surface-soft)',
+                backgroundColor: 'var(--surface-elevated)',
+                border: '1px solid var(--border-subtle)',
+                boxShadow: 'var(--shadow-sm)',
                 color: 'var(--foreground-muted)',
               }}
             >
-              Smart
+              <strong
+                className="text-sm"
+                style={{
+                  color: 'var(--foreground)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {new Intl.NumberFormat().format(visibleCardCount)}
+              </strong>
+              <span className="text-xs">
+                card{visibleCardCount !== 1 ? 's' : ''}
+              </span>
             </span>
-          )}
-          <span
-            className="text-xs"
-            style={{ color: 'var(--foreground-muted)' }}
-          >
-            {visibleCardCount} card{visibleCardCount !== 1 ? 's' : ''}
-          </span>
+          </div>
         </div>
+        <ViewModeToggle
+          value={viewMode}
+          onChange={setViewMode}
+          ariaLabel="Space view"
+          options={[
+            {
+              value: 'grid',
+              label: 'Grid',
+              icon: <LayoutGrid className="h-4 w-4" />,
+            },
+            {
+              value: 'list',
+              label: 'List',
+              icon: <Rows3 className="h-4 w-4" />,
+            },
+          ]}
+        />
       </div>
 
       {/* Cards masonry grid */}
@@ -254,31 +294,11 @@ export const Success = ({
           </p>
         </div>
       ) : (
-        <div className="masonry-grid">
-          {visibleCards.map((card) => {
-            const feedCard = card as FeedCardRecord
-
-            return (
-              <div key={card.id} className="masonry-item">
-                <div
-                  className="card-base cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedCard(toFeedCard(feedCard))}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setSelectedCard(toFeedCard(feedCard))
-                    }
-                  }}
-                >
-                  <FeedCardVisual card={feedCard} />
-                  <FeedCardBody card={feedCard} showSummary />
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <FeedCollectionView
+          cards={visibleCards as FeedCardRecord[]}
+          viewMode={viewMode}
+          onOpenCard={(card) => setSelectedCard(toFeedCard(card))}
+        />
       )}
 
       <CardDetailModal

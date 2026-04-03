@@ -33,13 +33,22 @@ const SpacesPage = () => {
         className="px-4 sm:px-6 py-6"
         style={{ maxWidth: 1200, margin: '0 auto' }}
       >
-        <div className="flex items-center justify-between mb-6">
-          <h2
-            className="font-serif text-xl"
-            style={{ color: 'var(--foreground)' }}
-          >
-            Spaces
-          </h2>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-2">
+            <h2
+              className="font-serif text-2xl"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Spaces
+            </h2>
+            <p
+              className="max-w-2xl text-sm leading-relaxed"
+              style={{ color: 'var(--foreground-muted)' }}
+            >
+              Retrace clusters of saved work without hunting through the whole
+              library.
+            </p>
+          </div>
           <CreateSpace />
         </div>
 

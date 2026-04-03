@@ -3,9 +3,9 @@ import {
   useEffect,
   useMemo,
   useState,
-  type KeyboardEvent,
 } from 'react'
 
+import { LayoutGrid, Rows3 } from 'lucide-react'
 import type { CardsQuery, CardsQueryVariables } from 'types/graphql'
 
 import {
@@ -16,11 +16,12 @@ import {
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
 import {
-  FeedCardBody,
-  FeedCardVisual,
   toFeedCard,
   type FeedCardRecord,
 } from 'src/components/FeedCellShared/FeedCellShared'
+import { FeedCollectionView } from 'src/components/FeedCollectionView/FeedCollectionView'
+import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle'
+import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode'
 import {
   mergeFeedCardRecord,
   useRealtimeCardUpdates,
@@ -130,6 +131,11 @@ export const Success = ({
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [optimisticCards, setOptimisticCards] = useState<FeedCardRecord[]>([])
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
+  const [viewMode, setViewMode] = usePersistedViewMode(
+    'mymind_library_view_mode',
+    ['grid', 'list'] as const,
+    'grid'
+  )
   const mergedCards = useMemo(
     () => [
       ...optimisticCards
@@ -292,42 +298,34 @@ export const Success = ({
             cards
           </span>
         </div>
+        <ViewModeToggle
+          value={viewMode}
+          onChange={setViewMode}
+          ariaLabel="Library view"
+          options={[
+            {
+              value: 'grid',
+              label: 'Grid',
+              icon: <LayoutGrid className="h-4 w-4" />,
+            },
+            {
+              value: 'list',
+              label: 'List',
+              icon: <Rows3 className="h-4 w-4" />,
+            },
+          ]}
+        />
       </div>
 
       {/* Masonry grid — 2 cols mobile, 3 cols desktop (CSS columns) */}
       {visibleCards.length === 0 ? (
         <Empty />
       ) : (
-        <div className="masonry-grid">
-          {visibleCards.map((card) => {
-            const feedCard = card as FeedCardRecord
-
-            return (
-              <div key={card.id} className="masonry-item">
-                <div
-                  className="card-base feed-card-shell cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={
-                    feedCard.title
-                      ? `Open ${feedCard.type} card: ${feedCard.title}`
-                      : `Open ${feedCard.type} card`
-                  }
-                  onClick={() => setSelectedCard(toFeedCard(feedCard))}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setSelectedCard(toFeedCard(feedCard))
-                    }
-                  }}
-                >
-                  <FeedCardVisual card={feedCard} />
-                  <FeedCardBody card={feedCard} showSummary />
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <FeedCollectionView
+          cards={visibleCards as FeedCardRecord[]}
+          viewMode={viewMode}
+          onOpenCard={(card) => setSelectedCard(toFeedCard(card))}
+        />
       )}
 
       {/* Pagination controls */}

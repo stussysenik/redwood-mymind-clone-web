@@ -1,6 +1,7 @@
 import type { SpacesQuery } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
+import { ArrowRight, Hash, Layers, Sparkles } from 'lucide-react'
 import { Link, routes } from '@redwoodjs/router'
 
 export const QUERY = gql`
@@ -16,11 +17,11 @@ export const QUERY = gql`
 `
 
 export const Loading = () => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
     {Array.from({ length: 6 }).map((_, i) => (
       <div
         key={i}
-        className="rounded-xl animate-pulse h-28"
+        className="h-40 animate-pulse rounded-3xl"
         style={{ backgroundColor: 'var(--shimmer-base)' }}
       />
     ))}
@@ -28,9 +29,19 @@ export const Loading = () => (
 )
 
 export const Empty = () => (
-  <div className="text-center py-20">
+  <div
+    className="rounded-[28px] px-6 py-16 text-center"
+    style={{
+      background:
+        'linear-gradient(135deg, color-mix(in srgb, var(--surface-elevated) 92%, white 8%) 0%, color-mix(in srgb, var(--surface-soft) 90%, white 10%) 100%)',
+      border: '1px solid var(--border-subtle)',
+    }}
+  >
+    <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--surface-accent)]">
+      <Sparkles className="h-6 w-6 text-[var(--accent-primary)]" />
+    </div>
     <p
-      className="font-serif text-lg mb-2"
+      className="mb-2 font-serif text-lg"
       style={{ color: 'var(--foreground)' }}
     >
       No spaces yet
@@ -58,48 +69,95 @@ export const Failure = ({ error }: CellFailureProps) => (
 
 export const Success = ({ spaces }: CellSuccessProps<SpacesQuery>) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {spaces.map((space) => (
         <Link
           key={space.id}
           to={routes.space({ id: space.id })}
-          className="block rounded-xl p-4 transition-all hover-lift"
+          className="group block rounded-[28px] p-5 transition-all hover:-translate-y-0.5"
           style={{
-            backgroundColor: 'var(--surface-card)',
-            border: '1px solid var(--border-default)',
-            borderLeft: `4px solid var(--accent-primary)`,
+            background:
+              'linear-gradient(135deg, color-mix(in srgb, var(--surface-card) 92%, white 8%) 0%, color-mix(in srgb, var(--surface-elevated) 94%, white 6%) 100%)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{
+                backgroundColor: space.isSmart
+                  ? 'var(--surface-accent)'
+                  : 'var(--surface-soft)',
+                color: 'var(--accent-primary)',
+              }}
+            >
+              {space.isSmart ? (
+                <Hash className="h-5 w-5" />
+              ) : (
+                <Layers className="h-5 w-5" />
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {space.isSmart && (
+                <span
+                  className="rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.18em]"
+                  style={{
+                    backgroundColor: 'var(--surface-accent)',
+                    color: 'var(--accent-primary)',
+                  }}
+                >
+                  Smart
+                </span>
+              )}
+              <span
+                className="rounded-full px-2.5 py-1 text-xs"
+                style={{
+                  backgroundColor: 'var(--surface-elevated)',
+                  color: 'var(--foreground-muted)',
+                }}
+              >
+                {new Intl.NumberFormat().format(space.cardCount)} cards
+              </span>
+            </div>
+          </div>
+          <div className="space-y-3">
             <h3
-              className="font-medium text-sm"
+              className="text-lg font-medium leading-tight"
               style={{ color: 'var(--foreground)' }}
             >
               {space.name}
             </h3>
-            {space.isSmart && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-full"
-                style={{
-                  backgroundColor: 'var(--surface-accent)',
-                  color: 'var(--accent-primary)',
-                }}
-              >
-                Smart
-              </span>
-            )}
-          </div>
-          {space.query && (
             <p
-              className="text-xs line-clamp-2 mb-2"
+              className="min-h-[40px] text-sm leading-relaxed"
               style={{ color: 'var(--foreground-muted)' }}
             >
-              Filter: {space.query}
+              {space.query
+                ? `Tracks cards retraceable through #${space.query}.`
+                : 'A manual collection for ideas you want to revisit fast.'}
             </p>
-          )}
-          <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            {space.cardCount} cards
-          </p>
+          </div>
+          <div className="mt-5 flex items-center justify-between">
+            {space.query ? (
+              <span
+                className="rounded-full px-2.5 py-1 text-xs"
+                style={{
+                  backgroundColor: 'var(--surface-soft)',
+                  color: 'var(--foreground-muted)',
+                }}
+              >
+                #{space.query}
+              </span>
+            ) : (
+              <span
+                className="text-xs uppercase tracking-[0.18em]"
+                style={{ color: 'var(--foreground-muted)' }}
+              >
+                Manual space
+              </span>
+            )}
+            <ArrowRight className="h-4 w-4 text-[var(--foreground-muted)] transition-transform group-hover:translate-x-0.5" />
+          </div>
         </Link>
       ))}
     </div>

@@ -168,7 +168,10 @@ function getVisualSources(
   return sources
 }
 
-function renderGradient(card: FeedCardRecord) {
+function renderGradient(
+  card: FeedCardRecord,
+  variant: 'stacked' | 'row' = 'stacked'
+) {
   const TypeIcon = TYPE_ICONS[normalizeCardType(card.type)] ?? Globe
   const seed = card.title || card.type || 'card'
   let hash = 0
@@ -181,8 +184,8 @@ function renderGradient(card: FeedCardRecord) {
   return (
     <div
       style={{
-        minHeight: 140,
-        borderRadius: '12px 12px 0 0',
+        minHeight: variant === 'row' ? '100%' : 140,
+        borderRadius: variant === 'row' ? '18px' : '12px 12px 0 0',
         background: `linear-gradient(135deg, hsl(${hue1}, 72%, 92%) 0%, hsl(${hue2}, 72%, 96%) 100%)`,
         display: 'flex',
         alignItems: 'center',
@@ -198,18 +201,20 @@ function renderGradient(card: FeedCardRecord) {
 function NoteCardVisual({
   title,
   content,
+  variant = 'stacked',
 }: {
   title?: string | null
   content?: string | null
+  variant?: 'stacked' | 'row'
 }) {
   return (
     <div
       style={{
         background:
           'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 50%, #FFCC80 100%)',
-        borderRadius: '12px 12px 0 0',
+        borderRadius: variant === 'row' ? '18px' : '12px 12px 0 0',
         padding: '24px 16px',
-        minHeight: 140,
+        minHeight: variant === 'row' ? '100%' : 140,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -234,7 +239,13 @@ function NoteCardVisual({
   )
 }
 
-export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
+export function FeedCardVisual({
+  card,
+  variant = 'stacked',
+}: {
+  card: FeedCardRecord
+  variant?: 'stacked' | 'row'
+}) {
   const [failedSources, setFailedSources] = useState<string[]>([])
   const isNote = isNoteCard(card)
   const processingState = getProcessingState(card.metadata)
@@ -252,8 +263,9 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
     <div
       className="overflow-hidden"
       style={{
-        borderRadius: '12px 12px 0 0',
-        aspectRatio: '4 / 3',
+        borderRadius: variant === 'row' ? '18px' : '12px 12px 0 0',
+        aspectRatio: variant === 'row' ? '1 / 1' : '4 / 3',
+        minHeight: variant === 'row' ? 160 : undefined,
         backgroundColor: 'var(--shimmer-base)',
       }}
     >
@@ -279,9 +291,9 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
       />
     </div>
   ) : isNote ? (
-    <NoteCardVisual title={card.title} content={card.content} />
+    <NoteCardVisual title={card.title} content={card.content} variant={variant} />
   ) : (
-    renderGradient(card)
+    renderGradient(card, variant)
   )
 
   return (
@@ -491,6 +503,105 @@ export function FeedCardBody({
 
       <FeedCardStatus card={card} />
       <FeedCardTags card={card} />
+    </div>
+  )
+}
+
+export function FeedCardListItem({
+  card,
+  onOpen,
+  showSummary = true,
+}: {
+  card: FeedCardRecord
+  onOpen: () => void
+  showSummary?: boolean
+}) {
+  const summary = card.metadata?.summary
+  const visualBadges = getVisualBadges(card)
+
+  return (
+    <div
+      className="feed-list-item group"
+      role="button"
+      tabIndex={0}
+      aria-label={
+        card.title ? `Open ${card.type} card: ${card.title}` : `Open ${card.type} card`
+      }
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+      style={{
+        backgroundColor: 'var(--surface-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 22,
+        boxShadow: 'var(--shadow-sm)',
+        overflow: 'hidden',
+      }}
+    >
+      <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="h-full p-3 md:p-3.5">
+          <FeedCardVisual card={card} variant="row" />
+        </div>
+        <div className="flex min-w-0 flex-col justify-between px-4 pb-4 pt-2 md:px-2 md:py-4 md:pr-4">
+          <div>
+            {visualBadges.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {visualBadges.map((badge) => (
+                  <span
+                    key={`${card.id}-${badge}`}
+                    className="rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em]"
+                    style={{
+                      backgroundColor: 'var(--surface-soft)',
+                      color: 'var(--foreground-muted)',
+                    }}
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <h3
+              className="text-base font-semibold leading-tight sm:text-lg"
+              style={{
+                color: 'var(--foreground)',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textWrap: 'pretty',
+              }}
+            >
+              {card.title || 'Untitled'}
+            </h3>
+
+            {showSummary && summary && (
+              <p
+                className="mt-3 text-sm leading-relaxed"
+                style={{
+                  color: 'var(--foreground-muted)',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {summary}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4">
+            <FeedCardStatus card={card} />
+            <FeedCardTags card={card} maxTags={5} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
