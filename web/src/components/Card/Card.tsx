@@ -23,7 +23,7 @@ import { decodeHtmlEntities } from 'src/lib/text-utils';
 import { getProcessingState } from 'src/lib/enrichment-timing';
 import { isCardProcessing } from 'src/components/cards/CardProcessingBadge';
 import { MASONRY_IMAGE_SIZES, PRIORITY_CARD_COUNT } from 'src/lib/image-config';
-import { getBrowserImageUrl } from 'src/lib/imageProxy';
+import { getBrowserImageUrl, getFallbackScreenshotUrl } from 'src/lib/imageProxy';
 
 // Platform-specific cards — lazy-loaded to reduce initial bundle
 const TwitterCard = lazy(() => import('src/components/cards/TwitterCard').then(m => ({ default: m.TwitterCard })));
@@ -194,8 +194,8 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 		// 2. Fallback: Automatic Screenshot (Microlink) - Fixed Golden Ratio for consistency
 		// Skip for social platforms that block screenshots (twitter/x show login walls)
 		const isSocialUrl = card.url && (card.url.includes('twitter.com') || card.url.includes('x.com') || card.url.includes('instagram.com'));
-		if (hasValidUrl && !screenshotError && !isSocialUrl) {
-			const screenshotUrl = `https://api.microlink.io/?url=${encodeURIComponent(card.url!)}&screenshot=true&meta=false&embed=screenshot.url`;
+		const screenshotUrl = getFallbackScreenshotUrl(card.url);
+		if (hasValidUrl && !screenshotError && !isSocialUrl && screenshotUrl) {
 			return (
 				<div className="relative aspect-[1.618/1] w-full overflow-hidden bg-gray-50">
 					<div className="absolute inset-0 animate-shimmer" />

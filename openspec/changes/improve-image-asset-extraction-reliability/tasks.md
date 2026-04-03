@@ -8,6 +8,7 @@
 
 - [x] 2.1 Extend scraped-card merge logic to preserve preview provenance and promote a fallback preview asset when no image exists.
 - [x] 2.2 Thread preview metadata through scraper and enrichment code without overwriting better existing images.
+- [x] 2.3 Stabilize fallback screenshot captures so persisted previews wait for meaningful page content before snapshotting.
 
 ## 3. Verification
 

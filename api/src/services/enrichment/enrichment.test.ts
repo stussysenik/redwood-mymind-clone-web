@@ -86,7 +86,7 @@ describe('buildScrapedCardUpdate', () => {
     )
 
     expect(update.imageUrl).toBe(
-      'https://api.microlink.io/?url=https%3A%2F%2Fexample.com%2Fpost&screenshot=true&meta=false&embed=screenshot.url'
+      'https://api.microlink.io/?url=https%3A%2F%2Fexample.com%2Fpost&screenshot=true&meta=false&embed=screenshot.url&delay=3000&waitUntil=networkidle'
     )
     expect(update.analysisImageUrl).toBe(update.imageUrl)
     expect(update.metadata.previewSource).toBe('microlink')

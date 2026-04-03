@@ -1,9 +1,6 @@
 import { scrapeUrl } from 'api/src/lib/scraper/scraper'
 import { diagnoseInstagramUrl } from 'api/src/lib/scraper/instagramExtractor'
-
-function buildMicrolinkScreenshotUrl(url: string): string {
-  return `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
-}
+import { buildMicrolinkScreenshotUrl } from 'api/src/lib/scraper/fallbackPreview'
 
 function isInstagramUrl(url: string): boolean {
   try {

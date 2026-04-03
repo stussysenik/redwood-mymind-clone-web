@@ -23,7 +23,7 @@ import {
   getEnrichmentProgress,
   getProcessingState,
 } from 'src/lib/enrichment-timing'
-import { getBrowserImageUrl } from 'src/lib/imageProxy'
+import { getBrowserImageUrl, getFallbackScreenshotUrl } from 'src/lib/imageProxy'
 import { ENRICHMENT_PROGRESS_STAGES, toProgressEnrichmentStage } from 'src/lib/semantic'
 import type { Card, CardMetadata, CardType } from 'src/lib/types'
 
@@ -96,29 +96,6 @@ export function toFeedCard(card: FeedCardRecord): Card {
 
 function isNoteCard(card: FeedCardRecord): boolean {
   return normalizeCardType(card.type) === 'note'
-}
-
-function getFallbackScreenshotUrl(
-  url: string | null | undefined
-): string | null {
-  if (!url) return null
-
-  const normalizedUrl = url.trim()
-  if (!normalizedUrl) return null
-  if (normalizedUrl.startsWith('file:') || normalizedUrl.startsWith('local-')) {
-    return null
-  }
-
-  const lower = normalizedUrl.toLowerCase()
-  if (
-    lower.includes('twitter.com') ||
-    lower.includes('x.com') ||
-    lower.includes('instagram.com')
-  ) {
-    return null
-  }
-
-  return `https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}&screenshot=true&meta=false&embed=screenshot.url`
 }
 
 function getDomainLabel(url: string | null | undefined): string | null {

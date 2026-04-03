@@ -6,6 +6,7 @@ import { Sentry } from 'src/lib/sentry'
 import { detectPlatform } from 'src/lib/platforms'
 import { createEnrichmentTiming } from 'src/lib/enrichmentTiming'
 import { buildEmbeddingText } from 'src/lib/pinecone'
+import { buildMicrolinkScreenshotUrl } from 'src/lib/scraper/fallbackPreview'
 import {
   classifyContent,
   generateFallbackTags,
@@ -176,11 +177,15 @@ function buildGeneratedTagOptions(args: {
   metadata: Record<string, unknown>
 }): GeneratedTagOptions {
   return {
-    contentType: args.contentType as Parameters<typeof sanitizeGeneratedTags>[1]['contentType'],
+    contentType: args.contentType as Parameters<
+      typeof sanitizeGeneratedTags
+    >[1]['contentType'],
     platform: args.platform,
     url: args.url || null,
     authorHandle:
-      pickText(args.metadata.authorHandle) || pickText(args.metadata.author) || null,
+      pickText(args.metadata.authorHandle) ||
+      pickText(args.metadata.author) ||
+      null,
     authorName: pickText(args.metadata.authorName) || null,
   }
 }
@@ -237,39 +242,25 @@ function toNumberArray(value: unknown): number[] {
   )
 }
 
-function buildMicrolinkScreenshotUrl(url: string | null | undefined): string | null {
-  const normalizedUrl = pickText(url)
-  if (!normalizedUrl) {
-    return null
-  }
-
-  if (
-    normalizedUrl.startsWith('file:') ||
-    normalizedUrl.startsWith('local-')
-  ) {
-    return null
-  }
-
-  return `https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}&screenshot=true&meta=false&embed=screenshot.url`
-}
-
 function isGenericTitle(title: string | null): boolean {
   if (!title) {
     return true
   }
 
   const normalized = title.trim().toLowerCase()
-  return normalized === 'link' || normalized === 'saved link' || normalized === 'saved item'
+  return (
+    normalized === 'link' ||
+    normalized === 'saved link' ||
+    normalized === 'saved item'
+  )
 }
 
 function isModuleResolutionError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    (
-      'code' in error
-        ? (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
-        : /Cannot find module|ERR_MODULE_NOT_FOUND/.test(error.message)
-    )
+    ('code' in error
+      ? (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+      : /Cannot find module|ERR_MODULE_NOT_FOUND/.test(error.message))
   )
 }
 
@@ -289,7 +280,7 @@ export function buildScrapedCardUpdate(
   card: CardSnapshot,
   scraped?: ScrapedCardData | null
 ): ScrapedCardUpdate {
-  const currentMetadata = ((card.metadata as Record<string, unknown>) || {})
+  const currentMetadata = (card.metadata as Record<string, unknown>) || {}
   const currentTitle = pickText(card.title)
   const currentContent = pickText(card.content)
   const currentImageUrl = pickText(card.imageUrl)
@@ -321,9 +312,13 @@ export function buildScrapedCardUpdate(
   const mergedMediaTypes =
     scrapedMediaTypes.length > 0 ? scrapedMediaTypes : currentMediaTypes
   const mergedVideoPositions =
-    scrapedVideoPositions.length > 0 ? scrapedVideoPositions : currentVideoPositions
+    scrapedVideoPositions.length > 0
+      ? scrapedVideoPositions
+      : currentVideoPositions
   const imageCount = Math.max(
-    typeof currentMetadata.slideCount === 'number' ? currentMetadata.slideCount : 0,
+    typeof currentMetadata.slideCount === 'number'
+      ? currentMetadata.slideCount
+      : 0,
     mergedImages.length,
     mergedMediaTypes.length,
     scrapedImageUrl ? 1 : 0,
@@ -334,12 +329,19 @@ export function buildScrapedCardUpdate(
     ...currentMetadata,
     scrapedAt: new Date().toISOString(),
     sourceDomain:
-      scraped?.domain || (currentMetadata.sourceDomain as string | undefined) || undefined,
+      scraped?.domain ||
+      (currentMetadata.sourceDomain as string | undefined) ||
+      undefined,
     sourceUrl:
-      scraped?.url || card.url || (currentMetadata.sourceUrl as string | undefined) || undefined,
+      scraped?.url ||
+      card.url ||
+      (currentMetadata.sourceUrl as string | undefined) ||
+      undefined,
     scrapedTitle: scrapedTitle || currentMetadata.scrapedTitle || undefined,
-    scrapedDescription: scrapedDescription || currentMetadata.scrapedDescription || undefined,
-    scrapedImageUrl: scrapedImageUrl || currentMetadata.scrapedImageUrl || undefined,
+    scrapedDescription:
+      scrapedDescription || currentMetadata.scrapedDescription || undefined,
+    scrapedImageUrl:
+      scrapedImageUrl || currentMetadata.scrapedImageUrl || undefined,
     images: mergedImages,
     mediaTypes: mergedMediaTypes,
     videoPositions: mergedVideoPositions,
@@ -351,22 +353,39 @@ export function buildScrapedCardUpdate(
     carouselExtracted:
       mergedImages.length > 1
         ? true
-        : (currentMetadata.carouselExtracted as boolean | undefined) || undefined,
+        : (currentMetadata.carouselExtracted as boolean | undefined) ||
+          undefined,
     carouselExtractedAt:
       mergedImages.length > 1
         ? new Date().toISOString()
-        : (currentMetadata.carouselExtractedAt as string | undefined) || undefined,
-    author: pickText(scraped?.author) || (currentMetadata.author as string | undefined) || undefined,
+        : (currentMetadata.carouselExtractedAt as string | undefined) ||
+          undefined,
+    author:
+      pickText(scraped?.author) ||
+      (currentMetadata.author as string | undefined) ||
+      undefined,
     authorName:
-      pickText(scraped?.authorName) || (currentMetadata.authorName as string | undefined) || undefined,
+      pickText(scraped?.authorName) ||
+      (currentMetadata.authorName as string | undefined) ||
+      undefined,
     authorHandle:
-      pickText(scraped?.authorHandle) || (currentMetadata.authorHandle as string | undefined) || undefined,
+      pickText(scraped?.authorHandle) ||
+      (currentMetadata.authorHandle as string | undefined) ||
+      undefined,
     authorAvatar:
-      pickText(scraped?.authorAvatar) || (currentMetadata.authorAvatar as string | undefined) || undefined,
+      pickText(scraped?.authorAvatar) ||
+      (currentMetadata.authorAvatar as string | undefined) ||
+      undefined,
     publishedAt:
-      pickText(scraped?.publishedAt) || (currentMetadata.publishedAt as string | undefined) || undefined,
-    hashtags: scraped?.hashtags?.length ? toStringArray(scraped.hashtags) : currentHashtags,
-    mentions: scraped?.mentions?.length ? toStringArray(scraped.mentions) : currentMentions,
+      pickText(scraped?.publishedAt) ||
+      (currentMetadata.publishedAt as string | undefined) ||
+      undefined,
+    hashtags: scraped?.hashtags?.length
+      ? toStringArray(scraped.hashtags)
+      : currentHashtags,
+    mentions: scraped?.mentions?.length
+      ? toStringArray(scraped.mentions)
+      : currentMentions,
     engagement: scraped?.engagement || currentMetadata.engagement || undefined,
     previewSource:
       scraped?.previewSource ||
@@ -378,7 +397,9 @@ export function buildScrapedCardUpdate(
       (currentMetadata.previewAspectRatio as string | undefined) ||
       undefined,
     needsMobileScreenshot:
-      scraped?.needsMobileScreenshot ?? currentMetadata.needsMobileScreenshot ?? undefined,
+      scraped?.needsMobileScreenshot ??
+      currentMetadata.needsMobileScreenshot ??
+      undefined,
   }
 
   const result: ScrapedCardUpdate = {
@@ -466,11 +487,8 @@ export const graphData: QueryResolvers['graphData'] = async ({
   }
 
   const cardsWithVisibleTags = cards.map((card) => {
-    const metadata =
-      ((card.metadata as Record<string, unknown> | null) || {}) as Record<
-        string,
-        unknown
-      >
+    const metadata = ((card.metadata as Record<string, unknown> | null) ||
+      {}) as Record<string, unknown>
     const visibleTags = stripGeneratedTagNoise(card.tags || [], {
       ...buildGeneratedTagOptions({
         contentType: card.type,
@@ -621,13 +639,11 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 
     const shouldScrape =
       !!card.url &&
-      (
-        !contentToAnalyze ||
+      (!contentToAnalyze ||
         contentToAnalyze.trim().length < 160 ||
         !card.imageUrl ||
         !card.title ||
-        isGenericTitle(card.title)
-      )
+        isGenericTitle(card.title))
 
     if (shouldScrape) {
       const scrapeStart = Date.now()
@@ -751,8 +767,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       try {
         const [dspySummary, dspyTags] = await Promise.all([
           generateSummaryWithDSPy(contentToAnalyze, dspyPlatform, {
-            author:
-              currentMetadata.authorHandle || currentMetadata.authorName,
+            author: currentMetadata.authorHandle || currentMetadata.authorName,
             title: classification.title,
             imageCount,
           }),
@@ -939,8 +954,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           summary: currentMetadata.summaryEditedAt
             ? currentMetadata.summary
             : finalSummary,
-          platform:
-            classification.platform || currentMetadata.platform,
+          platform: classification.platform || currentMetadata.platform,
           processing: false,
           enrichmentError: null,
           enrichmentFailedAt: null,
@@ -948,7 +962,9 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           enrichmentSource,
           tagsSource,
           summarySource,
-          titleSource: finalTitle ? 'glm' : currentMetadata.titleSource || 'scraped',
+          titleSource: finalTitle
+            ? 'glm'
+            : currentMetadata.titleSource || 'scraped',
           embeddingProvider,
           embeddingModel,
           embeddingStored,
@@ -987,7 +1003,8 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 
     // Apply fallback tags so the card never gets stuck
     try {
-      const fallbackCard = card || (await db.card.findUnique({ where: { id: cardId } }))
+      const fallbackCard =
+        card || (await db.card.findUnique({ where: { id: cardId } }))
       if (fallbackCard) {
         const fallback = generateFallbackTags(
           fallbackCard.url || null,
@@ -995,10 +1012,13 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           fallbackCard.title || null,
           fallbackCard.imageUrl || null
         )
-        const fallbackMetadata = ((fallbackCard.metadata as Record<string, unknown>) || {})
+        const fallbackMetadata =
+          (fallbackCard.metadata as Record<string, unknown>) || {}
         const fallbackTagOptions = buildGeneratedTagOptions({
           contentType: fallback.type,
-          platform: pickText(fallbackMetadata.platform) || detectPlatform(fallbackCard.url),
+          platform:
+            pickText(fallbackMetadata.platform) ||
+            detectPlatform(fallbackCard.url),
           url: fallbackCard.url || null,
           metadata: fallbackMetadata,
         })
@@ -1015,7 +1035,9 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           nextTags: sanitizedFallbackTags,
           metadata: fallbackMetadata,
           contentType: fallback.type,
-          platform: pickText(fallbackMetadata.platform) || detectPlatform(fallbackCard.url),
+          platform:
+            pickText(fallbackMetadata.platform) ||
+            detectPlatform(fallbackCard.url),
           url: fallbackCard.url || null,
         })
 
@@ -1076,9 +1098,8 @@ export const captureScreenshot: MutationResolvers['captureScreenshot'] =
   async ({ url }) => {
     try {
       // Use the emitted JS extension so the built ESM bundle resolves cleanly.
-      const { captureWithPlaywright } = await import(
-        '../../lib/scraper/screenshotPlaywright.js'
-      )
+      const { captureWithPlaywright } =
+        await import('../../lib/scraper/screenshotPlaywright.js')
       const result = await captureWithPlaywright(url)
 
       return {
@@ -1192,10 +1213,7 @@ export const backfillEmbeddings: MutationResolvers['backfillEmbeddings'] =
         })
 
         processed++
-        logger.info(
-          { cardId: card.id, processed },
-          'Backfilled embedding'
-        )
+        logger.info({ cardId: card.id, processed }, 'Backfilled embedding')
       } catch (err) {
         const errorMessage = getErrorMessage(
           err,

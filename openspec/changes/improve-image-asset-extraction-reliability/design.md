@@ -7,12 +7,15 @@ The product requirement is broader than a platform bug: a user saving a remotely
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Normalize Instagram extraction targets without losing media kind.
 - Preserve slide-level media metadata for Instagram carousels and videos.
 - Guarantee a fallback preview asset for scraped links that would otherwise save without a visual.
+- Make fallback previews wait for meaningful page content instead of capturing an initial loading skeleton.
 - Add structured diagnostics that make partial or failed extraction runs explainable.
 
 **Non-Goals:**
+
 - Introduce a new external scraping vendor or Meta API dependency.
 - Persist native video binaries or download Instagram media to local storage.
 - Redesign the frontend presentation of non-Instagram cards beyond consuming better metadata.
@@ -20,24 +23,35 @@ The product requirement is broader than a platform bug: a user saving a remotely
 ## Decisions
 
 ### Decision: Replace shortcode-only handling with target parsing
+
 The extractor will derive a normalized Instagram target object that includes `shortcode`, `kind`, and resolved URL details. This avoids the current blind spot where reels fall back to `/p/<shortcode>/` endpoints.
 
 Alternative considered: Keep shortcode-only handling and special-case reels later.
 Why rejected: It keeps the core mismatch in place and makes diagnostics less trustworthy.
 
 ### Decision: Carry slide-level media metadata through the scrape boundary
+
 `InstagramPostData` and the generic scraped payload will include `mediaTypes` and `videoPositions`, allowing the enrichment layer to persist those fields directly to card metadata.
 
 Alternative considered: Infer video slides in the frontend from URL patterns.
 Why rejected: The frontend only sees preview URLs, not enough source truth to infer mixed carousels reliably.
 
 ### Decision: Guarantee visuals in the enrichment merge layer
+
 The fallback preview guarantee will live in `buildScrapedCardUpdate`, where all scrape results converge before persistence. If no source image exists and the card has no current image, the merge layer will promote a screenshot preview URL and mark its provenance.
 
 Alternative considered: Add screenshot fallback separately in every scraper branch.
 Why rejected: That duplicates logic across platforms and still risks missing future scraper branches.
 
+### Decision: Stabilize screenshot fallbacks before capture
+
+Fallback screenshot URLs will include capture parameters that wait for network idle and a short settle delay before snapshotting. The same parameters should be reused in enrichment, diagnostics, and Playwright fallback helpers so verification mirrors production behavior.
+
+Alternative considered: Keep the fastest possible screenshot capture.
+Why rejected: It yields more loading-state previews, which satisfies the "non-empty asset" requirement technically while still failing the product requirement for meaningful visual recall.
+
 ### Decision: Expand diagnostics rather than add a new background service
+
 The existing Instagram diagnostic path will be extended to report normalized-target and partial-result context. This gives us a deploy verification loop without introducing a new Elixir service just to explain scraper decisions.
 
 Alternative considered: Move extraction provenance immediately into the Elixir worker pipeline.
@@ -49,6 +63,7 @@ Why rejected: It is a larger architecture change than needed for the current pro
 - [Instagram share URLs may still exist that cannot be resolved to a shortcode] → Mitigation: preserve diagnostics for unresolved targets and fall back to preview capture rather than silently saving an empty card.
 - [More metadata fields increase merge complexity] → Mitigation: add focused unit tests around merge behavior and keep fallback rules centralized.
 - [Microlink fallback is an external dependency] → Mitigation: reuse the dependency already present in the product and keep Playwright available as a separate capture path.
+- [Longer fallback waits could add small latency] → Mitigation: only apply them to screenshot fallbacks after first-party media is unavailable, and keep the delay short and consistent across environments.
 
 ## Migration Plan
 
