@@ -47,6 +47,7 @@ import {
   formatRemainingTime,
   getEnrichmentProgress,
 } from 'src/lib/enrichment-timing'
+import { getBrowserImageUrl, getBrowserImageUrls } from 'src/lib/imageProxy'
 import { normalizeEnrichmentStage } from 'src/lib/semantic'
 import type { Card } from 'src/lib/types'
 import { ImageLightbox } from 'src/components/ImageLightbox/ImageLightbox'
@@ -235,12 +236,17 @@ export function CardDetailModal({
         metaImages[0] &&
         !metaImages[0].includes('supabase')
       ) {
-        return [card.imageUrl, ...metaImages.slice(1)]
+        return getBrowserImageUrls([card.imageUrl, ...metaImages.slice(1)])
       }
-      return metaImages
+      return getBrowserImageUrls(metaImages)
     }
-    return card?.imageUrl ? [card.imageUrl] : []
+    return getBrowserImageUrls(card?.imageUrl ? [card.imageUrl] : [])
   })()
+  const authorAvatarUrl = getBrowserImageUrl(
+    typeof card?.metadata?.authorAvatar === 'string'
+      ? card.metadata.authorAvatar
+      : null
+  )
 
   const enrichmentStage =
     normalizeEnrichmentStage(card?.metadata?.enrichmentStage) ||
@@ -830,7 +836,7 @@ export function CardDetailModal({
                 <div className="flex items-center gap-3 mb-5">
                   {card.metadata?.authorAvatar ? (
                     <img
-                      src={card.metadata.authorAvatar}
+                      src={authorAvatarUrl || card.metadata.authorAvatar}
                       alt={card.metadata?.authorName || ''}
                       width={48}
                       height={48}
@@ -1079,7 +1085,7 @@ export function CardDetailModal({
                     <div className="flex items-center gap-3 mb-5">
                       {card.metadata?.authorAvatar ? (
                         <img
-                          src={card.metadata.authorAvatar}
+                          src={authorAvatarUrl || card.metadata.authorAvatar}
                           alt={card.metadata?.authorName || ''}
                           width={48}
                           height={48}

@@ -55,7 +55,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     <ToastProvider>
     <LocalAIProvider>
     <div
-      className="min-h-screen"
+      className="app-shell min-h-screen"
       style={{
         backgroundColor: 'var(--background)',
         color: 'var(--foreground)',
@@ -63,9 +63,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     >
       {/* Header */}
       <header
-        className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6"
+        className="app-header sticky top-0 z-50 flex items-center justify-between"
         style={{
-          height: 'var(--header-height)',
           backgroundColor: 'var(--header-backdrop)',
           backdropFilter: 'blur(12px)',
           borderBottom: '1px solid var(--border-default)',
@@ -223,7 +222,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
       {/* Mobile bottom nav — 4 icons: Home, Spaces, Graph, Settings */}
       <nav
-        className="sm:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around py-2"
+        className="app-bottom-nav sm:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around py-2"
         style={{
           backgroundColor: 'var(--header-backdrop)',
           backdropFilter: 'blur(12px)',
@@ -290,15 +289,14 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       </nav>
 
       {/* Main content with bottom padding for mobile nav */}
-      <main className="pb-16 sm:pb-0">{children}</main>
+      <main className="app-main">{children}</main>
 
       {/* FAB (floating add button) */}
       <button
-        className="fixed z-40 flex items-center justify-center rounded-full shadow-lg"
+        className="app-fab fixed z-40 flex items-center justify-center rounded-full shadow-lg"
         style={{
           width: '56px',
           height: '56px',
-          bottom: 'calc(var(--touch-target-comfortable) + 24px)',
           right: '16px',
           backgroundColor: 'var(--accent-primary)',
           color: 'white',

@@ -20,16 +20,35 @@ export interface EmbeddingAvailability {
   reason: string | null;
 }
 
-const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || 'gemini';
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+export const EXPECTED_EMBEDDING_DIMENSION = 1536;
+
+const EMBEDDING_PROVIDER = (process.env.EMBEDDING_PROVIDER || 'gemini').toLowerCase();
+const GOOGLE_API_KEY =
+  process.env.GOOGLE_API_KEY ||
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+  process.env.GEMINI_API_KEY;
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-2';
-const GEMINI_EMBEDDING_DIMENSION = parseInt(process.env.GEMINI_EMBEDDING_DIMENSION || '1536', 10);
+const GEMINI_EMBEDDING_DIMENSION = parseInt(
+  process.env.GEMINI_EMBEDDING_DIMENSION || String(EXPECTED_EMBEDDING_DIMENSION),
+  10
+);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 
 function clampText(text: string, maxChars: number = 12000): string {
   const normalized = text.trim();
   return normalized.length <= maxChars ? normalized : normalized.slice(0, maxChars);
+}
+
+function getCompatibilityError(): string | null {
+  if (
+    (EMBEDDING_PROVIDER === 'gemini' || EMBEDDING_PROVIDER === 'google') &&
+    GEMINI_EMBEDDING_DIMENSION !== EXPECTED_EMBEDDING_DIMENSION
+  ) {
+    return `GEMINI_EMBEDDING_DIMENSION must be ${EXPECTED_EMBEDDING_DIMENSION} to match pgvector storage (received ${GEMINI_EMBEDDING_DIMENSION})`;
+  }
+
+  return null;
 }
 
 class GeminiEmbeddingProvider implements EmbeddingProvider {
@@ -129,10 +148,14 @@ class OpenAIEmbeddingProvider implements EmbeddingProvider {
 let provider: EmbeddingProvider | null = null;
 
 function createProvider(): EmbeddingProvider | null {
+  if (getCompatibilityError()) {
+    return null;
+  }
+
   if (EMBEDDING_PROVIDER === 'openai' && OPENAI_API_KEY) {
     return new OpenAIEmbeddingProvider();
   }
-  if (GOOGLE_API_KEY) {
+  if ((EMBEDDING_PROVIDER === 'gemini' || EMBEDDING_PROVIDER === 'google') && GOOGLE_API_KEY) {
     return new GeminiEmbeddingProvider();
   }
   if (OPENAI_API_KEY) {
@@ -153,24 +176,41 @@ export function isEmbeddingsConfigured(): boolean {
 }
 
 export function getEmbeddingAvailability(): EmbeddingAvailability {
+  const compatibilityError = getCompatibilityError();
   const current = getEmbeddingProvider();
   if (current) {
     return {
       configured: true,
       provider: current.name,
       model: current.model,
-      dimension: current.name === 'gemini' ? GEMINI_EMBEDDING_DIMENSION : 1536,
+      dimension: EXPECTED_EMBEDDING_DIMENSION,
       reason: null,
     };
   }
 
-  if (EMBEDDING_PROVIDER === 'gemini' && !GOOGLE_API_KEY && !OPENAI_API_KEY) {
+  if (compatibilityError) {
+    return {
+      configured: false,
+      provider: EMBEDDING_PROVIDER,
+      model:
+        EMBEDDING_PROVIDER === 'openai'
+          ? OPENAI_EMBEDDING_MODEL
+          : GEMINI_EMBEDDING_MODEL,
+      dimension:
+        EMBEDDING_PROVIDER === 'openai'
+          ? EXPECTED_EMBEDDING_DIMENSION
+          : GEMINI_EMBEDDING_DIMENSION,
+      reason: compatibilityError,
+    };
+  }
+
+  if ((EMBEDDING_PROVIDER === 'gemini' || EMBEDDING_PROVIDER === 'google') && !GOOGLE_API_KEY && !OPENAI_API_KEY) {
     return {
       configured: false,
       provider: null,
       model: null,
       dimension: null,
-      reason: 'GOOGLE_API_KEY is not configured',
+      reason: 'GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY is not configured',
     };
   }
 
@@ -214,6 +254,6 @@ export function getEmbeddingProvenance() {
   return {
     provider: current?.name || null,
     model: current?.model || null,
-    dimension: current?.name === 'gemini' ? GEMINI_EMBEDDING_DIMENSION : 1536,
+    dimension: EXPECTED_EMBEDDING_DIMENSION,
   };
 }

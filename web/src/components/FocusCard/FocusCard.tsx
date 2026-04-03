@@ -9,6 +9,7 @@
 
 import { Globe, Play, StickyNote, FileText, ShoppingBag, BookOpen, Volume2, Film, Users } from 'lucide-react';
 import type { Card } from 'src/lib/types';
+import { getBrowserImageUrl } from 'src/lib/imageProxy';
 import { extractDomain, isVideoUrl } from 'src/lib/platforms';
 import { decodeHtmlEntities } from 'src/lib/text-utils';
 
@@ -51,6 +52,7 @@ export function FocusCard({ card, onOpenDetail, isAnimating = false, direction =
 	const domain = extractDomain(card.url);
 	const TypeIcon = TYPE_ICONS[card.type] || Globe;
 	const isVideo = card.url ? isVideoUrl(card.url) : false;
+	const browserImageUrl = getBrowserImageUrl(card.imageUrl);
 
 	// Generate gradient for cards without images
 	const getGradient = (str: string) => {
@@ -77,19 +79,19 @@ export function FocusCard({ card, onOpenDetail, isAnimating = false, direction =
 		>
 			{/* Large Image Container */}
 			<div className="aspect-[4/3] w-full overflow-hidden rounded-[var(--radius-xl)] shadow-[var(--shadow-xl)] bg-[var(--surface-secondary)] relative">
-				{card.imageUrl ? (
+				{browserImageUrl ? (
 					<>
 						{/* Blurred backdrop */}
 						<div className="absolute inset-0 overflow-hidden">
 							<img
-								src={card.imageUrl}
+								src={browserImageUrl}
 								alt=""
 								className="absolute inset-0 w-full h-full object-cover opacity-30 blur-2xl scale-110"
 							/>
 						</div>
 						{/* Main image */}
 						<img
-							src={card.imageUrl}
+							src={browserImageUrl}
 							alt={card.title || 'Card image'}
 							className="absolute inset-0 w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 relative z-10"
 						/>

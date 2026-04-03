@@ -8,7 +8,7 @@
  * - Shared tag labels on focused edges
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type ComponentType } from 'react';
 
 import { useQuery } from '@redwoodjs/web';
 
@@ -20,8 +20,6 @@ import { GraphTooltip } from 'src/components/GraphTooltip/GraphTooltip';
 import type { GraphNode } from 'src/lib/graph';
 import type { Card } from 'src/lib/types';
 import { Loader2 } from 'lucide-react';
-
-const ForceGraph2D = lazy(() => import('react-force-graph-2d'));
 
 // =============================================================================
 // GRAPHQL — fetch a single card for the detail modal
@@ -109,6 +107,23 @@ function truncate(s: string | null | undefined, max: number): string {
 	return s.length <= max ? s : s.slice(0, max) + '\u2026';
 }
 
+function getLinkEndpointId(endpoint: unknown): string | null {
+	if (typeof endpoint === 'string') {
+		return endpoint;
+	}
+
+	if (
+		endpoint &&
+		typeof endpoint === 'object' &&
+		'id' in endpoint &&
+		typeof endpoint.id === 'string'
+	) {
+		return endpoint.id;
+	}
+
+	return null;
+}
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -116,6 +131,8 @@ function truncate(s: string | null | undefined, max: number): string {
 export function GraphClient({ nodes, links }: GraphClientProps) {
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+	const [ForceGraphCanvas, setForceGraphCanvas] = useState<ComponentType<any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+	const [graphLoadError, setGraphLoadError] = useState<string | null>(null);
 
 	// Card detail modal state
 	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -144,6 +161,30 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// -------------------------------------------------------------------------
 	// RESPONSIVE SIZING
 	// -------------------------------------------------------------------------
+
+	useEffect(() => {
+		let isActive = true;
+
+		import('react-force-graph-2d')
+			.then((mod) => {
+				if (!isActive) return;
+				setForceGraphCanvas(() => mod.default);
+				setGraphLoadError(null);
+			})
+			.catch((error) => {
+				console.error('[GraphClient] Failed to load graph renderer', error);
+				if (!isActive) return;
+				setGraphLoadError(
+					error instanceof Error
+						? error.message
+						: 'Unable to load graph renderer'
+				);
+			});
+
+		return () => {
+			isActive = false;
+		};
+	}, []);
 
 	useEffect(() => {
 		const el = containerRef.current;
@@ -214,8 +255,8 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const connectedNodeIds = useMemo(() => {
 		const ids = new Set<string>();
 		for (const link of graphData.links) {
-			const src = typeof link.source === 'string' ? link.source : link.source?.id;
-			const tgt = typeof link.target === 'string' ? link.target : link.target?.id;
+			const src = getLinkEndpointId(link.source);
+			const tgt = getLinkEndpointId(link.target);
 			if (src) ids.add(src);
 			if (tgt) ids.add(tgt);
 		}
@@ -243,8 +284,8 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		// Link metadata: shared tags + weight per connection
 		const linkMeta: Record<string, { sharedTags: string[]; weight: number }> = {};
 		for (const link of graphData.links) {
-			const src = typeof link.source === 'string' ? link.source : link.source?.id;
-			const tgt = typeof link.target === 'string' ? link.target : link.target?.id;
+			const src = getLinkEndpointId(link.source);
+			const tgt = getLinkEndpointId(link.target);
 			if (src && tgt) {
 				idx[src]?.add(tgt);
 				idx[tgt]?.add(src);
@@ -558,6 +599,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// -------------------------------------------------------------------------
 
 	const isReady = dimensions.width > 10 && dimensions.height > 10;
+	const hasFilteredLinks = graphData.links.length > 0;
 
 	// Focused node metadata for the detail panel
 	const focusedNodeMeta = focusedNodeId
@@ -571,17 +613,34 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	return (
 		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }}>
-			{!isReady ? (
+			{!isReady || !ForceGraphCanvas ? (
 				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
 					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+				</div>
+			) : graphLoadError ? (
+				<div className="flex h-full items-center justify-center px-6 text-center">
+					<div>
+						<p className="text-sm font-medium text-[var(--foreground)]">
+							Graph renderer failed to load
+						</p>
+						<p className="mt-2 text-sm text-[var(--foreground-muted)]">
+							{graphLoadError}
+						</p>
+					</div>
+				</div>
+			) : !hasFilteredLinks ? (
+				<div className="flex h-full items-center justify-center px-6 text-center">
+					<div>
+						<p className="text-sm font-medium text-[var(--foreground)]">
+							No connected cards match the current filter
+						</p>
+						<p className="mt-2 text-sm text-[var(--foreground-muted)]">
+							Lower the minimum connection weight or save more cards with overlapping tags.
+						</p>
+					</div>
 				</div>
 			) : (
-			<Suspense fallback={
-				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
-					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
-				</div>
-			}>
-				<ForceGraph2D
+				<ForceGraphCanvas
 					ref={fgRef}
 					graphData={graphData}
 					width={dimensions.width}
@@ -609,7 +668,6 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					d3AlphaDecay={isMobile ? 0.05 : 0.01}
 					d3VelocityDecay={0.4}
 				/>
-			</Suspense>
 			)}
 
 			<GraphFilterPanel
@@ -622,7 +680,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 			/>
 
 			{/* Focus mode hint */}
-			{!focusedNodeId && (
+			{!focusedNodeId && hasFilteredLinks && (
 				<div
 					className="absolute top-4 left-1/2 -translate-x-1/2 text-[11px] select-none pointer-events-none"
 					style={{ color: 'var(--foreground-muted)' }}

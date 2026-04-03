@@ -23,6 +23,7 @@ import { decodeHtmlEntities } from 'src/lib/text-utils';
 import { getProcessingState } from 'src/lib/enrichment-timing';
 import { isCardProcessing } from 'src/components/cards/CardProcessingBadge';
 import { MASONRY_IMAGE_SIZES, PRIORITY_CARD_COUNT } from 'src/lib/image-config';
+import { getBrowserImageUrl } from 'src/lib/imageProxy';
 
 // Platform-specific cards — lazy-loaded to reduce initial bundle
 const TwitterCard = lazy(() => import('src/components/cards/TwitterCard').then(m => ({ default: m.TwitterCard })));
@@ -143,6 +144,7 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 	const domain = extractDomain(card.url);
 	const TypeIcon = TYPE_ICONS[card.type];
 	const isVideo = card.url?.includes('vimeo');
+	const browserImageUrl = getBrowserImageUrl(card.imageUrl);
 
 	// Processing updates are now handled by Supabase realtime in CardGridClient
 	// (targeted UPDATE events update cards in-place, no polling needed)
@@ -154,7 +156,7 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 		const hasValidUrl = card.url && !card.url.startsWith('file:') && !card.url.startsWith('local-');
 
 		// 1. Primary Image - Fixed aspect ratio with color placeholder for CLS prevention
-		if (card.imageUrl && !imageError) {
+		if (browserImageUrl && !imageError) {
 			return (
 				<div
 					className="relative w-full overflow-hidden"
@@ -164,7 +166,7 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 					}}
 				>
 					<img
-						src={card.imageUrl}
+						src={browserImageUrl}
 						alt={card.title || 'Card image'}
 						className="object-cover w-full h-full"
 						loading={isPriority ? "eager" : "lazy"}

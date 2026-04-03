@@ -151,7 +151,14 @@ export function GraphDetailPanel({
 					return (
 						<button
 							key={conn.id}
-							onClick={() => onCardClick ? onCardClick(conn.id) : window.open(`/?highlight=${conn.id}`, '_self')}
+							onClick={() =>
+								onCardClick
+									? onCardClick(conn.id)
+									: window.open(
+											`/?q=${encodeURIComponent(conn.title)}`,
+											'_self'
+									  )
+							}
 							className="w-full text-left px-4 py-2.5 hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5"
 							style={{ borderBottom: '1px solid var(--border-subtle)' }}
 						>

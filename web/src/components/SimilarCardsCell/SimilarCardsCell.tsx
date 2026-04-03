@@ -4,6 +4,8 @@ import type {
 } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
+import { getBrowserImageUrl } from 'src/lib/imageProxy'
+
 export const QUERY = gql`
   query SimilarCardsQuery($cardId: String!, $limit: Int) {
     similarCards(cardId: $cardId, limit: $limit) {
@@ -55,7 +57,7 @@ export const Success = ({
         >
           {card.imageUrl && (
             <img
-              src={card.imageUrl}
+              src={getBrowserImageUrl(card.imageUrl) || card.imageUrl}
               alt={card.title || ''}
               className="w-full h-20 object-cover"
               loading="lazy"

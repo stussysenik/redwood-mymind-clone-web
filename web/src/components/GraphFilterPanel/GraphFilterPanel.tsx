@@ -58,7 +58,7 @@ export function GraphFilterPanel({
 			</label>
 
 			{/* Reset — only show when not at default */}
-			{minWeight !== 3 && (
+			{minWeight !== 1 && (
 				<button
 					onClick={onReset}
 					className="text-[11px] hover:underline transition-colors"

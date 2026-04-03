@@ -14,6 +14,7 @@ import { TagDisplay, TagShimmerPlaceholder } from '../TagDisplay';
 import { AuthorDisplay } from '../AuthorDisplay';
 import { CardProcessingBadge, isCardProcessing } from './CardProcessingBadge';
 import { MASONRY_IMAGE_SIZES, PRIORITY_CARD_COUNT } from 'src/lib/image-config';
+import { getBrowserImageUrls } from 'src/lib/imageProxy';
 
 // =============================================================================
 // TYPES
@@ -63,7 +64,7 @@ export function InstagramCard({ card, index, onDelete, onArchive, onRestore, onC
 		if (originalCdnUrls?.[0] && !urls.includes(originalCdnUrls[0])) {
 			urls.push(originalCdnUrls[0]);
 		}
-		return urls;
+		return getBrowserImageUrls(urls);
 	})();
 
 	const currentImageUrl = !imageError ? imageFallbackChain[fallbackIndex] ?? null : null;

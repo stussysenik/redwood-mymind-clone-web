@@ -21,11 +21,14 @@
 
 export interface InstagramPostData {
 	shortcode: string;
+	targetKind: InstagramMediaKind;
 	caption: string;
 	authorName: string;
 	authorHandle: string;
 	authorAvatar: string;
 	images: string[];          // High-res CDN URLs
+	mediaTypes: Array<'image' | 'video'>;
+	videoPositions: number[];
 	isVideo: boolean;
 	videoUrl: string | null;
 	isCarousel: boolean;
@@ -41,14 +44,35 @@ export interface ExtractionStrategyTrace {
 	durationMs: number;
 	status: 'success' | 'failed' | 'skipped';
 	imageCount: number;
+	videoCount: number;
+	isPartial: boolean;
 	error?: string;
 }
 
 export interface ExtractionTrace {
+	originalUrl: string;
+	resolvedUrl: string;
 	shortcode: string;
+	targetKind: InstagramMediaKind;
+	slideHint: number | null;
 	totalMs: number;
 	strategies: ExtractionStrategyTrace[];
-	bestResult: { strategy: string; imageCount: number; author: string } | null;
+	bestResult: {
+		strategy: string;
+		imageCount: number;
+		author: string;
+		videoPositions: number[];
+		previewSource: 'instagram-api' | 'embed-html' | 'og-tags' | 'instafix';
+		isPartial: boolean;
+	} | null;
+}
+
+export type InstagramMediaKind = 'p' | 'reel' | 'tv';
+
+interface InstagramTarget {
+	shortcode: string;
+	kind: InstagramMediaKind;
+	url: string;
 }
 
 function getSlideHintFromUrl(url: string): number | null {
@@ -64,11 +88,45 @@ function getSlideHintFromUrl(url: string): number | null {
 }
 
 function isLikelyTruncated(result: InstagramPostData, slideHint: number | null): boolean {
+	if ((result.targetKind === 'reel' || result.targetKind === 'tv') && result.images.length > 1) {
+		return true;
+	}
 	if (slideHint && result.images.length < slideHint) {
 		return true;
 	}
+	if (result.slideCount > result.images.length) {
+		return true;
+	}
 	// Known provider edge-case: hard-capped 3-image carousels.
-	return result.images.length === 3;
+	return result.source === 'instafix' && result.images.length === 3;
+}
+
+function getCandidateScore(
+	result: InstagramPostData,
+	slideHint: number | null,
+): number {
+	let score = 0;
+
+	if (!isLikelyTruncated(result, slideHint)) {
+		score += 1000;
+	}
+
+	if ((result.targetKind === 'reel' || result.targetKind === 'tv') && result.images.length === 1) {
+		score += 100;
+	}
+
+	if (result.source === 'graphql') {
+		score += 80;
+	} else if (result.source === 'instafix') {
+		score += 40;
+	} else if (result.source === 'embed-html') {
+		score += 20;
+	}
+
+	score += result.images.length * 10;
+	score += result.videoPositions.length * 5;
+
+	return score;
 }
 
 // =============================================================================
@@ -83,8 +141,40 @@ function isLikelyTruncated(result: InstagramPostData, slideHint: number | null):
  * - https://instagram.com/p/ABC123/?igsh=xxx
  */
 export function extractShortcode(url: string): string | null {
-	const match = url.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
-	return match?.[1] ?? null;
+	return extractInstagramTarget(url)?.shortcode ?? null;
+}
+
+export function extractInstagramTarget(url: string): InstagramTarget | null {
+	try {
+		const parsed = new URL(url);
+		const host = parsed.hostname.toLowerCase();
+		if (!host.includes('instagram.com')) return null;
+
+		const segments = parsed.pathname.split('/').filter(Boolean);
+		if (segments.length >= 2 && isInstagramMediaKind(segments[0])) {
+			return {
+				shortcode: segments[1],
+				kind: segments[0],
+				url,
+			};
+		}
+
+		if (
+			segments.length >= 3 &&
+			segments[0] === 'share' &&
+			isInstagramMediaKind(segments[1])
+		) {
+			return {
+				shortcode: segments[2],
+				kind: segments[1],
+				url,
+			};
+		}
+	} catch {
+		// Fall through to null
+	}
+
+	return null;
 }
 
 // =============================================================================
@@ -99,6 +189,33 @@ export function extractShortcode(url: string): string | null {
  * These 302-redirect to canonical URLs (/reel/DHbVbT4Jx0c/, /p/C6q-XdvsU5v/).
  */
 const INSTAGRAM_SHARE_RE = /instagram\.com\/share\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/;
+
+function isInstagramMediaKind(value: string): value is InstagramMediaKind {
+	return value === 'p' || value === 'reel' || value === 'tv';
+}
+
+function parseResolvedInstagramUrl(html: string): string | null {
+	const patterns = [
+		/<link[^>]+rel="canonical"[^>]+href="([^"]+)"/i,
+		/"canonical_url":"([^"]+)"/i,
+		/"url":"(\\\/(?:p|reel|tv)\\\/[A-Za-z0-9_-]+\\\/[^"]*)"/i,
+		/(https?:\\\/\\\/www\.instagram\.com\\\/(?:p|reel|tv)\\\/[A-Za-z0-9_-]+\\\/[^"]*)/i,
+	];
+
+	for (const pattern of patterns) {
+		const match = html.match(pattern)?.[1];
+		if (!match) continue;
+		const candidate = cleanCdnUrl(match);
+		if (candidate.startsWith('/')) {
+			return new URL(candidate, 'https://www.instagram.com').toString();
+		}
+		if (candidate.startsWith('http')) {
+			return candidate;
+		}
+	}
+
+	return null;
+}
 
 export function isInstagramShareUrl(url: string): boolean {
 	return INSTAGRAM_SHARE_RE.test(url);
@@ -127,6 +244,16 @@ export async function resolveInstagramShareUrl(url: string): Promise<string> {
 				return resolved;
 			}
 		}
+
+		if (res.ok) {
+			const html = await res.text();
+			const resolved = parseResolvedInstagramUrl(html);
+			if (resolved) {
+				console.log(`[Instagram] Share URL resolved from HTML: ${resolved}`);
+				return resolved;
+			}
+		}
+
 		console.warn(`[Instagram] Share URL returned ${res.status}, using original`);
 		return url;
 	} catch (err) {
@@ -153,6 +280,23 @@ function cleanCdnUrl(url: string): string {
 		.replace(/\\u0026/g, '&')
 		.replace(/\\\//g, '/')
 		.replace(/\\"/g, '"');
+}
+
+function uniqStrings(values: string[]): string[] {
+	return values.filter((value, index) => values.indexOf(value) === index);
+}
+
+function buildVideoPositions(mediaTypes: Array<'image' | 'video'>): number[] {
+	return mediaTypes.reduce<number[]>((positions, type, index) => {
+		if (type === 'video') positions.push(index);
+		return positions;
+	}, []);
+}
+
+function inferMediaTypes(imageCount: number, isVideo: boolean): Array<'image' | 'video'> {
+	if (imageCount <= 0) return [];
+	if (imageCount === 1 && isVideo) return ['video'];
+	return Array.from({ length: imageCount }, () => 'image');
 }
 
 /** Extract a single OG meta tag value from HTML (handles both attribute orderings) */
@@ -228,13 +372,16 @@ export const INSTAFIX_MIRRORS = [
  *
  * First successful result wins.
  */
-export async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | null> {
-	const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+export async function fetchViaInstaFix(
+	shortcode: string,
+	targetKind: InstagramMediaKind,
+): Promise<InstagramPostData | null> {
+	const canonicalUrl = `https://www.instagram.com/${targetKind}/${shortcode}/`;
 
 	for (const mirror of INSTAFIX_MIRRORS) {
 		// Sub-strategy A: HTML page with OG tags (carousel-aware)
 		try {
-			const ddUrl = `https://${mirror}/p/${shortcode}/`;
+			const ddUrl = `https://${mirror}/${targetKind}/${shortcode}/`;
 			const res = await fetch(ddUrl, {
 				signal: AbortSignal.timeout(5000),
 				headers: {
@@ -267,16 +414,20 @@ export async function fetchViaInstaFix(shortcode: string): Promise<InstagramPost
 			const authorName = ogTitle ? parseAuthorFromOgTitle(ogTitle) : '';
 			const caption = cleanCaption(ogDesc || '');
 			const isVideo = !!ogVideo;
+			const mediaTypes = inferMediaTypes(images.length, isVideo);
 
 			console.log(`[Instagram] InstaFix HTML success (${mirror}): ${images.length} images, author="${authorName}"`);
 
 			return {
 				shortcode,
+				targetKind,
 				caption,
 				authorName,
 				authorHandle: authorName,
 				authorAvatar: '',
 				images,
+				mediaTypes,
+				videoPositions: buildVideoPositions(mediaTypes),
 				isVideo,
 				videoUrl: ogVideo || null,
 				isCarousel: images.length > 1,
@@ -311,14 +462,18 @@ export async function fetchViaInstaFix(shortcode: string): Promise<InstagramPost
 						const caption = cleanCaption(data.title || '');
 
 						console.log(`[Instagram] InstaFix oEmbed success (${mirror}): thumbnail found`);
+						const mediaTypes = ['image'] as Array<'image' | 'video'>;
 
 						return {
 							shortcode,
+							targetKind,
 							caption,
 							authorName: authorHandle,
 							authorHandle,
 							authorAvatar: '',
 							images: [cleanCdnUrl(resolveAgainstHost(data.thumbnail_url, mirror))],
+							mediaTypes,
+							videoPositions: [],
 							isVideo: false,
 							videoUrl: null,
 							isCarousel: false,
@@ -349,7 +504,10 @@ export async function fetchViaInstaFix(shortcode: string): Promise<InstagramPost
  * May return null from datacenter IPs (Instagram blocks non-residential).
  * Fast when it works (~150ms).
  */
-export async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostData | null> {
+export async function fetchViaGraphQL(
+	shortcode: string,
+	targetKind: InstagramMediaKind,
+): Promise<InstagramPostData | null> {
 	// Try multiple doc_ids (Instagram rotates these every 2-4 weeks)
 	const docIds = [
 		'10015901848480474',  // ahmedrangel/instagram-media-scraper (2025-2026)
@@ -402,6 +560,7 @@ export async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostD
 
 			// Successfully got data - parse it
 			const images: string[] = [];
+			const mediaTypes: Array<'image' | 'video'> = [];
 			let isCarousel = false;
 			const isVideo = media.is_video === true;
 			const videoUrl: string | null = media.video_url || null;
@@ -411,10 +570,13 @@ export async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostD
 			if (isSidecar && media.edge_sidecar_to_children?.edges) {
 				isCarousel = true;
 				for (const edge of media.edge_sidecar_to_children.edges) {
+					if (!edge?.node?.display_url) continue;
 					images.push(edge.node.display_url);
+					mediaTypes.push(edge.node.is_video === true ? 'video' : 'image');
 				}
 			} else if (media.display_url) {
 				images.push(media.display_url);
+				mediaTypes.push(isVideo ? 'video' : 'image');
 			}
 
 			// Extract caption
@@ -435,11 +597,14 @@ export async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostD
 
 			return {
 				shortcode,
+				targetKind,
 				caption,
 				authorName,
 				authorHandle,
 				authorAvatar,
 				images,
+				mediaTypes,
+				videoPositions: buildVideoPositions(mediaTypes),
 				isVideo,
 				videoUrl,
 				isCarousel,
@@ -467,9 +632,12 @@ export async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostD
  * Instagram embeds used to contain display_url data in script tags.
  * Even when client-rendered, there may be initial data or img elements.
  */
-export async function fetchViaEmbedHTML(shortcode: string): Promise<InstagramPostData | null> {
+export async function fetchViaEmbedHTML(
+	shortcode: string,
+	targetKind: InstagramMediaKind,
+): Promise<InstagramPostData | null> {
 	try {
-		const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+		const embedUrl = `https://www.instagram.com/${targetKind}/${shortcode}/embed/captioned/`;
 
 		const res = await fetch(embedUrl, {
 			signal: AbortSignal.timeout(8000),
@@ -604,14 +772,18 @@ export async function fetchViaEmbedHTML(shortcode: string): Promise<InstagramPos
 		}
 
 		console.log(`[Instagram] Embed HTML: found ${images.length} images, author="${author}"`);
+		const mediaTypes = inferMediaTypes(images.length, false);
 
 		return {
 			shortcode,
+			targetKind,
 			caption,
 			authorName: author.replace('@', ''),
 			authorHandle: author.replace('@', ''),
 			authorAvatar: '',
 			images,
+			mediaTypes,
+			videoPositions: [],
 			isVideo: false,
 			videoUrl: null,
 			isCarousel: images.length > 1,
@@ -636,9 +808,12 @@ export async function fetchViaEmbedHTML(shortcode: string): Promise<InstagramPos
  * Least data but most reliable — Instagram serves OG metadata to known search
  * crawlers (Googlebot) regardless of IP, so this works on Vercel/datacenter IPs.
  */
-export async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | null> {
+export async function fetchViaOGTags(
+	shortcode: string,
+	targetKind: InstagramMediaKind,
+): Promise<InstagramPostData | null> {
 	try {
-		const postUrl = `https://www.instagram.com/p/${shortcode}/`;
+		const postUrl = `https://www.instagram.com/${targetKind}/${shortcode}/`;
 
 		const res = await fetch(postUrl, {
 			signal: AbortSignal.timeout(5000),
@@ -657,10 +832,11 @@ export async function fetchViaOGTags(shortcode: string): Promise<InstagramPostDa
 		const html = await res.text();
 
 		const ogImage = parseOgTag(html, 'og:image');
+		const ogVideo = parseOgTag(html, 'og:video') || parseOgTag(html, 'og:video:url');
 		const ogTitle = parseOgTag(html, 'og:title');
 		const ogDesc = parseOgTag(html, 'og:description');
 
-		if (!ogImage || ogImage.includes('static.cdninstagram')) {
+		if ((!ogImage || ogImage.includes('static.cdninstagram')) && !ogVideo) {
 			console.warn('[Instagram] OG tags: no valid image found');
 			return null;
 		}
@@ -672,17 +848,23 @@ export async function fetchViaOGTags(shortcode: string): Promise<InstagramPostDa
 			if (captionMatch) captionStr = captionMatch[1].trim();
 		}
 
+		const images = ogImage ? [cleanCdnUrl(ogImage)] : [];
+		const mediaTypes = inferMediaTypes(images.length, !!ogVideo);
+
 		return {
 			shortcode,
+			targetKind,
 			caption: captionStr,
 			authorName: authorStr,
 			authorHandle: authorStr.replace(/\s/g, '').toLowerCase(),
 			authorAvatar: '',
-			images: [cleanCdnUrl(ogImage)],
-			isVideo: false,
-			videoUrl: null,
+			images,
+			mediaTypes,
+			videoPositions: buildVideoPositions(mediaTypes),
+			isVideo: !!ogVideo,
+			videoUrl: ogVideo || null,
 			isCarousel: false,
-			slideCount: 1,
+			slideCount: images.length,
 			likes: 0,
 			comments: 0,
 			timestamp: '',
@@ -708,25 +890,29 @@ export async function fetchViaOGTags(shortcode: string): Promise<InstagramPostDa
  */
 export async function extractInstagramPost(url: string): Promise<InstagramPostData | null> {
 	const resolvedUrl = await resolveInstagramShareUrl(url);
-	const shortcode = extractShortcode(resolvedUrl);
+	const target = extractInstagramTarget(resolvedUrl) || extractInstagramTarget(url);
 	let bestResult: InstagramPostData | null = null;
 	const slideHint = getSlideHintFromUrl(resolvedUrl) ?? getSlideHintFromUrl(url);
-	if (!shortcode) {
+	if (!target?.shortcode) {
 		console.warn('[Instagram] Could not extract shortcode from URL:', url);
 		return null;
 	}
+	const { shortcode, kind: targetKind } = target;
 
-	console.log(`[Instagram] Extracting post ${shortcode}${slideHint ? ` (img_index hint=${slideHint})` : ''}`);
+	console.log(`[Instagram] Extracting ${targetKind}/${shortcode}${slideHint ? ` (img_index hint=${slideHint})` : ''}`);
 
 	const registerCandidate = (candidate: InstagramPostData): boolean => {
-		if (!bestResult || candidate.images.length > bestResult.images.length) {
+		if (
+			!bestResult ||
+			getCandidateScore(candidate, slideHint) > getCandidateScore(bestResult, slideHint)
+		) {
 			bestResult = candidate;
 		}
 		return !isLikelyTruncated(candidate, slideHint);
 	};
 
 	// Layer 1: GraphQL API (richest data when accessible)
-	const graphqlResult = await fetchViaGraphQL(shortcode);
+	const graphqlResult = await fetchViaGraphQL(shortcode, targetKind);
 	if (graphqlResult) {
 		console.log(`[Instagram] GraphQL success: ${graphqlResult.images.length} images, author="${graphqlResult.authorHandle}"`);
 		if (registerCandidate(graphqlResult)) {
@@ -736,7 +922,7 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 	}
 
 	// Layer 2: InstaFix mirrors (works from datacenter IPs)
-	const instaFixResult = await fetchViaInstaFix(shortcode);
+	const instaFixResult = await fetchViaInstaFix(shortcode, targetKind);
 	if (instaFixResult) {
 		console.log(`[Instagram] InstaFix success: ${instaFixResult.images.length} images, author="${instaFixResult.authorHandle}"`);
 		if (registerCandidate(instaFixResult)) {
@@ -746,7 +932,7 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 	}
 
 	// Layer 3: Static Embed HTML parsing
-	const embedResult = await fetchViaEmbedHTML(shortcode);
+	const embedResult = await fetchViaEmbedHTML(shortcode, targetKind);
 	if (embedResult) {
 		console.log(`[Instagram] Embed HTML success: ${embedResult.images.length} images`);
 		if (registerCandidate(embedResult)) {
@@ -762,7 +948,7 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 	}
 
 	// Layer 4: Direct page OG tags with Googlebot UA (last-resort single image)
-	const ogResult = await fetchViaOGTags(shortcode);
+	const ogResult = await fetchViaOGTags(shortcode, targetKind);
 	if (ogResult) {
 		console.log(`[Instagram] OG tags success: ${ogResult.images.length} images`);
 		return ogResult;
@@ -778,6 +964,7 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 
 async function runStrategyTraced(
 	name: string,
+	slideHint: number | null,
 	fn: () => Promise<InstagramPostData | null>,
 ): Promise<{ trace: ExtractionStrategyTrace; result: InstagramPostData | null }> {
 	const start = performance.now();
@@ -790,6 +977,8 @@ async function runStrategyTraced(
 				durationMs,
 				status: result ? 'success' : 'failed',
 				imageCount: result?.images.length ?? 0,
+				videoCount: result?.videoPositions.length ?? 0,
+				isPartial: result ? isLikelyTruncated(result, slideHint) : false,
 				error: result ? undefined : 'returned null (no data extracted)',
 			},
 			result,
@@ -802,6 +991,8 @@ async function runStrategyTraced(
 				durationMs,
 				status: 'failed',
 				imageCount: 0,
+				videoCount: 0,
+				isPartial: false,
 				error: err instanceof Error ? err.message : String(err),
 			},
 			result: null,
@@ -814,30 +1005,47 @@ async function runStrategyTraced(
  * and returns an ExtractionTrace with timing/status for each.
  */
 export async function diagnoseInstagramExtraction(shortcode: string): Promise<ExtractionTrace> {
+	const syntheticUrl = `https://www.instagram.com/p/${shortcode}/`;
+	return diagnoseInstagramUrl(syntheticUrl);
+}
+
+export async function diagnoseInstagramUrl(url: string): Promise<ExtractionTrace> {
 	const overallStart = performance.now();
 	const strategies: ExtractionStrategyTrace[] = [];
 	let bestResult: InstagramPostData | null = null;
+	const resolvedUrl = await resolveInstagramShareUrl(url);
+	const target = extractInstagramTarget(resolvedUrl) || extractInstagramTarget(url);
+	if (!target) {
+		throw new Error(`Could not resolve Instagram target from URL: ${url}`);
+	}
+	const slideHint = getSlideHintFromUrl(resolvedUrl) ?? getSlideHintFromUrl(url);
 
 	const pickBest = (candidate: InstagramPostData | null) => {
-		if (candidate && (!bestResult || candidate.images.length > bestResult.images.length)) {
+		if (
+			candidate &&
+			(
+				!bestResult ||
+				getCandidateScore(candidate, slideHint) > getCandidateScore(bestResult, slideHint)
+			)
+		) {
 			bestResult = candidate;
 		}
 	};
 
 	// Run active strategies sequentially (so we can see individual timings cleanly)
-	const graphql = await runStrategyTraced('graphql', () => fetchViaGraphQL(shortcode));
+	const graphql = await runStrategyTraced('graphql', slideHint, () => fetchViaGraphQL(target.shortcode, target.kind));
 	strategies.push(graphql.trace);
 	pickBest(graphql.result);
 
-	const instafix = await runStrategyTraced('instafix', () => fetchViaInstaFix(shortcode));
+	const instafix = await runStrategyTraced('instafix', slideHint, () => fetchViaInstaFix(target.shortcode, target.kind));
 	strategies.push(instafix.trace);
 	pickBest(instafix.result);
 
-	const embed = await runStrategyTraced('embed-html', () => fetchViaEmbedHTML(shortcode));
+	const embed = await runStrategyTraced('embed-html', slideHint, () => fetchViaEmbedHTML(target.shortcode, target.kind));
 	strategies.push(embed.trace);
 	pickBest(embed.result);
 
-	const og = await runStrategyTraced('og-tags', () => fetchViaOGTags(shortcode));
+	const og = await runStrategyTraced('og-tags', slideHint, () => fetchViaOGTags(target.shortcode, target.kind));
 	strategies.push(og.trace);
 	pickBest(og.result);
 
@@ -845,11 +1053,22 @@ export async function diagnoseInstagramExtraction(shortcode: string): Promise<Ex
 	const best = bestResult as InstagramPostData | null;
 
 	return {
-		shortcode,
+		originalUrl: url,
+		resolvedUrl,
+		shortcode: target.shortcode,
+		targetKind: target.kind,
+		slideHint,
 		totalMs,
 		strategies,
 		bestResult: best
-			? { strategy: best.source, imageCount: best.images.length, author: best.authorHandle }
+			? {
+				strategy: best.source,
+				imageCount: best.images.length,
+				author: best.authorHandle,
+				videoPositions: best.videoPositions,
+				previewSource: best.source === 'graphql' ? 'instagram-api' : best.source,
+				isPartial: isLikelyTruncated(best, slideHint),
+			}
 			: null,
 	};
 }

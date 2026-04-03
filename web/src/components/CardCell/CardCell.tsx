@@ -1,6 +1,8 @@
 import type { CardQuery, CardQueryVariables } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
+import { getBrowserImageUrl } from 'src/lib/imageProxy'
+
 export const QUERY = gql`
   query CardQuery($id: String!) {
     card(id: $id) {
@@ -62,7 +64,7 @@ export const Success = ({
     >
       {card.imageUrl && (
         <img
-          src={card.imageUrl}
+          src={getBrowserImageUrl(card.imageUrl) || card.imageUrl}
           alt={card.title || ''}
           className="w-full object-cover"
           style={{ maxHeight: '400px' }}

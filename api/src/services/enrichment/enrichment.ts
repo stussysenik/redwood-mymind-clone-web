@@ -10,6 +10,7 @@ import {
   classifyContent,
   generateFallbackTags,
 } from 'src/lib/ai/classificationPipeline'
+import { sanitizeGeneratedTags, stripGeneratedTagNoise } from 'src/lib/semantic'
 import {
   generateSummaryWithDSPy,
   generateTagsWithDSPy,
@@ -100,6 +101,8 @@ type ScrapedCardData = {
   description?: string
   imageUrl?: string | null
   images?: string[]
+  mediaTypes?: Array<'image' | 'video'>
+  videoPositions?: number[]
   content?: string | null
   author?: string
   authorName?: string
@@ -111,6 +114,15 @@ type ScrapedCardData = {
   hashtags?: string[]
   mentions?: string[]
   needsMobileScreenshot?: boolean
+  previewSource?:
+    | 'instagram-api'
+    | 'twitter-api'
+    | 'scraper'
+    | 'playwright'
+    | 'microlink'
+    | 'user-upload'
+    | 'unknown'
+  previewAspectRatio?: string
   engagement?: {
     likes?: number
     retweets?: number
@@ -126,6 +138,15 @@ type CardSnapshot = {
   url: string | null
   metadata?: Record<string, unknown> | null
 }
+
+const REPAIRABLE_AI_TAG_SOURCES = new Set([
+  'dspy',
+  'glm',
+  'fallback',
+  'kimi',
+  'glm-content',
+  'rule-based',
+])
 
 export interface ScrapedCardUpdate {
   content?: string
@@ -146,6 +167,46 @@ function pickText(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
+type GeneratedTagOptions = Parameters<typeof sanitizeGeneratedTags>[1]
+
+function buildGeneratedTagOptions(args: {
+  contentType: string
+  platform: string
+  url: string | null | undefined
+  metadata: Record<string, unknown>
+}): GeneratedTagOptions {
+  return {
+    contentType: args.contentType as Parameters<typeof sanitizeGeneratedTags>[1]['contentType'],
+    platform: args.platform,
+    url: args.url || null,
+    authorHandle:
+      pickText(args.metadata.authorHandle) || pickText(args.metadata.author) || null,
+    authorName: pickText(args.metadata.authorName) || null,
+  }
+}
+
+export function mergeGeneratedCardTags(args: {
+  currentTags: string[]
+  nextTags: string[]
+  metadata: Record<string, unknown>
+  contentType: string
+  platform: string
+  url: string | null | undefined
+}): string[] {
+  const generatedTagOptions = buildGeneratedTagOptions({
+    contentType: args.contentType,
+    platform: args.platform,
+    url: args.url,
+    metadata: args.metadata,
+  })
+  const currentSource = pickText(args.metadata.tagsSource)
+  const existingTags = REPAIRABLE_AI_TAG_SOURCES.has(currentSource || '')
+    ? sanitizeGeneratedTags(args.currentTags, generatedTagOptions)
+    : args.currentTags
+
+  return Array.from(new Set([...existingTags, ...args.nextTags]))
+}
+
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
@@ -154,6 +215,42 @@ function toStringArray(value: unknown): string[] {
   return value
     .map((item) => pickText(item))
     .filter((item): item is string => !!item)
+}
+
+function toMediaTypeArray(value: unknown): Array<'image' | 'video'> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter(
+    (item): item is 'image' | 'video' => item === 'image' || item === 'video'
+  )
+}
+
+function toNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter(
+    (item): item is number => typeof item === 'number' && Number.isFinite(item)
+  )
+}
+
+function buildMicrolinkScreenshotUrl(url: string | null | undefined): string | null {
+  const normalizedUrl = pickText(url)
+  if (!normalizedUrl) {
+    return null
+  }
+
+  if (
+    normalizedUrl.startsWith('file:') ||
+    normalizedUrl.startsWith('local-')
+  ) {
+    return null
+  }
+
+  return `https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}&screenshot=true&meta=false&embed=screenshot.url`
 }
 
 function isGenericTitle(title: string | null): boolean {
@@ -184,7 +281,7 @@ async function importScraperModule() {
       throw error
     }
 
-    return import('../../lib/scraper/scraper')
+    return import('../../lib/scraper/' + 'scraper')
   }
 }
 
@@ -197,23 +294,38 @@ export function buildScrapedCardUpdate(
   const currentContent = pickText(card.content)
   const currentImageUrl = pickText(card.imageUrl)
   const currentImages = toStringArray(currentMetadata.images)
+  const currentMediaTypes = toMediaTypeArray(currentMetadata.mediaTypes)
+  const currentVideoPositions = toNumberArray(currentMetadata.videoPositions)
   const currentHashtags = toStringArray(currentMetadata.hashtags)
   const currentMentions = toStringArray(currentMetadata.mentions)
 
   const scrapedTitle = pickText(scraped?.title)
   const scrapedContent = pickText(scraped?.content)
   const scrapedDescription = pickText(scraped?.description)
-  const scrapedImageUrl = pickText(scraped?.imageUrl) || pickText(scraped?.images?.[0])
+  const directScrapedImageUrl =
+    pickText(scraped?.imageUrl) || pickText(scraped?.images?.[0])
   const scrapedImages = toStringArray(scraped?.images)
+  const scrapedMediaTypes = toMediaTypeArray(scraped?.mediaTypes)
+  const scrapedVideoPositions = toNumberArray(scraped?.videoPositions)
+  const fallbackPreviewUrl =
+    !directScrapedImageUrl && !currentImageUrl
+      ? buildMicrolinkScreenshotUrl(scraped?.url || card.url)
+      : null
+  const scrapedImageUrl = directScrapedImageUrl || fallbackPreviewUrl
 
   const shouldPromoteTitle =
     !!scrapedTitle && (!currentTitle || isGenericTitle(currentTitle))
   const shouldPromoteImage = !!scrapedImageUrl && !currentImageUrl
 
   const mergedImages = scrapedImages.length > 0 ? scrapedImages : currentImages
+  const mergedMediaTypes =
+    scrapedMediaTypes.length > 0 ? scrapedMediaTypes : currentMediaTypes
+  const mergedVideoPositions =
+    scrapedVideoPositions.length > 0 ? scrapedVideoPositions : currentVideoPositions
   const imageCount = Math.max(
     typeof currentMetadata.slideCount === 'number' ? currentMetadata.slideCount : 0,
     mergedImages.length,
+    mergedMediaTypes.length,
     scrapedImageUrl ? 1 : 0,
     currentImageUrl ? 1 : 0
   )
@@ -229,6 +341,21 @@ export function buildScrapedCardUpdate(
     scrapedDescription: scrapedDescription || currentMetadata.scrapedDescription || undefined,
     scrapedImageUrl: scrapedImageUrl || currentMetadata.scrapedImageUrl || undefined,
     images: mergedImages,
+    mediaTypes: mergedMediaTypes,
+    videoPositions: mergedVideoPositions,
+    isCarousel:
+      mergedImages.length > 1
+        ? true
+        : (currentMetadata.isCarousel as boolean | undefined) || undefined,
+    slideCount: imageCount || undefined,
+    carouselExtracted:
+      mergedImages.length > 1
+        ? true
+        : (currentMetadata.carouselExtracted as boolean | undefined) || undefined,
+    carouselExtractedAt:
+      mergedImages.length > 1
+        ? new Date().toISOString()
+        : (currentMetadata.carouselExtractedAt as string | undefined) || undefined,
     author: pickText(scraped?.author) || (currentMetadata.author as string | undefined) || undefined,
     authorName:
       pickText(scraped?.authorName) || (currentMetadata.authorName as string | undefined) || undefined,
@@ -241,6 +368,15 @@ export function buildScrapedCardUpdate(
     hashtags: scraped?.hashtags?.length ? toStringArray(scraped.hashtags) : currentHashtags,
     mentions: scraped?.mentions?.length ? toStringArray(scraped.mentions) : currentMentions,
     engagement: scraped?.engagement || currentMetadata.engagement || undefined,
+    previewSource:
+      scraped?.previewSource ||
+      (fallbackPreviewUrl ? 'microlink' : undefined) ||
+      (currentMetadata.previewSource as string | undefined) ||
+      undefined,
+    previewAspectRatio:
+      pickText(scraped?.previewAspectRatio) ||
+      (currentMetadata.previewAspectRatio as string | undefined) ||
+      undefined,
     needsMobileScreenshot:
       scraped?.needsMobileScreenshot ?? currentMetadata.needsMobileScreenshot ?? undefined,
   }
@@ -329,8 +465,29 @@ export const graphData: QueryResolvers['graphData'] = async ({
     })
   }
 
+  const cardsWithVisibleTags = cards.map((card) => {
+    const metadata =
+      ((card.metadata as Record<string, unknown> | null) || {}) as Record<
+        string,
+        unknown
+      >
+    const visibleTags = stripGeneratedTagNoise(card.tags || [], {
+      ...buildGeneratedTagOptions({
+        contentType: card.type,
+        platform: pickText(metadata.platform) || detectPlatform(card.url),
+        url: card.url,
+        metadata,
+      }),
+    })
+
+    return {
+      ...card,
+      tags: visibleTags,
+    }
+  })
+
   // Build graph nodes
-  const nodes = cards.map((card) => ({
+  const nodes = cardsWithVisibleTags.map((card) => ({
     id: card.id,
     title: card.title,
     imageUrl: card.imageUrl,
@@ -348,16 +505,16 @@ export const graphData: QueryResolvers['graphData'] = async ({
     weight: number
   }[] = []
 
-  for (let i = 0; i < cards.length; i++) {
-    for (let j = i + 1; j < cards.length; j++) {
-      const sharedTags = (cards[i].tags || []).filter((t) =>
-        (cards[j].tags || []).includes(t)
+  for (let i = 0; i < cardsWithVisibleTags.length; i++) {
+    for (let j = i + 1; j < cardsWithVisibleTags.length; j++) {
+      const sharedTags = (cardsWithVisibleTags[i].tags || []).filter((t) =>
+        (cardsWithVisibleTags[j].tags || []).includes(t)
       )
 
       if (sharedTags.length >= minWeight) {
         links.push({
-          source: cards[i].id,
-          target: cards[j].id,
+          source: cardsWithVisibleTags[i].id,
+          target: cardsWithVisibleTags[j].id,
           sharedTags,
           weight: sharedTags.length,
         })
@@ -621,6 +778,15 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       }
     }
 
+    const generatedTagOptions = buildGeneratedTagOptions({
+      contentType: classification.type,
+      platform: detectedPlatform,
+      url: card.url,
+      metadata: currentMetadata,
+    })
+
+    finalTags = sanitizeGeneratedTags(finalTags, generatedTagOptions)
+
     // 7. Generate embedding and store it
     const hadStoredEmbedding = currentMetadata.embeddingStored === true
     const embeddingAvailability = getEmbeddingAvailability()
@@ -724,7 +890,14 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
 
     // 9. Merge tags
     const currentTags = Array.isArray(card.tags) ? card.tags : []
-    const mergedTags = Array.from(new Set([...currentTags, ...finalTags]))
+    const mergedTags = mergeGeneratedCardTags({
+      currentTags,
+      nextTags: finalTags,
+      metadata: currentMetadata,
+      contentType: classification.type,
+      platform: detectedPlatform,
+      url: card.url,
+    })
 
     // 10. Calculate total timing
     const totalMs = Date.now() - timing.startedAt
@@ -822,13 +995,29 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
           fallbackCard.title || null,
           fallbackCard.imageUrl || null
         )
+        const fallbackMetadata = ((fallbackCard.metadata as Record<string, unknown>) || {})
+        const fallbackTagOptions = buildGeneratedTagOptions({
+          contentType: fallback.type,
+          platform: pickText(fallbackMetadata.platform) || detectPlatform(fallbackCard.url),
+          url: fallbackCard.url || null,
+          metadata: fallbackMetadata,
+        })
+        const sanitizedFallbackTags = sanitizeGeneratedTags(
+          fallback.tags,
+          fallbackTagOptions
+        )
 
         const existingTags = Array.isArray(fallbackCard.tags)
           ? fallbackCard.tags
           : []
-        const mergedTags = Array.from(
-          new Set([...existingTags, ...fallback.tags])
-        )
+        const mergedTags = mergeGeneratedCardTags({
+          currentTags: existingTags,
+          nextTags: sanitizedFallbackTags,
+          metadata: fallbackMetadata,
+          contentType: fallback.type,
+          platform: pickText(fallbackMetadata.platform) || detectPlatform(fallbackCard.url),
+          url: fallbackCard.url || null,
+        })
 
         await db.card.update({
           where: { id: cardId },
@@ -850,7 +1039,7 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
         })
 
         logger.info(
-          { cardId, tags: fallback.tags },
+          { cardId, tags: sanitizedFallbackTags },
           'Fallback tags applied after enrichment failure'
         )
       }
@@ -894,8 +1083,8 @@ export const captureScreenshot: MutationResolvers['captureScreenshot'] =
 
       return {
         success: result.success,
-        url: result.screenshotUrl || null,
-        source: result.source || 'playwright',
+        url: null,
+        source: 'playwright',
         platform: result.platform || null,
         error: result.error || null,
       }

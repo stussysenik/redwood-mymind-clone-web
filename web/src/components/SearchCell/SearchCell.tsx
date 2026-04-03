@@ -102,6 +102,7 @@ export const Success = ({
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
   const visibleTotal = Math.max(0, total - hiddenCardIds.size)
+  const visibleTotalLabel = new Intl.NumberFormat().format(visibleTotal)
   const visibleCards = useMemo(
     () =>
       cards
@@ -161,34 +162,68 @@ export const Success = ({
 
   return (
     <div className="px-4 py-6 sm:px-6">
-      <p className="mb-4 text-xs" style={{ color: 'var(--foreground-muted)' }}>
-        {visibleTotal} results
-      </p>
+      <div className="mb-5 flex items-center justify-between">
+        <div
+          className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+          role="status"
+          aria-live="polite"
+          style={{
+            backgroundColor: 'var(--surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-[0.18em]"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
+            Search
+          </span>
+          <strong
+            className="text-sm"
+            style={{
+              color: 'var(--foreground)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {visibleTotalLabel}
+          </strong>
+          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            results
+          </span>
+        </div>
+      </div>
       {visibleCards.length === 0 ? (
         <Empty />
       ) : (
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(var(--masonry-columns), 1fr)' }}
-        >
+        <div className="masonry-grid">
           {visibleCards.map((card) => (
-            <div
-              key={card.id}
-              className="card-base cursor-pointer"
-              role="button"
-              tabIndex={0}
-              onClick={() =>
-                setSelectedCard(toFeedCard(card as FeedCardRecord))
-              }
-              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
+            <div key={card.id} className="masonry-item">
+              <div
+                className="card-base feed-card-shell cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-label={
+                  card.title
+                    ? `Open ${card.type} result: ${card.title}`
+                    : `Open ${card.type} result`
+                }
+                onClick={() =>
                   setSelectedCard(toFeedCard(card as FeedCardRecord))
                 }
-              }}
-            >
-              <FeedCardVisual card={card as FeedCardRecord} />
-              <FeedCardBody card={card as FeedCardRecord} />
+                onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSelectedCard(toFeedCard(card as FeedCardRecord))
+                  }
+                }}
+              >
+                <FeedCardVisual card={card as FeedCardRecord} />
+                <FeedCardBody
+                  card={card as FeedCardRecord}
+                  showSummary
+                />
+              </div>
             </div>
           ))}
         </div>

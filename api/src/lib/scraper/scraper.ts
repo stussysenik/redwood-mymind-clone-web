@@ -25,6 +25,8 @@ export interface ScrapedContent {
 	description: string;
 	imageUrl: string | null;
 	images?: string[]; // For multi-image posts (Twitter, Instagram carousel)
+	mediaTypes?: Array<'image' | 'video'>;
+	videoPositions?: number[];
 	content: string; // The main text content
 	author?: string;
 	/** Author's display name (e.g., "Elon Musk") */
@@ -40,6 +42,8 @@ export interface ScrapedContent {
 	mentions?: string[]; // Extracted @mentions from content
 	/** Flag for screenshot to use mobile viewport for better aspect ratio */
 	needsMobileScreenshot?: boolean;
+	previewSource?: 'instagram-api' | 'twitter-api' | 'scraper' | 'playwright' | 'microlink' | 'user-upload' | 'unknown';
+	previewAspectRatio?: string;
 	/** Engagement metrics (Twitter likes, retweets, etc.) */
 	engagement?: {
 		likes?: number;
@@ -161,6 +165,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						description: tweet.text,
 						imageUrl: tweet.images[0] ?? null,
 						images: tweet.images,
+						previewSource: 'twitter-api',
 						content: tweet.text,
 						author,
 						authorName: tweet.authorName,
@@ -215,10 +220,15 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 						description: igPost.caption,
 						imageUrl: igPost.images[0],
 						images: igPost.images,
+						mediaTypes: igPost.mediaTypes,
+						videoPositions: igPost.videoPositions,
+						previewSource: 'instagram-api',
+						previewAspectRatio: '1 / 1',
 						content: igPost.caption,
 						author: igPost.authorHandle,
 						authorName: igPost.authorName,
 						authorHandle: igPost.authorHandle,
+						authorAvatar: igPost.authorAvatar,
 						domain: 'instagram.com',
 						url,
 					};

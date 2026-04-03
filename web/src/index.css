@@ -103,6 +103,10 @@
   /* Touch targets (mobile-first) */
   --touch-target-min: 44px;
   --touch-target-comfortable: 48px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
 
   /* 60/30/10 Surface System */
   --surface-primary: var(--background);
@@ -276,6 +280,9 @@
 html {
   scroll-behavior: smooth;
   transition: background-color 200ms ease, color 200ms ease;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 html.no-transition,
@@ -288,12 +295,19 @@ body {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
+  overflow-x: hidden;
   background-color: var(--background);
   color: var(--foreground);
   line-height: 1.6;
   transition: background-color 200ms ease, color 200ms ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: rgba(255, 107, 74, 0.12);
+}
+
+#redwood-app {
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -424,17 +438,42 @@ h1, h2, h3 {
   transform: scale(1.01);
 }
 
+.feed-card-shell {
+  border-radius: 18px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, var(--surface-elevated), var(--surface-card)) padding-box,
+    linear-gradient(145deg, rgba(255, 255, 255, 0.75), rgba(148, 163, 184, 0.2), rgba(71, 85, 105, 0.08)) border-box;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08), 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.feed-card-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 32%);
+}
+
 /* =============================================================================
    MASONRY LAYOUT (CSS Columns, mobile-first)
    ============================================================================= */
 
 .masonry-grid {
-  columns: 2;
-  column-gap: 12px;
+  columns: 1;
+  column-gap: 16px;
+}
+
+@media (min-width: 540px) {
+  .masonry-grid {
+    columns: 2;
+    column-gap: 14px;
+  }
 }
 
 /* Desktop: 3 columns */
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .masonry-grid {
     columns: 3;
   }
@@ -442,7 +481,43 @@ h1, h2, h3 {
 
 .masonry-item {
   break-inside: avoid;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.app-shell {
+  overflow-x: hidden;
+}
+
+.app-header {
+  padding-top: var(--safe-area-top);
+  height: calc(var(--header-height) + var(--safe-area-top));
+  padding-left: calc(16px + var(--safe-area-left));
+  padding-right: calc(16px + var(--safe-area-right));
+}
+
+.app-main {
+  padding-bottom: calc(112px + var(--safe-area-bottom));
+}
+
+.app-bottom-nav {
+  padding-bottom: calc(8px + var(--safe-area-bottom));
+  padding-left: max(8px, var(--safe-area-left));
+  padding-right: max(8px, var(--safe-area-right));
+}
+
+.app-fab {
+  bottom: calc(var(--touch-target-comfortable) + 32px + var(--safe-area-bottom));
+}
+
+@media (min-width: 640px) {
+  .app-header {
+    padding-left: calc(24px + var(--safe-area-left));
+    padding-right: calc(24px + var(--safe-area-right));
+  }
+
+  .app-main {
+    padding-bottom: 0;
+  }
 }
 
 /* =============================================================================

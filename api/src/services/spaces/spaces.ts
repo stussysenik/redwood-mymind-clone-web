@@ -1,6 +1,16 @@
 import type { QueryResolvers, MutationResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
+import { normalizeTag } from 'src/lib/semantic'
+
+function normalizeSpaceQuery(query: string | null | undefined): string | null {
+  if (typeof query !== 'string') {
+    return null
+  }
+
+  const normalized = normalizeTag(query.replace(/^#+/, ''))
+  return normalized || null
+}
 
 export const spaces: QueryResolvers['spaces'] = async () => {
   const userId = context.currentUser!.id
@@ -14,13 +24,14 @@ export const spaces: QueryResolvers['spaces'] = async () => {
   const results = await Promise.all(
     spacesList.map(async (s) => {
       let cardCount = 0
-      if (s.query) {
+      const normalizedQuery = normalizeSpaceQuery(s.query)
+      if (normalizedQuery) {
         cardCount = await db.card.count({
           where: {
             userId,
             deletedAt: null,
             archivedAt: null,
-            tags: { has: s.query },
+            tags: { has: normalizedQuery },
           },
         })
       }
@@ -42,13 +53,14 @@ export const space: QueryResolvers['space'] = async ({ id }) => {
 
   // Fetch cards matching this space's query/tag filter
   let cards: any[] = []
-  if (s.query) {
+  const normalizedQuery = normalizeSpaceQuery(s.query)
+  if (normalizedQuery) {
     cards = await db.card.findMany({
       where: {
         userId,
         deletedAt: null,
         archivedAt: null,
-        tags: { has: s.query },
+        tags: { has: normalizedQuery },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -95,7 +107,7 @@ export const createSpace: MutationResolvers['createSpace'] = async ({
     data: {
       userId,
       name: input.name,
-      query: input.query || null,
+      query: normalizeSpaceQuery(input.query),
       isSmart: input.isSmart ?? false,
     },
   })
@@ -115,7 +127,7 @@ export const updateSpace: MutationResolvers['updateSpace'] = async ({
 
   const data: any = {}
   if (input.name !== undefined) data.name = input.name
-  if (input.query !== undefined) data.query = input.query
+  if (input.query !== undefined) data.query = normalizeSpaceQuery(input.query)
 
   const space = await db.space.update({
     where: { id },

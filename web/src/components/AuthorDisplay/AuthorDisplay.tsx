@@ -9,6 +9,7 @@
 
 import { User } from 'lucide-react';
 import { useState } from 'react';
+import { getBrowserImageUrl } from 'src/lib/imageProxy';
 
 // =============================================================================
 // TYPES
@@ -92,6 +93,7 @@ export function AuthorDisplay({
 }: AuthorDisplayProps) {
 	const [imageError, setImageError] = useState(false);
 	const config = sizeConfig[size];
+	const browserAvatarUrl = getBrowserImageUrl(avatarUrl);
 
 	// Determine display name and handle
 	const displayName = name || handle || 'Unknown';
@@ -104,9 +106,9 @@ export function AuthorDisplay({
 		<div className={`flex items-center ${config.gap} ${className}`}>
 			{/* Avatar */}
 			<div className={`relative ${config.avatar} flex-shrink-0 overflow-hidden rounded-full`}>
-				{avatarUrl && !imageError ? (
+				{browserAvatarUrl && !imageError ? (
 					<img
-						src={avatarUrl}
+						src={browserAvatarUrl}
 						alt={`${displayName}'s avatar`}
 						width={config.avatarImg}
 						height={config.avatarImg}

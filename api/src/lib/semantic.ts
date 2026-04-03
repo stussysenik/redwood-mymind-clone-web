@@ -644,6 +644,134 @@ export function validateTags(tags: string[], contentType?: CardType): string[] {
   return sanitizeTags(tags, { contentType })
 }
 
+function extractInstagramShortcode(url: string | null | undefined): string | null {
+  if (!url) {
+    return null
+  }
+
+  try {
+    const parsed = new URL(url)
+    if (!parsed.hostname.toLowerCase().includes('instagram.com')) {
+      return null
+    }
+
+    const match = parsed.pathname.match(/^\/(?:p|reel|reels|tv)\/([^/?#]+)/i)
+    return match?.[1] ? normalizeTag(match[1]) : null
+  } catch {
+    return null
+  }
+}
+
+function addBlockedGeneratedTag(blocked: Set<string>, value: string | null | undefined) {
+  if (!value) {
+    return
+  }
+
+  const normalized = normalizeTag(value)
+  if (normalized) {
+    blocked.add(normalized)
+  }
+}
+
+function inferGeneratedTagPlatform(
+  explicitPlatform: string | null | undefined,
+  url: string | null | undefined
+): string {
+  const normalizedPlatform = normalizeTag(explicitPlatform || '')
+  if (normalizedPlatform) {
+    return normalizedPlatform
+  }
+
+  if (!url) {
+    return ''
+  }
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    if (hostname.includes('instagram.com')) return 'instagram'
+    if (hostname.includes('twitter.com')) return 'twitter'
+    if (hostname.includes('x.com')) return 'x'
+    if (hostname.includes('reddit.com')) return 'reddit'
+    if (hostname.includes('tiktok.com')) return 'tiktok'
+  } catch {
+    return ''
+  }
+
+  return ''
+}
+
+type GeneratedTagContext = {
+  contentType?: CardType
+  platform?: string | null
+  url?: string | null
+  authorHandle?: string | null
+  authorName?: string | null
+}
+
+function buildBlockedGeneratedTags(options: GeneratedTagContext): Set<string> {
+  const blocked = new Set<string>()
+  const platform = inferGeneratedTagPlatform(options.platform, options.url)
+
+  if (platform === 'instagram') {
+    addBlockedGeneratedTag(blocked, extractInstagramShortcode(options.url))
+  }
+
+  if (
+    platform === 'instagram' ||
+    platform === 'twitter' ||
+    platform === 'twitter-x' ||
+    platform === 'x' ||
+    platform === 'reddit' ||
+    platform === 'tiktok'
+  ) {
+    addBlockedGeneratedTag(blocked, options.authorHandle)
+    addBlockedGeneratedTag(blocked, options.authorName)
+  }
+
+  return blocked
+}
+
+export function stripGeneratedTagNoise(
+  tags: string[],
+  options: GeneratedTagContext = {}
+): string[] {
+  const blocked = buildBlockedGeneratedTags(options)
+
+  return normalizeTagList(tags).filter(
+    (tag) => !BLOCKED_TAGS.has(tag) && !blocked.has(normalizeTag(tag))
+  )
+}
+
+export function sanitizeGeneratedTags(
+  tags: string[],
+  options: GeneratedTagContext = {}
+): string[] {
+  const platform = inferGeneratedTagPlatform(options.platform, options.url)
+  const fallbackTags: string[] = []
+
+  if (platform === 'twitter' || platform === 'twitter-x' || platform === 'x') {
+    fallbackTags.push('conversation', 'public-note')
+  }
+
+  if (platform === 'reddit') {
+    fallbackTags.push('discussion', 'community')
+  }
+
+  if (platform === 'tiktok') {
+    fallbackTags.push('short-form', 'visual-inspiration')
+  }
+
+  if (platform === 'instagram') {
+    fallbackTags.push('composition', 'visual-inspiration')
+  }
+
+  const cleaned = stripGeneratedTagNoise(tags, options)
+  return sanitizeTags(cleaned, {
+    contentType: options.contentType,
+    fallbackTags,
+  })
+}
+
 export function buildClassificationResult(
   value: unknown,
   options: { normalizeType?: (type: string) => string } = {}

@@ -1,5 +1,7 @@
 const findManyMock = jest.fn()
 const queryRawMock = jest.fn()
+const querySemanticSimilarMock = jest.fn()
+const getEmbeddingAvailabilityMock = jest.fn()
 
 jest.mock('src/lib/db', () => ({
   db: {
@@ -10,7 +12,15 @@ jest.mock('src/lib/db', () => ({
   },
 }))
 
-import { searchCards } from './search'
+jest.mock('src/lib/ai/vectorStore', () => ({
+  querySemanticSimilar: querySemanticSimilarMock,
+}))
+
+jest.mock('src/lib/ai/embeddings', () => ({
+  getEmbeddingAvailability: getEmbeddingAvailabilityMock,
+}))
+
+import { searchCardsForUser } from './search'
 
 const makeRow = (overrides = {}) => ({
   id: 'card-1',
@@ -33,22 +43,26 @@ describe('searchCards', () => {
   beforeEach(() => {
     queryRawMock.mockReset()
     findManyMock.mockReset()
-    globalThis.context = {
-      currentUser: {
-        id: 'user-1',
-      },
-    } as any
+    querySemanticSimilarMock.mockReset()
+    getEmbeddingAvailabilityMock.mockReset()
+    getEmbeddingAvailabilityMock.mockReturnValue({
+      configured: false,
+      provider: null,
+      model: null,
+      dimension: null,
+      reason: 'No embedding provider configured',
+    })
   })
 
   it('normalizes hashtag searches before tag matching', async () => {
     queryRawMock.mockResolvedValue([makeRow()])
 
-    const result = await searchCards({
+    const result = await searchCardsForUser('user-1', {
       query: '#Tag-Name',
       limit: 10,
     })
 
-    const values = queryRawMock.mock.calls[0].slice(1)
+    const values = queryRawMock.mock.calls[0][0].values
 
     expect(values).toEqual(
       expect.arrayContaining(['Tag-Name', '%Tag-Name%'])
@@ -62,12 +76,12 @@ describe('searchCards', () => {
   it('keeps freeform search text intact', async () => {
     queryRawMock.mockResolvedValue([makeRow()])
 
-    await searchCards({
+    await searchCardsForUser('user-1', {
       query: 'Design Inspiration',
       limit: 10,
     })
 
-    const values = queryRawMock.mock.calls[0].slice(1)
+    const values = queryRawMock.mock.calls[0][0].values
 
     expect(values).toEqual(
       expect.arrayContaining(['Design Inspiration', '%Design Inspiration%'])
@@ -77,7 +91,7 @@ describe('searchCards', () => {
   it('normalizes tag filters without affecting browse mode', async () => {
     findManyMock.mockResolvedValue([makeRow()])
 
-    const result = await searchCards({
+    const result = await searchCardsForUser('user-1', {
       tag: '#Tag-Name',
       limit: 10,
     })
@@ -98,5 +112,79 @@ describe('searchCards', () => {
     })
     expect(result.mode).toBe('browse')
     expect(result.total).toBe(1)
+  })
+
+  it('applies the explicit tag filter during searched queries', async () => {
+    queryRawMock.mockResolvedValue([makeRow()])
+
+    await searchCardsForUser('user-1', {
+      query: 'Design Inspiration',
+      tag: '#Visual',
+      limit: 10,
+    })
+
+    const values = queryRawMock.mock.calls[0][0].values
+    expect(values).toEqual(expect.arrayContaining(['visual']))
+  })
+
+  it('normalizes spaced hashtag queries to stored tag format', async () => {
+    queryRawMock.mockResolvedValue([makeRow({ tags: ['design-systems'] })])
+
+    await searchCardsForUser('user-1', {
+      query: '#Design Systems',
+      limit: 10,
+    })
+
+    const values = queryRawMock.mock.calls[0][0].values
+    expect(values).toEqual(
+      expect.arrayContaining(['Design Systems', '%Design Systems%', 'design-systems'])
+    )
+  })
+
+  it('merges semantic-only matches into the ranked search results when embeddings are available', async () => {
+    queryRawMock.mockResolvedValue([])
+    getEmbeddingAvailabilityMock.mockReturnValue({
+      configured: true,
+      provider: 'gemini',
+      model: 'gemini-embedding-2',
+      dimension: 1536,
+      reason: null,
+    })
+    querySemanticSimilarMock.mockResolvedValue([
+      {
+        id: 'card-2',
+        score: 0.92,
+      },
+    ])
+    findManyMock.mockResolvedValue([
+      {
+        id: 'card-2',
+        userId: 'user-1',
+        type: 'link',
+        title: 'Semantic result',
+        content: 'Found by meaning',
+        url: 'https://example.com/semantic',
+        imageUrl: null,
+        metadata: {},
+        tags: ['semantic'],
+        createdAt: new Date('2026-03-31T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-31T00:00:00.000Z'),
+        deletedAt: null,
+        archivedAt: null,
+      },
+    ])
+
+    const result = await searchCardsForUser('user-1', {
+      query: 'creative retrieval',
+      limit: 10,
+    })
+
+    expect(querySemanticSimilarMock).toHaveBeenCalledWith(
+      'user-1',
+      'creative retrieval',
+      expect.any(Number)
+    )
+    expect(result.cards[0].id).toBe('card-2')
+    expect(result.mode).toBe('semantic-hybrid')
   })
 })

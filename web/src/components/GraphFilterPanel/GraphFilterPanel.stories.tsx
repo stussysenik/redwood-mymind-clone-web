@@ -11,30 +11,27 @@ type Story = StoryObj<typeof GraphFilterPanel>
 
 // Controlled wrapper for interactive stories
 function ControlledFilterPanel({
-  initialTagFilter = '',
   initialMinWeight = 1,
   nodeCount = 42,
   edgeCount = 87,
+  orphanCount = 9,
 }: {
-  initialTagFilter?: string
   initialMinWeight?: number
   nodeCount?: number
   edgeCount?: number
+  orphanCount?: number
 }) {
-  const [tagFilter, setTagFilter] = useState(initialTagFilter)
   const [minWeight, setMinWeight] = useState(initialMinWeight)
 
   return (
     <div style={{ position: 'relative', height: 300, width: 400 }}>
       <GraphFilterPanel
-        tagFilter={tagFilter}
-        onTagFilterChange={setTagFilter}
         minWeight={minWeight}
         onMinWeightChange={setMinWeight}
         nodeCount={nodeCount}
         edgeCount={edgeCount}
+        orphanCount={orphanCount}
         onReset={() => {
-          setTagFilter('')
           setMinWeight(1)
         }}
       />
@@ -49,10 +46,10 @@ export const Default: Story = {
 export const WithActiveFilter: Story = {
   render: () => (
     <ControlledFilterPanel
-      initialTagFilter="react"
       initialMinWeight={2}
       nodeCount={14}
       edgeCount={23}
+      orphanCount={2}
     />
   ),
 }
@@ -69,6 +66,6 @@ export const HighMinWeight: Story = {
 
 export const LargeGraph: Story = {
   render: () => (
-    <ControlledFilterPanel nodeCount={312} edgeCount={748} />
+    <ControlledFilterPanel nodeCount={312} edgeCount={748} orphanCount={41} />
   ),
 }

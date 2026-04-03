@@ -152,6 +152,7 @@ export const Success = ({
     total + optimisticCards.length - hiddenCardIds.size
   )
   const totalPages = Math.max(1, Math.ceil(visibleTotal / pageSize))
+  const visibleTotalLabel = new Intl.NumberFormat().format(visibleTotal)
   const visibleCards = mergedCards.filter(
     (card) => !hiddenCardIds.has(card.id) && !card.archivedAt && !card.deletedAt
   )
@@ -261,10 +262,36 @@ export const Success = ({
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* Card count */}
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-          {visibleTotal} cards
-        </p>
+      <div className="mb-5 flex items-center justify-between">
+        <div
+          className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+          role="status"
+          aria-live="polite"
+          style={{
+            backgroundColor: 'var(--surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-[0.18em]"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
+            Library
+          </span>
+          <strong
+            className="text-sm"
+            style={{
+              color: 'var(--foreground)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {visibleTotalLabel}
+          </strong>
+          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            cards
+          </span>
+        </div>
       </div>
 
       {/* Masonry grid — 2 cols mobile, 3 cols desktop (CSS columns) */}
@@ -278,9 +305,14 @@ export const Success = ({
             return (
               <div key={card.id} className="masonry-item">
                 <div
-                  className="card-base cursor-pointer"
+                  className="card-base feed-card-shell cursor-pointer"
                   role="button"
                   tabIndex={0}
+                  aria-label={
+                    feedCard.title
+                      ? `Open ${feedCard.type} card: ${feedCard.title}`
+                      : `Open ${feedCard.type} card`
+                  }
                   onClick={() => setSelectedCard(toFeedCard(feedCard))}
                   onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                     if (event.key === 'Enter' || event.key === ' ') {

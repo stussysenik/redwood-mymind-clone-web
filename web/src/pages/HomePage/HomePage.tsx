@@ -27,7 +27,7 @@ const HomePage = () => {
   return (
     <>
       <Metadata title="Home" description="Your saved knowledge" />
-      <div className="px-4 sm:px-6 pt-4 pb-2" style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-1 sm:pb-2" style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SearchBar />
       </div>
       {query.trim() ? (

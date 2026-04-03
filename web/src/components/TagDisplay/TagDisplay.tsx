@@ -7,6 +7,8 @@
  * @fileoverview Reusable tag display with colored indicators
  */
 
+import { navigate } from '@redwoodjs/router'
+
 /**
  * Pastel color palette for AI-generated tags.
  *
@@ -42,41 +44,65 @@ export function getTagColor(tag: string) {
 }
 
 interface TagDisplayProps {
-  tags: string[];
-  maxTags?: number;
-  className?: string;
+  tags: string[]
+  maxTags?: number
+  className?: string
+  interactive?: boolean
+  onTagClick?: (tag: string) => void
 }
 
 /**
  * Displays tags with colored dot indicators.
  * Consistent style: ● tag-name
  */
-export function TagDisplay({ tags, maxTags = 5, className = '' }: TagDisplayProps) {
-  if (!tags || tags.length === 0) return null;
+export function TagDisplay({
+  tags,
+  maxTags = 5,
+  className = '',
+  interactive = true,
+  onTagClick,
+}: TagDisplayProps) {
+  if (!tags || tags.length === 0) return null
 
-  const displayTags = tags.slice(0, maxTags);
+  const displayTags = tags.slice(0, maxTags)
 
   return (
     <div data-testid="tag-display" className={`flex flex-wrap gap-x-3 gap-y-1.5 ${className}`}>
       {displayTags.map((tag) => {
         const color = getTagColor(tag)
         return (
-          <span
+          <button
             key={tag}
             data-testid="tag-item"
-            className="flex items-center gap-1 text-sm sm:text-xs"
-            style={{ color: color.text }}
+            type="button"
+            className="flex items-center gap-1 bg-transparent p-0 text-sm sm:text-xs"
+            style={{ color: color.text, border: 0, cursor: 'pointer' }}
+            onClick={(event) => {
+              if (!interactive) {
+                return
+              }
+
+              event.preventDefault()
+              event.stopPropagation()
+              if (onTagClick) {
+                onTagClick(tag)
+                return
+              }
+
+              void navigate(`/?q=%23${encodeURIComponent(tag)}`)
+            }}
+            aria-label={`Search by tag ${tag}`}
           >
             <span
               className="w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: color.dot }}
             />
             {tag}
-          </span>
+          </button>
         )
       })}
     </div>
-  );
+  )
 }
 
 /**
@@ -112,7 +138,7 @@ export function TagShimmerPlaceholder({ className = '' }: { className?: string }
         </span>
       ))}
     </div>
-  );
+  )
 }
 
-export default TagDisplay;
+export default TagDisplay

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { navigate } from '@redwoodjs/router'
+
 import {
   BookOpen,
   Film,
@@ -21,6 +23,7 @@ import {
   getEnrichmentProgress,
   getProcessingState,
 } from 'src/lib/enrichment-timing'
+import { getBrowserImageUrl } from 'src/lib/imageProxy'
 import { ENRICHMENT_PROGRESS_STAGES, toProgressEnrichmentStage } from 'src/lib/semantic'
 import type { Card, CardMetadata, CardType } from 'src/lib/types'
 
@@ -118,6 +121,43 @@ function getFallbackScreenshotUrl(
   return `https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}&screenshot=true&meta=false&embed=screenshot.url`
 }
 
+function getDomainLabel(url: string | null | undefined): string | null {
+  if (!url) {
+    return null
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')
+  } catch {
+    return null
+  }
+}
+
+function getVisualBadges(card: FeedCardRecord): string[] {
+  const badges: string[] = []
+  const domainLabel = getDomainLabel(card.url)
+  const images = Array.isArray(card.metadata?.images) ? card.metadata.images : []
+  const mediaTypes = Array.isArray(card.metadata?.mediaTypes)
+    ? card.metadata.mediaTypes
+    : []
+  const hasVideo =
+    mediaTypes.includes('video') ||
+    (Array.isArray(card.metadata?.videoPositions) &&
+      card.metadata.videoPositions.length > 0)
+
+  if (domainLabel) {
+    badges.push(domainLabel)
+  }
+
+  if (hasVideo) {
+    badges.push('Video')
+  } else if (images.length > 1) {
+    badges.push(`${images.length} slides`)
+  }
+
+  return badges.slice(0, 2)
+}
+
 function getVisualSources(
   card: FeedCardRecord
 ): Array<{ src: string; kind: 'image' | 'screenshot' }> {
@@ -127,8 +167,9 @@ function getVisualSources(
     src: string | null | undefined,
     kind: 'image' | 'screenshot'
   ) => {
-    if (!src) return
-    const trimmed = src.trim()
+    const browserUrl = getBrowserImageUrl(src)
+    if (!browserUrl) return
+    const trimmed = browserUrl.trim()
     if (!trimmed || seen.has(trimmed)) return
     seen.add(trimmed)
     sources.push({ src: trimmed, kind })
@@ -220,6 +261,7 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
   const [failedSources, setFailedSources] = useState<string[]>([])
   const isNote = isNoteCard(card)
   const processingState = getProcessingState(card.metadata)
+  const visualBadges = useMemo(() => getVisualBadges(card), [card])
 
   const sources = useMemo(() => getVisualSources(card), [card])
 
@@ -234,7 +276,7 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
       className="overflow-hidden"
       style={{
         borderRadius: '12px 12px 0 0',
-        aspectRatio: '5 / 3',
+        aspectRatio: '4 / 3',
         backgroundColor: 'var(--shimmer-base)',
       }}
     >
@@ -268,6 +310,27 @@ export function FeedCardVisual({ card }: { card: FeedCardRecord }) {
   return (
     <div className="relative">
       {visual}
+      {visualBadges.length > 0 && (
+        <div
+          className="absolute bottom-2 left-2 z-[1] flex flex-wrap gap-1.5"
+          aria-hidden="true"
+        >
+          {visualBadges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full px-2.5 py-1 text-[10px] font-medium"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                color: 'var(--foreground)',
+                backdropFilter: 'blur(10px)',
+                boxShadow: 'var(--shadow-sm)',
+              }}
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
       {processingState !== 'idle' && processingState !== 'failed' && (
         <div className="absolute left-2 top-2 z-10">
           <AnalyzingIndicator
@@ -369,19 +432,27 @@ export function FeedCardTags({
       {tags.slice(0, maxTags).map((tag) => {
         const color = getTagColor(tag)
         return (
-          <span
+          <button
             key={tag}
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void navigate(`/?q=%23${encodeURIComponent(tag)}`)
+            }}
             style={{
               fontSize: 10,
               padding: '4px 8px',
               borderRadius: 9999,
               backgroundColor: color.bg,
+              border: 0,
               color: color.text,
               lineHeight: 1,
+              cursor: 'pointer',
             }}
           >
             {tag}
-          </span>
+          </button>
         )
       })}
     </div>
@@ -398,19 +469,20 @@ export function FeedCardBody({
   const summary = card.metadata?.summary
 
   return (
-    <div style={{ padding: '8px 12px 12px' }}>
+    <div style={{ padding: '12px 14px 14px' }}>
       {card.title && (
         <h3
           style={{
-            fontSize: 13,
-            fontWeight: 500,
+            fontSize: 15,
+            fontWeight: 600,
             color: 'var(--foreground)',
             display: '-webkit-box',
-            WebkitLineClamp: 2,
+            WebkitLineClamp: 3,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
-            margin: '0 0 4px',
-            lineHeight: 1.4,
+            margin: '0 0 6px',
+            lineHeight: 1.35,
+            textWrap: 'pretty',
           }}
         >
           {card.title}
@@ -419,12 +491,11 @@ export function FeedCardBody({
 
       {showSummary && summary && (
         <p
-          className="hidden md:block"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--foreground-muted)',
-            lineHeight: 1.45,
-            marginBottom: 6,
+            lineHeight: 1.5,
+            marginBottom: 8,
           }}
         >
           <span
@@ -433,6 +504,7 @@ export function FeedCardBody({
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
+              wordBreak: 'break-word',
             }}
           >
             {summary}

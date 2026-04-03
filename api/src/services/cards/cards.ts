@@ -4,7 +4,33 @@ import { db } from 'src/lib/db'
 import { createEnrichmentTiming } from 'src/lib/enrichmentTiming'
 import { logger } from 'src/lib/logger'
 import { detectPlatform } from 'src/lib/platforms'
+import { stripGeneratedTagNoise } from 'src/lib/semantic'
 import { enrichCardPipeline } from 'src/services/enrichment/enrichment'
+
+function sanitizeCardTags<T extends { tags?: string[] | null; metadata?: unknown; url?: string | null }>(
+  card: T
+): T {
+  const metadata =
+    card.metadata && typeof card.metadata === 'object' && !Array.isArray(card.metadata)
+      ? (card.metadata as Record<string, unknown>)
+      : {}
+
+  return {
+    ...card,
+    tags: stripGeneratedTagNoise(card.tags || [], {
+      platform: typeof metadata.platform === 'string' ? metadata.platform : null,
+      url: card.url || null,
+      authorHandle:
+        typeof metadata.authorHandle === 'string'
+          ? metadata.authorHandle
+          : typeof metadata.author === 'string'
+            ? metadata.author
+            : null,
+      authorName:
+        typeof metadata.authorName === 'string' ? metadata.authorName : null,
+    }),
+  }
+}
 
 export const cards: QueryResolvers['cards'] = async ({
   page = 1,
@@ -41,7 +67,7 @@ export const cards: QueryResolvers['cards'] = async ({
   ])
 
   return {
-    cards: cardsList,
+    cards: cardsList.map((card) => sanitizeCardTags(card)),
     total,
     page,
     pageSize,
@@ -50,12 +76,14 @@ export const cards: QueryResolvers['cards'] = async ({
 }
 
 export const card: QueryResolvers['card'] = async ({ id }) => {
-  return db.card.findFirst({
+  const result = await db.card.findFirst({
     where: {
       id,
       userId: context.currentUser!.id,
     },
   })
+
+  return result ? sanitizeCardTags(result) : null
 }
 
 export const randomCards: QueryResolvers['randomCards'] = async ({
@@ -71,21 +99,23 @@ export const randomCards: QueryResolvers['randomCards'] = async ({
     ORDER BY RANDOM()
     LIMIT ${limit}
   `
-  return cards.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    type: row.type,
-    title: row.title,
-    content: row.content,
-    url: row.url,
-    imageUrl: row.image_url,
-    metadata: row.metadata || {},
-    tags: row.tags || [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at,
-    archivedAt: row.archived_at,
-  }))
+  return cards.map((row) =>
+    sanitizeCardTags({
+      id: row.id,
+      userId: row.user_id,
+      type: row.type,
+      title: row.title,
+      content: row.content,
+      url: row.url,
+      imageUrl: row.image_url,
+      metadata: row.metadata || {},
+      tags: row.tags || [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
+      archivedAt: row.archived_at,
+    })
+  )
 }
 
 export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {

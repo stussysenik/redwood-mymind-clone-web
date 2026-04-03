@@ -125,7 +125,7 @@ export function SearchBar({
 	};
 
 	const handleSaveSpace = async () => {
-		const normalizedQuery = query.trim().replace(/^#+/, '');
+		const normalizedQuery = query.trim().replace(/^#+/, '').toLowerCase();
 		if (!normalizedQuery) return;
 
 		setIsSaving(true);
@@ -169,8 +169,8 @@ export function SearchBar({
 			{/* Search Container */}
 			<div
 				className={`
-					surface-shell flex items-center gap-3 py-3 px-4 rounded-[var(--radius-lg)]
-					transition-all duration-300 ease-out
+					surface-shell flex items-center gap-2.5 py-2.5 px-3.5 sm:gap-3 sm:py-3 sm:px-4 rounded-[var(--radius-xl)]
+					transition-[background-color,border-color,box-shadow,transform] duration-300 ease-out
 					${isFocused
 						? 'bg-[var(--surface-elevated)] border-[var(--border-default)] shadow-[var(--shadow-xl)] transform -translate-y-0.5'
 						: 'hover:bg-[var(--surface-elevated)] hover:border-[var(--border-default)]'
@@ -190,6 +190,7 @@ export function SearchBar({
 				<input
 					ref={inputRef}
 					type="text"
+					name="search"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 					onFocus={() => setIsFocused(true)}
@@ -197,13 +198,16 @@ export function SearchBar({
 					onKeyDown={handleKeyDown}
 					placeholder={placeholder}
 					className={`
-            flex-1 bg-transparent text-lg
+            flex-1 bg-transparent text-base sm:text-lg
             placeholder:text-[var(--foreground-muted)]
             focus:outline-none
             font-medium tracking-tight text-[var(--foreground)]
           `}
 					style={{ fontFamily: 'var(--font-serif)' }}
 					aria-label="Search cards"
+					autoComplete="off"
+					spellCheck={false}
+					enterKeyHint="search"
 					data-testid="search-input"
 				/>
 
