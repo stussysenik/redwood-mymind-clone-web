@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Twitter/X Content Extractor
+ * BYOA - Twitter/X Content Extractor
  *
  * Extracts tweet data using free APIs (no auth required):
  * 1. FxTwitter API (primary) - rich JSON with media, metrics, author
@@ -90,7 +90,7 @@ async function fetchViaFxTwitter(tweetId: string): Promise<TweetData | null> {
 		const res = await fetch(`https://api.fxtwitter.com/status/${tweetId}`, {
 			signal: AbortSignal.timeout(5000),
 			headers: {
-				'User-Agent': 'MyMind/1.0 (content archiver)',
+				'User-Agent': 'BYOA/1.0 (content archiver)',
 			},
 		});
 

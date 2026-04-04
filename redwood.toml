@@ -1,7 +1,7 @@
-# MyMind Clone - RedwoodJS Configuration
+# BYOA - RedwoodJS Configuration
 
 [web]
-  title = "MyMind Clone"
+  title = "BYOA"
   port = 8913
   apiUrl = "/.redwood/functions"
   includeEnvironmentVariables = [

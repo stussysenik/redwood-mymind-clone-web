@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Twitter/X Prompt Template
+ * BYOA - Twitter/X Prompt Template
  *
  * Tweet structure and text analysis with formatting preservation.
  * Includes thread context detection and hashtag highlighting.

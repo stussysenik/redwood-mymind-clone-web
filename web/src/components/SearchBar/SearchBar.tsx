@@ -1,10 +1,10 @@
 /**
  * BYOA - SearchBar Component
  *
- * Serif italic search input matching mymind.com aesthetic.
+ * Serif italic search input matching BYOA aesthetic.
  * "Search my mind..." placeholder in elegant serif typography.
  *
- * @fileoverview Search input with mymind-inspired styling
+ * @fileoverview Search input with BYOA-inspired styling
  */
 
 import React from 'react';

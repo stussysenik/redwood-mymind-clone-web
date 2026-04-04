@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Instagram Content Extractor
+ * BYOA - Instagram Content Extractor
  *
  * Extracts Instagram post data using fast HTTP-only methods (no Playwright):
  * 1. Instagram GraphQL API - richest data (all slides, metrics, author)
@@ -481,7 +481,7 @@ export async function fetchViaInstaFix(
 			const res = await fetch(oembedUrl, {
 				signal: AbortSignal.timeout(5000),
 				headers: {
-					'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+					'User-Agent': 'Mozilla/5.0 (compatible; BYOABot/1.0)',
 					'Accept': 'application/json',
 				},
 			});

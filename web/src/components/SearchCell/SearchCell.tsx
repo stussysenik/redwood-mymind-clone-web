@@ -61,6 +61,15 @@ const ARCHIVE_CARD_MUTATION = gql`
   }
 `
 
+const UNARCHIVE_CARD_MUTATION = gql`
+  mutation UnarchiveCardFromSearchMutation($id: String!) {
+    unarchiveCard(id: $id) {
+      id
+      archivedAt
+    }
+  }
+`
+
 export const Loading = () => (
   <div className="px-4 py-6 sm:px-6">
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -96,9 +105,13 @@ export const Failure = ({ error }: CellFailureProps) => (
 
 export const Success = ({
   searchCards,
-}: CellSuccessProps<SearchCardsQuery, SearchCardsQueryVariables>) => {
+  mode,
+}: CellSuccessProps<SearchCardsQuery, SearchCardsQueryVariables> & {
+  mode?: string
+}) => {
   const { cards, total } = searchCards
   const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION)
+  const [unarchiveCardMutation] = useMutation(UNARCHIVE_CARD_MUTATION)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
@@ -118,10 +131,13 @@ export const Success = ({
             ? mergeFeedCardRecord(feedCard, liveCards[card.id])
             : feedCard
         })
-        .filter(
-          (card) => !hiddenCardIds.has(card.id) && !card.archivedAt && !card.deletedAt
-        ),
-    [cards, hiddenCardIds, liveCards]
+        .filter((card) => {
+          if (hiddenCardIds.has(card.id)) return false
+          if (mode === 'ARCHIVE') return !card.deletedAt
+          if (mode === 'TRASH') return true
+          return !card.archivedAt && !card.deletedAt
+        }),
+    [cards, hiddenCardIds, liveCards, mode]
   )
 
   useEffect(() => {
@@ -155,6 +171,27 @@ export const Success = ({
 
     void archiveCardMutation({ variables: { id } }).catch((error) => {
       console.error('[SearchCell] Archive failed:', error)
+      setHiddenCardIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+      if (previousSelectedCard?.id === id) {
+        setSelectedCard(previousSelectedCard)
+      }
+    })
+  }
+
+  const handleUnarchive = (id: string) => {
+    const previousSelectedCard = selectedCard
+    setHiddenCardIds((current) => new Set(current).add(id))
+
+    if (previousSelectedCard?.id === id) {
+      setSelectedCard(null)
+    }
+
+    void unarchiveCardMutation({ variables: { id } }).catch((error) => {
+      console.error('[SearchCell] Unarchive failed:', error)
       setHiddenCardIds((current) => {
         const next = new Set(current)
         next.delete(id)
@@ -233,7 +270,9 @@ export const Success = ({
         card={selectedCard}
         isOpen={selectedCard !== null}
         onClose={() => setSelectedCard(null)}
-        onArchive={handleArchive}
+        onArchive={mode === 'ARCHIVE' ? undefined : handleArchive}
+        onRestore={mode === 'ARCHIVE' ? handleUnarchive : undefined}
+        restoreLabel={mode === 'ARCHIVE' ? 'Unarchive' : 'Restore'}
       />
     </div>
   )

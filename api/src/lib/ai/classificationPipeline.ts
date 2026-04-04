@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Classification Pipeline
+ * BYOA - Classification Pipeline
  *
  * Structured pipeline for content classification with strategy pattern,
  * validation gate, retry logic, and observability. Replaces the broken

@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Classification Tool Definition
+ * BYOA - Classification Tool Definition
  *
  * Main tool definition for AI content classification.
  * Used across all platforms for structured metadata extraction.

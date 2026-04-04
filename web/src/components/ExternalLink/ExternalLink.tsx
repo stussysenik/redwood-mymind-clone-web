@@ -112,7 +112,7 @@ export function ExternalLink({
 			e.stopPropagation();
 		}
 
-		// Store return context for potential "return to MyMind" feature
+		// Store return context for potential "return to BYOA" feature
 		if (trackReturn) {
 			storeReturnContext(url);
 		}

@@ -110,7 +110,7 @@ export const Loading = () => {
 }
 
 /**
- * Empty state — centered serif italic prompt, MyMind aesthetic.
+ * Empty state — centered serif italic prompt, BYOA aesthetic.
  */
 export const Empty = () => (
   <div

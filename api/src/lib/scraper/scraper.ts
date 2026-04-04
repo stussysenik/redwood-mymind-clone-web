@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - URL Scraper
+ * BYOA - URL Scraper
  *
  * Extracts structured content from URLs with platform-specific handling.
  * Supports YouTube, Twitter/X, Instagram, TikTok, Reddit, IMDB, Letterboxd,
@@ -721,7 +721,7 @@ export async function scrapeUrl(
 				const jsonUrl = url.replace(/\/?$/, '') + '.json';
 				let redditRes = await fetch(jsonUrl, {
 					headers: {
-						'User-Agent': 'MyMind/1.0 (Content Archiver)',
+						'User-Agent': 'BYOA/1.0 (Content Archiver)',
 						'Accept': 'application/json',
 					},
 				});
@@ -739,7 +739,7 @@ export async function scrapeUrl(
 
 					redditRes = await fetch(oldRedditUrl, {
 						headers: {
-							'User-Agent': 'MyMind/1.0 (Content Archiver)',
+							'User-Agent': 'BYOA/1.0 (Content Archiver)',
 							'Accept': 'application/json',
 						},
 					});
@@ -1351,7 +1351,7 @@ export async function scrapeUrl(
 					const wikiRes = await fetch(apiUrl, {
 						headers: {
 							'Accept': 'application/json',
-							'User-Agent': 'MyMind/1.0 (Content Archiver)',
+							'User-Agent': 'BYOA/1.0 (Content Archiver)',
 						},
 					});
 

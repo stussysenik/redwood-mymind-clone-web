@@ -60,7 +60,7 @@ const preview: Preview = {
         title: 'Theme Pack',
         icon: 'paintbrush',
         items: [
-          { value: 'default', title: '🎨 Default (MyMind/Riso)' },
+          { value: 'default', title: '🎨 Default (BYOA/Riso)' },
           // Custom themes
           ...themeManifest
             .filter((t) => t.category === 'custom')

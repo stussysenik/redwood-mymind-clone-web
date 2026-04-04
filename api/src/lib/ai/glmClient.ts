@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - AI Utilities (GLM Client)
+ * BYOA - AI Utilities (GLM Client)
  *
  * Uses GLM-4.7 for content classification and GLM-4.6V for vision.
  * Falls back to rule-based classification if API is unavailable.
@@ -150,7 +150,7 @@ export async function fetchImageAsBase64(imageUrl: string): Promise<string | nul
 		const response = await fetch(imageUrl, {
 			signal: controller.signal,
 			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+				'User-Agent': 'Mozilla/5.0 (compatible; BYOABot/1.0)',
 				'Accept': 'image/*',
 			},
 		});
@@ -292,7 +292,7 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer | null> {
 		const response = await fetch(imageUrl, {
 			signal: controller.signal,
 			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+				'User-Agent': 'Mozilla/5.0 (compatible; BYOABot/1.0)',
 				'Accept': 'image/*',
 			},
 		});

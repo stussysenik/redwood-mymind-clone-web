@@ -106,7 +106,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
-	// MyMind-style vanish: animate out, then unmount
+	// BYOA-style vanish: animate out, then unmount
 	const vanishAndClose = useCallback(() => {
 		setIsVanishing(true);
 		setTimeout(() => {
@@ -373,7 +373,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			const savedCard = result.data?.saveCard;
 			if (!savedCard?.id) throw new Error('Failed to save');
 
-			// MyMind-style vanish: animate out, card appears in timeline
+			// BYOA-style vanish: animate out, card appears in timeline
 			posthog?.capture('card_saved', { mode, type: savedCard.type })
 			showToast('Saved', 'success')
 			vanishAndClose();

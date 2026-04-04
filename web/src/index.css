@@ -26,7 +26,7 @@
  */
 
 /* =============================================================================
-   DESIGN TOKENS (MyMind Palette)
+   DESIGN TOKENS (BYOA Palette)
    ============================================================================= */
 
 :root {
@@ -1157,7 +1157,7 @@ h1, h2, h3 {
   animation: backdrop-enter 150ms ease-out forwards;
 }
 
-/* Modal vanish — MyMind-style instant close */
+/* Modal vanish — BYOA-style instant close */
 @keyframes modal-vanish {
   to {
     opacity: 0;

@@ -1,7 +1,7 @@
 /**
  * BYOA - TagScroller Component
  *
- * Horizontal scrolling tag/filter bar matching mymind.com.
+ * Horizontal scrolling tag/filter bar matching BYOA.
  * Now uses PLATFORM-BASED pills instead of content-type pills.
  *
  * Features:

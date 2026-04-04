@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Playwright Screenshot Capture Module
+ * BYOA - Playwright Screenshot Capture Module
  *
  * Self-hosted screenshot capture using Playwright with content-focused selectors.
  *

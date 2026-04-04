@@ -2,7 +2,7 @@ import { expect, login, saveLink, test } from './support/fixtures'
 
 const MODAL_TEXTAREA = 'textarea[placeholder*="Save something"]'
 
-test.describe('Add Flow - MyMind-style vanish', () => {
+test.describe('Add Flow - BYOA-style vanish', () => {
   test.beforeEach(async ({ page, testUser }) => {
     await login(page, testUser)
   })

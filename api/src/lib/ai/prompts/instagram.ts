@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Instagram Prompt Template
+ * BYOA - Instagram Prompt Template
  *
  * Visual-first analysis for Instagram posts and carousels.
  * Emphasizes image description before caption text.

@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Text Utilities
+ * BYOA - Text Utilities
  *
  * Utility functions for text processing and normalization.
  *

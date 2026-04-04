@@ -107,7 +107,7 @@ const MagicLinkForm = () => (
 
 /**
  * Login form — standard email + password layout centered on the page.
- * Shows the branded "mymind" heading provided by the layout shell.
+ * Shows the branded "BYOA" heading provided by the layout shell.
  */
 export const LoginFormVariant: Story = {
   args: {
