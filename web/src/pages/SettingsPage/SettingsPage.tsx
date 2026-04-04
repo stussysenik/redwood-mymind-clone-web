@@ -5,7 +5,9 @@ import { Metadata } from '@redwoodjs/web'
 import { useAuth } from 'src/auth'
 import { useLocalAI } from 'src/lib/local-ai'
 import { LOCAL_AI_RUNTIME } from 'src/lib/local-ai/config'
-import { Sun, Moon, Monitor, Brain, Download, LogOut } from 'lucide-react'
+import { Sun, Moon, Monitor, Brain, Download, LogOut, Type } from 'lucide-react'
+
+import { useTypography, PAIRINGS } from 'src/lib/typography'
 
 type Theme = 'light' | 'dark' | 'system'
 
@@ -31,6 +33,7 @@ const SettingsPage = () => {
   const { currentUser, logOut } = useAuth()
   const localAI = useLocalAI()
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const { pairing, setPairing } = useTypography()
 
   useEffect(() => {
     applyTheme(theme)
@@ -101,6 +104,40 @@ const SettingsPage = () => {
                   {label}
                 </button>
               ))}
+            </div>
+
+            {/* Typography pairing */}
+            <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+              <p className="text-sm mb-3" style={{ color: 'var(--foreground)' }}>Typography</p>
+              <div className="grid gap-2">
+                {PAIRINGS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPairing(p.id)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left transition-all"
+                    style={{
+                      backgroundColor: pairing === p.id ? 'var(--accent-light)' : 'var(--surface-soft)',
+                      border: pairing === p.id
+                        ? '1.5px solid var(--accent-primary)'
+                        : '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <Type className="h-4 w-4 shrink-0" style={{ color: pairing === p.id ? 'var(--accent-primary)' : 'var(--foreground-muted)' }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{p.label}</p>
+                      <p
+                        className="text-xs truncate"
+                        style={{
+                          color: 'var(--foreground-muted)',
+                          fontFamily: `'${p.display}', serif`,
+                        }}
+                      >
+                        {p.specimen}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
