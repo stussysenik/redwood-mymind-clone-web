@@ -1,18 +1,14 @@
 ## Implementation Tasks
 
-### Feature 1: Typography + Visual Fidelity
-- [ ] Download and self-host font files for all 3 pairings (Playfair Display, Inter, JetBrains Mono, IBM Plex Sans, Fraunces, Source Sans 3)
-- [ ] Add CSS custom properties for `--font-display`, `--font-body`, `--font-ui` and `[data-typography]` selectors
-- [ ] Add typography scale variables (`--text-xs` through `--text-2xl`, line-height, letter-spacing)
-- [ ] Update ThemeProvider to manage `data-typography` attribute
-- [ ] Build typography picker UI in Settings → Appearance
-- [ ] Migrate `--font-serif` → `--font-display` and `--font-sans` → `--font-body` across all CSS/components
-- [ ] Remove old `--font-serif` / `--font-sans` declarations
-- [ ] Remove `aspect-[1.618/1]` from Card.tsx, `aspect-video` from TwitterCard/RedditCard, fixed aspects from InstagramCard
-- [ ] Add `width: 100%; height: auto; aspect-ratio: auto` to card images
-- [ ] Keep intentional aspect ratios: YouTubeCard (16:9), poster cards (2:3), VideoPlayer
-- [ ] Test masonry layout with variable-height images across breakpoints
-- [ ] Verify font loading (only active pairing loaded, preload display font)
+### Feature 1: Typography + Visual Fidelity ✅ v0.6.0
+- [x] Download and self-host font files for all 3 pairings (Playfair Display, Inter, JetBrains Mono, IBM Plex Sans, Fraunces, Source Sans 3)
+- [x] Add CSS custom properties for `--font-display`, `--font-body`, `--font-ui` and `[data-typography]` selectors
+- [x] Update ThemeProvider to manage `data-typography` attribute (useTypography hook + initTypography)
+- [x] Build typography picker UI in Settings → Appearance
+- [x] Migrate `--font-serif` → `--font-display` and `--font-sans` → `--font-body` across all CSS/components
+- [x] Update theme engine definitions (9 JSONs, cli.ts, ThemeEditor, regenerate themes.css)
+- [x] Remove forced aspect ratios from Card.tsx and FeedCellShared (natural `aspect-ratio: auto`)
+- [x] Keep intentional aspect ratios: YouTubeCard (16:9), poster cards (2:3), VideoPlayer
 
 ### Feature 2: Fisher-Yates Shuffle
 - [ ] Implement `fisherYatesShuffle.ts` — pure algorithm with swap event emitter
