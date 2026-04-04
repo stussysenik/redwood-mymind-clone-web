@@ -265,7 +265,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		if (!fg || forcesConfigured.current) return;
 		forcesConfigured.current = true;
 
-		const nodeCount = graphData?.nodes?.length ?? 0;
+		const nodeCount = nodes.length;
 		const chargeStrength = isMobile
 			? Math.min(-200, -100 - nodeCount * 0.5)
 			: Math.min(-300, -150 - nodeCount * 0.8);
@@ -280,7 +280,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		});
 		fg.d3Force('center')?.strength(0.05);
 		fg.d3ReheatSimulation();
-	}, [isMobile, graphData?.nodes?.length]);
+	}, [isMobile, nodes.length]);
 
 	// -------------------------------------------------------------------------
 	// BUILD GRAPH DATA
