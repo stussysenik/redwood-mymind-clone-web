@@ -265,18 +265,18 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		if (!fg || forcesConfigured.current) return;
 		forcesConfigured.current = true;
 
-		const nodeCount = nodes.length;
-		const chargeStrength = isMobile
-			? Math.min(-200, -100 - nodeCount * 0.5)
-			: Math.min(-300, -150 - nodeCount * 0.8);
-		const distanceMax = isMobile ? 400 : 600;
+		// Stronger repulsion as graph grows to prevent overlap.
+		// Math.min picks the more-negative (stronger) of floor vs. scaled value.
+		const CHARGE_FLOOR = isMobile ? -200 : -300;
+		const CHARGE_PER_NODE = isMobile ? 0.5 : 0.8;
+		const CHARGE_BASE = isMobile ? -100 : -150;
+		const chargeStrength = Math.min(CHARGE_FLOOR, CHARGE_BASE - nodes.length * CHARGE_PER_NODE);
 
-		fg.d3Force('charge')?.strength(chargeStrength).distanceMax(distanceMax);
+		fg.d3Force('charge')?.strength(chargeStrength).distanceMax(isMobile ? 400 : 600);
 		fg.d3Force('link')?.distance((link: FGLink) => {
-			const w = link.weight ?? 1;
 			const base = isMobile ? 50 : 80;
-			const scale = isMobile ? 100 : 150;
-			return base + (1 / w) * scale;
+			const spread = isMobile ? 100 : 150;
+			return base + (1 / (link.weight ?? 1)) * spread;
 		});
 		fg.d3Force('center')?.strength(0.05);
 		fg.d3ReheatSimulation();

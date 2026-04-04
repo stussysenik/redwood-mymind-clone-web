@@ -27,6 +27,7 @@ import {
   mergeFeedCardRecord,
   useRealtimeCardUpdates,
 } from 'src/lib/realtimeCards'
+import { ARCHIVE_CARD_MUTATION, makeOptimisticCardAction } from 'src/lib/cardMutations'
 import type { Card } from 'src/lib/types'
 
 export const QUERY = gql`
@@ -52,15 +53,6 @@ export const QUERY = gql`
         archivedAt
         deletedAt
       }
-    }
-  }
-`
-
-const ARCHIVE_CARD_MUTATION = gql`
-  mutation ArchiveCardMutation($id: String!) {
-    archiveCard(id: $id) {
-      id
-      archivedAt
     }
   }
 `
@@ -124,7 +116,7 @@ export const Failure = ({ error }: CellFailureProps) => (
 export const Success = ({
   space,
 }: CellSuccessProps<SpaceQuery, SpaceQueryVariables>) => {
-  const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION)
+  const [archiveMut] = useMutation(ARCHIVE_CARD_MUTATION)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
@@ -176,26 +168,7 @@ export const Success = ({
 
   if (!space) return <Empty />
 
-  const handleArchive = (id: string) => {
-    const previousSelectedCard = selectedCard
-    setHiddenCardIds((current) => new Set(current).add(id))
-
-    if (previousSelectedCard?.id === id) {
-      setSelectedCard(null)
-    }
-
-    void archiveCardMutation({ variables: { id } }).catch((error) => {
-      console.error('[SpaceCell] Archive failed:', error)
-      setHiddenCardIds((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-      if (previousSelectedCard?.id === id) {
-        setSelectedCard(previousSelectedCard)
-      }
-    })
-  }
+  const handleArchive = makeOptimisticCardAction(archiveMut, selectedCard, setSelectedCard, setHiddenCardIds)
 
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>

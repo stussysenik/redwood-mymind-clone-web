@@ -26,6 +26,12 @@ import {
   mergeFeedCardRecord,
   useRealtimeCardUpdates,
 } from 'src/lib/realtimeCards'
+import {
+  ARCHIVE_CARD_MUTATION,
+  UNARCHIVE_CARD_MUTATION,
+  RESTORE_CARD_MUTATION,
+  makeOptimisticCardAction,
+} from 'src/lib/cardMutations'
 import type { Card } from 'src/lib/types'
 
 export const QUERY = gql`
@@ -50,33 +56,6 @@ export const QUERY = gql`
       page
       pageSize
       hasMore
-    }
-  }
-`
-
-const ARCHIVE_CARD_MUTATION = gql`
-  mutation ArchiveCardMutation($id: String!) {
-    archiveCard(id: $id) {
-      id
-      archivedAt
-    }
-  }
-`
-
-const UNARCHIVE_CARD_MUTATION = gql`
-  mutation UnarchiveCardMutation($id: String!) {
-    unarchiveCard(id: $id) {
-      id
-      archivedAt
-    }
-  }
-`
-
-const RESTORE_CARD_MUTATION = gql`
-  mutation RestoreCardMutation($id: String!) {
-    restoreCard(id: $id) {
-      id
-      deletedAt
     }
   }
 `
@@ -144,9 +123,9 @@ export const Success = ({
   onPageChange?: (page: number) => void
 }) => {
   const { cards, total, page, pageSize, hasMore } = data
-  const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION)
-  const [unarchiveCardMutation] = useMutation(UNARCHIVE_CARD_MUTATION)
-  const [restoreCardMutation] = useMutation(RESTORE_CARD_MUTATION)
+  const [archiveMut] = useMutation(ARCHIVE_CARD_MUTATION)
+  const [unarchiveMut] = useMutation(UNARCHIVE_CARD_MUTATION)
+  const [restoreMut] = useMutation(RESTORE_CARD_MUTATION)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [optimisticCards, setOptimisticCards] = useState<FeedCardRecord[]>([])
@@ -267,50 +246,9 @@ export const Success = ({
     }
   }, [])
 
-  const handleArchive = (id: string) => {
-    const previousSelectedCard = selectedCard
-    setHiddenCardIds((current) => new Set(current).add(id))
-
-    if (previousSelectedCard?.id === id) {
-      setSelectedCard(null)
-    }
-
-    void archiveCardMutation({ variables: { id } }).catch((error) => {
-      console.error('[CardsCell] Archive failed:', error)
-      setHiddenCardIds((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-      if (previousSelectedCard?.id === id) {
-        setSelectedCard(previousSelectedCard)
-      }
-    })
-  }
-
-  const handleUnarchive = (id: string) => {
-    setHiddenCardIds((current) => new Set(current).add(id))
-    if (selectedCard?.id === id) setSelectedCard(null)
-    void unarchiveCardMutation({ variables: { id } }).catch(() => {
-      setHiddenCardIds((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    })
-  }
-
-  const handleRestore = (id: string) => {
-    setHiddenCardIds((current) => new Set(current).add(id))
-    if (selectedCard?.id === id) setSelectedCard(null)
-    void restoreCardMutation({ variables: { id } }).catch(() => {
-      setHiddenCardIds((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    })
-  }
+  const handleArchive = makeOptimisticCardAction(archiveMut, selectedCard, setSelectedCard, setHiddenCardIds)
+  const handleUnarchive = makeOptimisticCardAction(unarchiveMut, selectedCard, setSelectedCard, setHiddenCardIds)
+  const handleRestore = makeOptimisticCardAction(restoreMut, selectedCard, setSelectedCard, setHiddenCardIds)
 
   const headerLabel = mode === 'ARCHIVE' ? 'Archive' : mode === 'TRASH' ? 'Trash' : 'Library'
 
