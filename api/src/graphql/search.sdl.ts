@@ -6,7 +6,7 @@ export const schema = gql`
   }
 
   type Query {
-    searchCards(query: String!, type: String, tag: String, limit: Int): SearchResult! @requireAuth
+    searchCards(query: String!, type: String, tag: String, limit: Int, mode: String): SearchResult! @requireAuth
     similarCards(cardId: String!, limit: Int): [Card!]! @requireAuth
   }
 `

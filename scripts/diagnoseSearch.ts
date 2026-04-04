@@ -1,6 +1,11 @@
 import { db } from 'api/src/lib/db'
 import { getEmbeddingAvailability } from 'api/src/lib/ai/embeddings'
-import { searchCardsForUser } from 'api/src/services/search/search'
+import { searchCardsForUserDetailed } from 'api/src/services/search/search'
+
+type SearchCase = {
+  label: string
+  query: string
+}
 
 function parseArgs(argv: string[]) {
   const separatorIndex = argv.lastIndexOf('--')
@@ -8,6 +13,7 @@ function parseArgs(argv: string[]) {
     separatorIndex >= 0 ? argv.slice(separatorIndex + 1) : argv
 
   const queries: string[] = []
+  const cases: SearchCase[] = []
   let userId: string | null = null
   let tag: string | null = null
   let type: string | null = null
@@ -42,15 +48,32 @@ function parseArgs(argv: string[]) {
       continue
     }
 
+    if (value === '--case') {
+      const rawCase = effectiveArgv[index + 1] || ''
+      const separator = rawCase.includes('=') ? '=' : ':'
+      const splitIndex = rawCase.indexOf(separator)
+      if (splitIndex > 0) {
+        const label = rawCase.slice(0, splitIndex).trim()
+        const query = rawCase.slice(splitIndex + 1).trim()
+        if (label && query) {
+          cases.push({ label, query })
+        }
+      }
+      index += 1
+      continue
+    }
+
     if (value.trim()) {
       queries.push(value)
     }
   }
 
-  return { queries, userId, tag, type, limit }
+  return { queries, cases, userId, tag, type, limit }
 }
 
-async function resolveUserId(explicitUserId: string | null): Promise<string | null> {
+async function resolveUserId(
+  explicitUserId: string | null
+): Promise<string | null> {
   if (explicitUserId) {
     return explicitUserId
   }
@@ -64,13 +87,26 @@ async function resolveUserId(explicitUserId: string | null): Promise<string | nu
 }
 
 export default async () => {
-  const { queries, userId: requestedUserId, tag, type, limit } = parseArgs(
-    process.argv.slice(2)
-  )
+  const {
+    queries,
+    cases,
+    userId: requestedUserId,
+    tag,
+    type,
+    limit,
+  } = parseArgs(process.argv.slice(2))
 
-  if (queries.length === 0) {
+  const searchCases =
+    cases.length > 0
+      ? cases
+      : queries.map((query, index) => ({
+          label: `query-${index + 1}`,
+          query,
+        }))
+
+  if (searchCases.length === 0) {
     console.error(
-      'Usage: yarn rw exec diagnoseSearch -- [--user-id <uuid>] [--tag <tag>] [--type <type>] [--limit <n>] <query> [more queries]'
+      'Usage: yarn rw exec diagnoseSearch -- [--user-id <uuid>] [--tag <tag>] [--type <type>] [--limit <n>] [--case label=query] <query> [more queries]'
     )
     process.exitCode = 1
     return
@@ -99,30 +135,74 @@ export default async () => {
     )
   )
 
-  for (const query of queries) {
-    const result = await searchCardsForUser(userId, {
-      query,
+  const reports: Array<{
+    label: string
+    query: string
+    mode: string
+    total: number
+    blindSpots: string[]
+  }> = []
+
+  for (const searchCase of searchCases) {
+    const result = await searchCardsForUserDetailed(userId, {
+      query: searchCase.query,
       limit,
       tag,
       type,
     })
-    console.log(`\n=== ${JSON.stringify(query)} ===`)
+    const blindSpots = (result.diagnostics?.skipped || []).map(
+      (issue) => issue.reason
+    )
+
+    console.log(
+      `\n=== ${searchCase.label}: ${JSON.stringify(searchCase.query)} ===`
+    )
     console.log(
       JSON.stringify(
         {
+          label: searchCase.label,
+          query: searchCase.query,
           mode: result.mode,
           total: result.total,
-          cards: result.cards.map((card) => ({
-            id: card.id,
-            title: card.title,
-            tags: card.tags,
-            createdAt: card.createdAt,
-            url: card.url,
-          })),
+          embedding: result.diagnostics?.embedding || null,
+          blindSpots,
+          cards:
+            result.diagnostics?.results ||
+            result.cards.map((card, index) => ({
+              rank: index + 1,
+              id: card.id,
+              title: card.title,
+              url: card.url,
+              tags: card.tags,
+            })),
         },
         null,
         2
       )
     )
+
+    reports.push({
+      label: searchCase.label,
+      query: searchCase.query,
+      mode: result.mode,
+      total: result.total,
+      blindSpots,
+    })
   }
+
+  const residualBlindSpots = Array.from(
+    new Set(reports.flatMap((report) => report.blindSpots))
+  )
+
+  console.log('\n=== summary ===')
+  console.log(
+    JSON.stringify(
+      {
+        cases: reports,
+        residualBlindSpots,
+      },
+      null,
+      2
+    )
+  )
 }
