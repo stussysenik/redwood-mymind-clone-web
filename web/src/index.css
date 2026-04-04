@@ -1,5 +1,5 @@
 /* All @import statements must come first (CSS spec) */
-@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+@import './lib/fonts.css';
 @import './lib/themes/generated/themes.css';
 @import './lib/themes/daisyui-bridge.css';
 @import './lib/themes/skins/shadcn.css';
