@@ -20,22 +20,27 @@ export const spaces: QueryResolvers['spaces'] = async () => {
     orderBy: { createdAt: 'desc' },
   })
 
-  // For each space, count matching cards via query/tag filter
+  // For each space, count matching cards and fetch a few previews
   const results = await Promise.all(
     spacesList.map(async (s) => {
       let cardCount = 0
+      let previewCards: any[] = []
       const normalizedQuery = normalizeSpaceQuery(s.query)
       if (normalizedQuery) {
-        cardCount = await db.card.count({
-          where: {
-            userId,
-            deletedAt: null,
-            archivedAt: null,
-            tags: { has: normalizedQuery },
-          },
+        const where = {
+          userId,
+          deletedAt: null,
+          archivedAt: null,
+          tags: { has: normalizedQuery },
+        }
+        cardCount = await db.card.count({ where })
+        previewCards = await db.card.findMany({
+          where: { ...where, imageUrl: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          take: 4,
         })
       }
-      return { ...s, cardCount, cards: [] }
+      return { ...s, cardCount, cards: previewCards }
     })
   )
 

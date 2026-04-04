@@ -56,14 +56,15 @@ export function CreateSpace() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm physics-press"
+        className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-all hover:-translate-y-0.5 active:scale-95"
         style={{
-          backgroundColor: 'var(--foreground)',
-          color: 'var(--background)',
+          backgroundColor: 'var(--accent-primary)',
+          color: 'white',
+          boxShadow: '0 2px 8px color-mix(in srgb, var(--accent-primary) 35%, transparent)',
         }}
       >
-        <Plus className="w-4 h-4" />
-        <span>Create Space</span>
+        <Plus className="w-4 h-4" strokeWidth={2.5} />
+        <span>New</span>
       </button>
     )
   }

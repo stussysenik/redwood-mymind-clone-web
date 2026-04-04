@@ -26050,6 +26050,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"web-haptics@npm:^0.0.6":
+  version: 0.0.6
+  resolution: "web-haptics@npm:0.0.6"
+  peerDependencies:
+    react: ">=18"
+    react-dom: ">=18"
+    svelte: ">=4"
+    vue: ">=3"
+  peerDependenciesMeta:
+    react:
+      optional: true
+    react-dom:
+      optional: true
+    svelte:
+      optional: true
+    vue:
+      optional: true
+  checksum: 10c0/71d3bfb0299469362e23ef177337f2cf665ed66aa49b6d5e7afc9d97fc05af9a2056263c17766eb929eb86ec1f526fba21502e926ea3cc39175f251c5c9374db
+  languageName: node
+  linkType: hard
+
 "web-streams-polyfill@npm:^3.2.1":
   version: 3.3.3
   resolution: "web-streams-polyfill@npm:3.3.3"
@@ -26092,6 +26113,7 @@ __metadata:
     react-player: "npm:^3.4.0"
     react-router-dom: "npm:^7.13.1"
     tailwindcss: "npm:^3.4.17"
+    web-haptics: "npm:^0.0.6"
   languageName: unknown
   linkType: soft
 

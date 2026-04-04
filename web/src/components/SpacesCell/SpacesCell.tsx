@@ -1,7 +1,7 @@
 import type { SpacesQuery } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
-import { ArrowRight, Hash, Layers, Sparkles } from 'lucide-react'
+import { ArrowRight, Sparkles } from 'lucide-react'
 import { Link, routes } from '@redwoodjs/router'
 
 export const QUERY = gql`
@@ -12,16 +12,20 @@ export const QUERY = gql`
       query
       isSmart
       cardCount
+      cards {
+        id
+        imageUrl
+      }
     }
   }
 `
 
 export const Loading = () => (
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-    {Array.from({ length: 6 }).map((_, i) => (
+  <div className="space-y-3">
+    {Array.from({ length: 4 }).map((_, i) => (
       <div
         key={i}
-        className="h-40 animate-pulse rounded-3xl"
+        className="h-16 animate-pulse rounded-2xl"
         style={{ backgroundColor: 'var(--shimmer-base)' }}
       />
     ))}
@@ -30,31 +34,23 @@ export const Loading = () => (
 
 export const Empty = () => (
   <div
-    className="rounded-[28px] px-6 py-16 text-center"
+    className="rounded-2xl px-5 py-12 text-center"
     style={{
-      background:
-        'linear-gradient(135deg, color-mix(in srgb, var(--surface-elevated) 92%, white 8%) 0%, color-mix(in srgb, var(--surface-soft) 90%, white 10%) 100%)',
+      backgroundColor: 'var(--surface-card)',
       border: '1px solid var(--border-subtle)',
     }}
   >
-    <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--surface-accent)]">
-      <Sparkles className="h-6 w-6 text-[var(--accent-primary)]" />
+    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--surface-accent)]">
+      <Sparkles className="h-5 w-5 text-[var(--accent-primary)]" />
     </div>
     <p
-      className="mb-2 font-display text-lg"
+      className="mb-1 font-display text-base"
       style={{ color: 'var(--foreground)' }}
     >
       No spaces yet
     </p>
-    <p
-      className="text-sm mb-1"
-      style={{ color: 'var(--foreground-muted)' }}
-    >
-      Spaces let you organize cards into collections.
-    </p>
     <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
-      Create a space manually using the button above, or use a suggested space
-      generated from your most-used tags.
+      Create one to start organizing your library.
     </p>
   </div>
 )
@@ -69,97 +65,86 @@ export const Failure = ({ error }: CellFailureProps) => (
 
 export const Success = ({ spaces }: CellSuccessProps<SpacesQuery>) => {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {spaces.map((space) => (
-        <Link
-          key={space.id}
-          to={routes.space({ id: space.id })}
-          className="group block rounded-[28px] p-5 transition-all hover:-translate-y-0.5"
-          style={{
-            background:
-              'linear-gradient(135deg, color-mix(in srgb, var(--surface-card) 92%, white 8%) 0%, color-mix(in srgb, var(--surface-elevated) 94%, white 6%) 100%)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-2xl"
-              style={{
-                backgroundColor: space.isSmart
-                  ? 'var(--surface-accent)'
-                  : 'var(--surface-soft)',
-                color: 'var(--accent-primary)',
-              }}
-            >
-              {space.isSmart ? (
-                <Hash className="h-5 w-5" />
+    <div className="space-y-2">
+      {spaces.map((space) => {
+        const previews = (space.cards ?? [])
+          .filter((c) => c.imageUrl)
+          .slice(0, 4)
+        const slug = space.name.toLowerCase().replace(/\s+/g, '-')
+
+        return (
+          <Link
+            key={space.id}
+            to={routes.space({ id: space.id })}
+            className="group flex items-center gap-3 rounded-2xl px-3.5 py-3 transition-all hover:-translate-y-0.5 active:scale-[0.99]"
+            style={{
+              backgroundColor: 'var(--surface-card)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            {/* Preview thumbnails */}
+            <div className="flex shrink-0 -space-x-2">
+              {previews.length > 0 ? (
+                previews.map((card, i) => (
+                  <div
+                    key={card.id}
+                    className="h-9 w-9 shrink-0 overflow-hidden rounded-lg ring-2 ring-[var(--surface-card)]"
+                    style={{
+                      zIndex: previews.length - i,
+                    }}
+                  >
+                    <img
+                      src={card.imageUrl!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ))
               ) : (
-                <Layers className="h-5 w-5" />
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {space.isSmart && (
-                <span
-                  className="rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.18em]"
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg"
                   style={{
-                    backgroundColor: 'var(--surface-accent)',
-                    color: 'var(--accent-primary)',
+                    backgroundColor: 'var(--surface-soft)',
+                    color: 'var(--foreground-muted)',
                   }}
                 >
-                  Smart
-                </span>
+                  <span className="text-xs font-mono">/</span>
+                </div>
               )}
-              <span
-                className="rounded-full px-2.5 py-1 text-xs"
-                style={{
-                  backgroundColor: 'var(--surface-elevated)',
-                  color: 'var(--foreground-muted)',
-                }}
-              >
-                {new Intl.NumberFormat().format(space.cardCount)} cards
-              </span>
             </div>
-          </div>
-          <div className="space-y-3">
-            <h3
-              className="text-lg font-medium leading-tight"
-              style={{ color: 'var(--foreground)' }}
-            >
-              {space.name}
-            </h3>
-            <p
-              className="min-h-[40px] text-sm leading-relaxed"
-              style={{ color: 'var(--foreground-muted)' }}
-            >
-              {space.query
-                ? `Tracks cards retraceable through #${space.query}.`
-                : 'A manual collection for ideas you want to revisit fast.'}
-            </p>
-          </div>
-          <div className="mt-5 flex items-center justify-between">
-            {space.query ? (
+
+            {/* URL-style path + count */}
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate font-mono text-[13px]">
+                <span style={{ color: 'var(--foreground-muted)' }}>
+                  /
+                </span>
+                <span
+                  className="font-medium"
+                  style={{ color: 'var(--foreground)' }}
+                >
+                  {slug}
+                </span>
+              </h3>
               <span
-                className="rounded-full px-2.5 py-1 text-xs"
-                style={{
-                  backgroundColor: 'var(--surface-soft)',
-                  color: 'var(--foreground-muted)',
-                }}
-              >
-                #{space.query}
-              </span>
-            ) : (
-              <span
-                className="text-xs uppercase tracking-[0.18em]"
+                className="mt-0.5 block font-mono text-[11px] tabular-nums"
                 style={{ color: 'var(--foreground-muted)' }}
               >
-                Manual space
+                {new Intl.NumberFormat().format(space.cardCount)} card{space.cardCount !== 1 ? 's' : ''}
+                {space.query && (
+                  <span style={{ opacity: 0.5 }}>{' '}· #{space.query}</span>
+                )}
               </span>
-            )}
-            <ArrowRight className="h-4 w-4 text-[var(--foreground-muted)] transition-transform group-hover:translate-x-0.5" />
-          </div>
-        </Link>
-      ))}
+            </div>
+
+            <ArrowRight
+              className="h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-60 group-hover:translate-x-0.5"
+              style={{ color: 'var(--foreground-muted)' }}
+            />
+          </Link>
+        )
+      })}
     </div>
   )
 }

@@ -130,28 +130,12 @@ function getHumanSourceLabel(url: string | null | undefined): string | null {
 function getVisualBadges(card: FeedCardRecord): string[] {
   const badges: string[] = []
   const domainLabel = getDomainLabel(card.url)
-  const images = Array.isArray(card.metadata?.images)
-    ? card.metadata.images
-    : []
-  const mediaTypes = Array.isArray(card.metadata?.mediaTypes)
-    ? card.metadata.mediaTypes
-    : []
-  const hasVideo =
-    mediaTypes.includes('video') ||
-    (Array.isArray(card.metadata?.videoPositions) &&
-      card.metadata.videoPositions.length > 0)
 
   if (domainLabel) {
     badges.push(domainLabel)
   }
 
-  if (hasVideo) {
-    badges.push('Video')
-  } else if (images.length > 1) {
-    badges.push(`${images.length} slides`)
-  }
-
-  return badges.slice(0, 2)
+  return badges.slice(0, 1)
 }
 
 function getVisualSources(
@@ -411,7 +395,7 @@ function FeedCardStatus({ card }: { card: FeedCardRecord }) {
 
 export function FeedCardTags({
   card,
-  maxTags = 3,
+  maxTags = Infinity,
 }: {
   card: FeedCardRecord
   maxTags?: number
@@ -490,7 +474,7 @@ export function FeedCardTags({
 
 export function FeedCardBody({
   card,
-  showSummary = false,
+  showSummary = true,
 }: {
   card: FeedCardRecord
   showSummary?: boolean
@@ -523,21 +507,12 @@ export function FeedCardBody({
           style={{
             fontSize: 12,
             color: 'var(--foreground-muted)',
-            lineHeight: 1.5,
+            lineHeight: 1.55,
             marginBottom: 8,
+            wordBreak: 'break-word',
           }}
         >
-          <span
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              wordBreak: 'break-word',
-            }}
-          >
-            {summary}
-          </span>
+          {summary}
         </p>
       )}
 

@@ -1,7 +1,7 @@
 /**
  * Platform-Specific Summary Prompts
  *
- * Generates analytical summaries instead of simple truncation.
+ * Generates neutral, factual 5-sentence summaries for saved content.
  * Each prompt is optimized for the type of content from that platform.
  *
  * @fileoverview AI summary prompt templates
@@ -11,10 +11,6 @@
 // TYPES
 // =============================================================================
 
-/**
- * Platform type for summary prompts.
- * Inlined here to avoid depending on a client-side platforms module.
- */
 export type Platform =
   | 'twitter'
   | 'mastodon'
@@ -47,161 +43,136 @@ export interface SummaryContext {
 }
 
 // =============================================================================
+// SHARED RULES
+// =============================================================================
+
+const SHARED_RULES = `RULES:
+- Write EXACTLY 5 sentences. No more, no less.
+- Use a neutral, factual, third-person tone. No hype, no opinions, no exclamation marks.
+- Do NOT start with "This is" or "This post". Start with the subject directly.
+- Do NOT repeat or paraphrase the original content verbatim.
+- Do NOT use generic filler phrases like "worth checking out" or "interesting content".
+- Each sentence should add distinct information. No redundancy.
+- Write plainly — like a librarian cataloging a reference, not a marketer.`;
+
+// =============================================================================
 // INSTAGRAM PROMPTS
 // =============================================================================
 
-/**
- * Generate summary prompt for Instagram content
- */
 export function getInstagramSummaryPrompt(context: SummaryContext): string {
   const { content, author, imageCount = 1 } = context;
   const postType = imageCount > 1 ? 'carousel' : 'post';
 
-  return `Analyze this Instagram ${postType}${author ? ` by @${author}` : ''}.
+  return `Summarize this Instagram ${postType}${author ? ` by @${author}` : ''}.
 
 CAPTION: "${content.slice(0, 500)}"
 ${imageCount > 1 ? `IMAGES: ${imageCount} photos in carousel` : ''}
 
-Generate a 2-4 sentence ANALYTICAL summary that captures:
-1. What is this post ABOUT? (topic, theme, subject matter)
-2. What makes it MEMORABLE or worth saving? (insight, emotion, aesthetic)
-3. Who would find this interesting or useful?
+Write a neutral 5-sentence summary covering:
+1. What the post depicts or discusses.
+2. Who created it and in what context.
+3. Visual style or format of the media.
+4. The subject matter or theme.
+5. What type of audience or interest area it relates to.
 
-RULES:
-- Do NOT repeat or paraphrase the caption verbatim
-- Provide INSIGHT, not description
-- Focus on WHY this content matters
-- 50-200 characters ideal length
-
-EXAMPLE of BAD summary: "The user posted about their trip"
-EXAMPLE of GOOD summary: "Travel photography from Morocco's medinas - captures the sensory overload of spice markets and winding alleys that define Marrakech's old city."`;
+${SHARED_RULES}`;
 }
 
 // =============================================================================
 // TWITTER PROMPTS
 // =============================================================================
 
-/**
- * Generate summary prompt for Twitter/X content
- */
 export function getTwitterSummaryPrompt(context: SummaryContext): string {
   const { content, author } = context;
 
-  return `Analyze this tweet${author ? ` from @${author}` : ''}.
+  return `Summarize this tweet${author ? ` from @${author}` : ''}.
 
 TWEET: "${content.slice(0, 500)}"
 
-Generate a 1-3 sentence ANALYTICAL summary that captures:
-1. What INSIGHT or perspective does this tweet offer?
-2. What larger conversation or trend does it relate to?
-3. Why would someone save this for later reference?
+Write a neutral 5-sentence summary covering:
+1. The core statement or claim being made.
+2. The topic or domain it relates to.
+3. Any data, names, or specifics mentioned.
+4. The perspective or stance taken.
+5. The broader context or conversation it fits into.
 
-RULES:
-- Do NOT just rephrase the tweet
-- Provide CONTEXT about why this matters
-- If it's a hot take or opinion, note the perspective
-- If it contains information, highlight what's useful
-- 50-150 characters ideal length
-
-EXAMPLE of BAD summary: "A tweet about programming"
-EXAMPLE of GOOD summary: "Contrarian take on microservices - argues monoliths are underrated for teams under 50 engineers, with specific scaling thresholds."`;
+${SHARED_RULES}`;
 }
 
 // =============================================================================
 // YOUTUBE PROMPTS
 // =============================================================================
 
-/**
- * Generate summary prompt for YouTube content
- */
 export function getYouTubeSummaryPrompt(context: SummaryContext): string {
   const { title, author } = context;
 
-  return `Analyze this YouTube video.
+  return `Summarize this YouTube video.
 
 TITLE: "${title}"
 ${author ? `CHANNEL: ${author}` : ''}
 
-Generate a 2-3 sentence ANALYTICAL summary that captures:
-1. What will the viewer LEARN or experience?
-2. What makes this video worth watching later?
-3. What category/genre does this belong to?
+Write a neutral 5-sentence summary covering:
+1. The subject matter of the video.
+2. The format (tutorial, documentary, review, etc.).
+3. The creator or channel and their focus area.
+4. Key topics or segments likely covered.
+5. The target audience or use case for watching.
 
-RULES:
-- Do NOT just repeat the video title
-- Describe the VALUE proposition
-- Mention if it's tutorial, entertainment, documentary, etc.
-- 50-150 characters ideal length
-
-EXAMPLE of BAD summary: "A video about cooking"
-EXAMPLE of GOOD summary: "Deep-dive into Japanese knife sharpening techniques - covers whetstone selection, angle geometry, and maintenance routines for home cooks."`;
+${SHARED_RULES}`;
 }
 
 // =============================================================================
 // ARTICLE PROMPTS
 // =============================================================================
 
-/**
- * Generate summary prompt for articles/blog posts
- */
 export function getArticleSummaryPrompt(context: SummaryContext): string {
   const { content, title, author } = context;
 
-  return `Analyze this article.
+  return `Summarize this article.
 
 TITLE: "${title}"
 ${author ? `AUTHOR: ${author}` : ''}
 EXCERPT: "${content.slice(0, 800)}"
 
-Generate a 2-4 sentence ANALYTICAL summary that captures:
-1. What is the MAIN ARGUMENT or thesis?
-2. What EVIDENCE or insights support it?
-3. What ACTION or takeaway should the reader remember?
+Write a neutral 5-sentence summary covering:
+1. The main argument or thesis of the piece.
+2. Key evidence or examples cited.
+3. The publication context or author background.
+4. Practical implications or takeaways.
+5. The domain or field it contributes to.
 
-RULES:
-- Do NOT just describe what the article is about
-- Extract the KEY INSIGHT
-- Note if it's opinion, research, tutorial, or news
-- 100-250 characters ideal length
-
-EXAMPLE of BAD summary: "An article discussing technology trends"
-EXAMPLE of GOOD summary: "Research-backed analysis of AI adoption in healthcare - finds diagnostic accuracy improves 12% with human-AI collaboration vs AI alone, with specific workflow recommendations."`;
+${SHARED_RULES}`;
 }
 
 // =============================================================================
 // GENERIC PROMPTS
 // =============================================================================
 
-/**
- * Generate summary prompt for generic content
- */
 export function getGenericSummaryPrompt(context: SummaryContext): string {
   const { content, title, url } = context;
+  let hostname = '';
+  try { hostname = url ? new URL(url).hostname : ''; } catch { /* */ }
 
-  return `Analyze this saved content.
+  return `Summarize this saved content.
 
 ${title ? `TITLE: "${title}"` : ''}
-${url ? `SOURCE: ${new URL(url).hostname}` : ''}
+${hostname ? `SOURCE: ${hostname}` : ''}
 CONTENT: "${content.slice(0, 800)}"
 
-Generate a 2-3 sentence ANALYTICAL summary that captures:
-1. What is this content ABOUT?
-2. Why would someone want to revisit this later?
-3. What category does it belong to?
+Write a neutral 5-sentence summary covering:
+1. What the content is about.
+2. Key facts, names, or specifics mentioned.
+3. The format or type of content (guide, reference, opinion, etc.).
+4. The source or authorship context.
+5. What domain or interest area it falls under.
 
-RULES:
-- Be specific, not generic
-- Focus on VALUE and memorability
-- 50-200 characters ideal length`;
+${SHARED_RULES}`;
 }
 
 // =============================================================================
 // PROMPT ROUTER
 // =============================================================================
 
-/**
- * Get the appropriate summary prompt based on platform
- */
 export function getSummaryPrompt(context: SummaryContext): string {
   switch (context.platform) {
     case 'instagram':
@@ -245,21 +216,17 @@ export function detectPlatformFromUrl(url: string): Platform {
 // VALIDATION
 // =============================================================================
 
-/**
- * Validate that a summary is analytical, not just truncation
- */
 export function validateSummaryQuality(summary: string, originalContent: string): {
   valid: boolean;
   issues: string[];
 } {
   const issues: string[] = [];
 
-  // Check length
   if (summary.length < 50) {
     issues.push('Summary too short (< 50 chars)');
   }
-  if (summary.length > 500) {
-    issues.push('Summary too long (> 500 chars)');
+  if (summary.length > 800) {
+    issues.push('Summary too long (> 800 chars)');
   }
 
   // Check if it's just truncation of original
@@ -277,6 +244,8 @@ export function validateSummaryQuality(summary: string, originalContent: string)
     'a video about',
     'an article about',
     'this tweet is about',
+    'worth checking out',
+    'interesting content',
   ];
   for (const phrase of genericPhrases) {
     if (summaryLower.includes(phrase)) {

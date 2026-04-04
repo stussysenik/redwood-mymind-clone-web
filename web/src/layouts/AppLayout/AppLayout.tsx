@@ -6,6 +6,7 @@ import { LayoutGrid, Network, Settings, FolderOpen, LogOut, Archive, Dices } fro
 import { navigate, routes, useLocation } from '@redwoodjs/router'
 
 import { useAuth } from 'src/auth'
+import { haptic } from 'src/lib/haptics'
 import AddModal from 'src/components/AddModal'
 import { ShuffleModal } from 'src/components/ShuffleModal/ShuffleModal'
 import { ToastProvider } from 'src/components/Toast/Toast'
@@ -13,6 +14,23 @@ import { LocalAIProvider } from 'src/lib/local-ai'
 import { initTypography } from 'src/lib/typography'
 
 initTypography()
+
+// Apply persisted accent color on load
+if (typeof window !== 'undefined') {
+  const storedAccent = localStorage.getItem('byoa-accent-color')
+  if (storedAccent) {
+    const root = document.documentElement
+    root.style.setProperty('--accent-primary', storedAccent)
+    const r = parseInt(storedAccent.slice(1, 3), 16)
+    const g = parseInt(storedAccent.slice(3, 5), 16)
+    const b = parseInt(storedAccent.slice(5, 7), 16)
+    const darken = (v: number) => Math.max(0, Math.round(v * 0.85))
+    root.style.setProperty('--accent-hover', `rgb(${darken(r)}, ${darken(g)}, ${darken(b)})`)
+    root.style.setProperty('--accent-light', `rgba(${r}, ${g}, ${b}, 0.1)`)
+    root.style.setProperty('--surface-accent', `rgba(${r}, ${g}, ${b}, 0.08)`)
+    root.style.setProperty('--surface-accent-strong', `rgba(${r}, ${g}, ${b}, 0.16)`)
+  }
+}
 
 interface AppLayoutProps {
   children: ReactNode
@@ -47,6 +65,22 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showAvatarDropdown])
 
+  // Cmd+A to open Add modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !showAddModal) {
+        // Only intercept if not in an input/textarea
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
+        e.preventDefault()
+        haptic('soft')
+        setShowAddModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showAddModal])
+
   const avatarInitial = currentUser?.email
     ? currentUser.email.charAt(0).toUpperCase()
     : 'U'
@@ -77,9 +111,14 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <h1
-            className="text-base font-mono font-bold cursor-pointer tracking-tight"
+            className="cursor-pointer"
             style={{
               color: 'var(--foreground)',
+              fontFamily: "'Rubik Mono One', monospace",
+              fontSize: '13px',
+              textTransform: 'lowercase',
+              fontVariantCaps: 'all-small-caps',
+              letterSpacing: '0.04em',
             }}
             onClick={() => navigate(routes.home())}
           >
@@ -88,7 +127,24 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </div>
 
         {/* Center: View toggle (desktop only) */}
-        <div className="hidden sm:flex items-center">
+        <div className="hidden sm:flex items-center gap-2">
+          {/* Dice / Shuffle — first */}
+          <button
+            onClick={() => { haptic('soft'); setShowShuffle(true) }}
+            className="flex items-center justify-center rounded-full transition-all hover:-translate-y-0.5"
+            style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: 'var(--surface-soft)',
+              color: 'var(--foreground-muted)',
+              border: '1px solid var(--border-default)',
+            }}
+            title="Shuffle — random discovery"
+            aria-label="Shuffle cards"
+          >
+            <Dices size={15} />
+          </button>
+
           <div
             className="flex items-center rounded-full"
             style={{
@@ -130,23 +186,6 @@ const AppLayout = ({ children }: AppLayoutProps) => {
               <Network size={14} />
             </button>
           </div>
-
-          {/* Dice / Shuffle */}
-          <button
-            onClick={() => setShowShuffle(true)}
-            className="ml-2 flex items-center justify-center rounded-full transition-all hover:-translate-y-0.5"
-            style={{
-              width: '32px',
-              height: '32px',
-              backgroundColor: 'var(--surface-soft)',
-              color: 'var(--foreground-muted)',
-              border: '1px solid var(--border-default)',
-            }}
-            title="Shuffle — random discovery"
-            aria-label="Shuffle cards"
-          >
-            <Dices size={15} />
-          </button>
         </div>
 
         {/* Right: Avatar with dropdown */}
@@ -258,72 +297,43 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </div>
       </header>
 
-      {/* Mobile bottom nav — 4 icons: Home, Spaces, Graph, Settings */}
+      {/* Mobile bottom nav */}
       <nav
-        className="app-bottom-nav sm:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around py-2"
+        className="app-bottom-nav sm:hidden fixed bottom-0 left-0 right-0 z-50 flex items-stretch justify-around"
         style={{
-          backgroundColor: 'var(--header-backdrop)',
-          backdropFilter: 'blur(12px)',
+          backgroundColor: 'var(--background)',
           borderTop: '1px solid var(--border-default)',
-          minHeight: 'var(--touch-target-comfortable)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
-        <a
-          href="/"
-          className="flex flex-col items-center gap-0.5 p-2"
-          style={{
-            color:
-              pathname === '/'
-                ? 'var(--accent-primary)'
-                : 'var(--foreground-muted)',
-            minWidth: 'var(--touch-target-min)',
-          }}
-        >
-          <LayoutGrid size={20} />
-          <span className="text-[10px]">Home</span>
-        </a>
-        <a
-          href="/spaces"
-          className="flex flex-col items-center gap-0.5 p-2"
-          style={{
-            color:
-              pathname === '/spaces'
-                ? 'var(--accent-primary)'
-                : 'var(--foreground-muted)',
-            minWidth: 'var(--touch-target-min)',
-          }}
-        >
-          <FolderOpen size={20} />
-          <span className="text-[10px]">Spaces</span>
-        </a>
-        <a
-          href="/graph"
-          className="flex flex-col items-center gap-0.5 p-2"
-          style={{
-            color:
-              pathname === '/graph'
-                ? 'var(--accent-primary)'
-                : 'var(--foreground-muted)',
-            minWidth: 'var(--touch-target-min)',
-          }}
-        >
-          <Network size={20} />
-          <span className="text-[10px]">Graph</span>
-        </a>
-        <a
-          href="/settings"
-          className="flex flex-col items-center gap-0.5 p-2"
-          style={{
-            color:
-              pathname === '/settings'
-                ? 'var(--accent-primary)'
-                : 'var(--foreground-muted)',
-            minWidth: 'var(--touch-target-min)',
-          }}
-        >
-          <Settings size={20} />
-          <span className="text-[10px]">Settings</span>
-        </a>
+        {[
+          { href: '/', icon: <LayoutGrid size={20} />, label: 'Feed', match: pathname === '/' },
+          { action: () => { haptic('soft'); setShowShuffle(true) }, icon: <Dices size={20} />, label: 'Shuffle', match: false },
+          { href: '/graph', icon: <Network size={20} />, label: 'Graph', match: pathname === '/graph' },
+          { href: '/spaces', icon: <FolderOpen size={20} />, label: 'Spaces', match: pathname.startsWith('/spaces') },
+          { href: '/settings', icon: <Settings size={20} />, label: 'Settings', match: pathname === '/settings' },
+        ].map((item, i) => {
+          const Tag = item.href ? 'a' : 'button'
+          const props = item.href
+            ? { href: item.href, onClick: () => haptic('light') }
+            : { onClick: item.action, type: 'button' as const }
+
+          return (
+            <Tag
+              key={item.label}
+              {...(props as any)}
+              className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2"
+              style={{
+                color: item.match
+                  ? 'var(--accent-primary)'
+                  : 'var(--foreground-muted)',
+              }}
+            >
+              {item.icon}
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </Tag>
+          )
+        })}
       </nav>
 
       {/* Main content with bottom padding for mobile nav */}
@@ -341,7 +351,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           boxShadow: 'var(--shadow-lg)',
           transition: 'transform var(--duration-fast) var(--ease-spring)',
         }}
-        onClick={() => setShowAddModal(true)}
+        onClick={() => { haptic('medium'); setShowAddModal(true) }}
         title="Add new card"
       >
         <svg

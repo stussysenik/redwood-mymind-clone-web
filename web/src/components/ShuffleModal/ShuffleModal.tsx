@@ -5,13 +5,14 @@
  * them one by one in a focused full-screen overlay.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { ChevronLeft, ChevronRight, Dices, Shuffle, X } from 'lucide-react'
 
 import { useQuery } from '@redwoodjs/web'
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
+import { haptic } from 'src/lib/haptics'
 import {
   type FeedCardRecord,
   toFeedCard,
@@ -53,6 +54,41 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
     variables: { limit: confirmedCount ?? 10 },
     skip: confirmedCount === null,
   })
+
+  // Shake-to-close: detect device shake via accelerometer
+  const shakeRef = useRef({ last: 0, count: 0 })
+  useEffect(() => {
+    // Request permission on iOS
+    const requestPermission = async () => {
+      const DM = DeviceMotionEvent as any
+      if (typeof DM.requestPermission === 'function') {
+        try { await DM.requestPermission() } catch { return }
+      }
+    }
+    requestPermission()
+
+    const handler = (e: DeviceMotionEvent) => {
+      const acc = e.accelerationIncludingGravity
+      if (!acc?.x || !acc?.y || !acc?.z) return
+      const force = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z)
+      const now = Date.now()
+      if (force > 25) {
+        if (now - shakeRef.current.last < 500) {
+          shakeRef.current.count++
+          if (shakeRef.current.count >= 3) {
+            haptic('heavy')
+            onClose()
+            shakeRef.current.count = 0
+          }
+        } else {
+          shakeRef.current.count = 1
+        }
+        shakeRef.current.last = now
+      }
+    }
+    window.addEventListener('devicemotion', handler)
+    return () => window.removeEventListener('devicemotion', handler)
+  }, [onClose])
 
   const cards: FeedCardRecord[] = data?.randomCards ?? []
 

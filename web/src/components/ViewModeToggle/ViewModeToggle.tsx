@@ -1,5 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
+import { haptic } from 'src/lib/haptics'
+
 interface ViewModeOption {
   value: string
   label: string
@@ -21,7 +23,7 @@ export function ViewModeToggle<T extends string>({
 }: ViewModeToggleProps<T>) {
   return (
     <div
-      className="inline-flex items-center gap-1 rounded-full p-1"
+      className="inline-flex items-center gap-0.5 rounded-full p-0.5 sm:gap-1 sm:p-1"
       role="tablist"
       aria-label={ariaLabel}
       style={{
@@ -39,8 +41,8 @@ export function ViewModeToggle<T extends string>({
             type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => onChange(option.value as T)}
-            className="inline-flex min-h-[36px] items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all"
+            onClick={() => { haptic('selection'); onChange(option.value as T) }}
+            className="inline-flex min-h-[32px] items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all sm:min-h-[36px] sm:gap-2 sm:px-3 sm:py-1.5"
             style={{
               backgroundColor: isActive
                 ? 'var(--accent-primary)'
@@ -51,7 +53,7 @@ export function ViewModeToggle<T extends string>({
             <span className="flex h-3.5 w-3.5 items-center justify-center">
               {option.icon}
             </span>
-            <span>{option.label}</span>
+            <span className="hidden sm:inline">{option.label}</span>
           </button>
         )
       })}

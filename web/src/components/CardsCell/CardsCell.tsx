@@ -63,6 +63,24 @@ const ARCHIVE_CARD_MUTATION = gql`
   }
 `
 
+const UNARCHIVE_CARD_MUTATION = gql`
+  mutation UnarchiveCardMutation($id: String!) {
+    unarchiveCard(id: $id) {
+      id
+      archivedAt
+    }
+  }
+`
+
+const RESTORE_CARD_MUTATION = gql`
+  mutation RestoreCardMutation($id: String!) {
+    restoreCard(id: $id) {
+      id
+      deletedAt
+    }
+  }
+`
+
 /**
  * Loading skeleton — masonry layout with shimmer placeholders of varying heights.
  * Uses the same CSS columns approach as the real grid so the skeleton
@@ -119,14 +137,16 @@ export const Failure = ({ error }: CellFailureProps) => (
 
 export const Success = ({
   cards: data,
-  onNextPage,
-  onPrevPage,
+  mode,
+  onPageChange,
 }: CellSuccessProps<CardsQuery, CardsQueryVariables> & {
-  onNextPage?: () => void
-  onPrevPage?: () => void
+  mode?: string
+  onPageChange?: (page: number) => void
 }) => {
   const { cards, total, page, pageSize, hasMore } = data
   const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION)
+  const [unarchiveCardMutation] = useMutation(UNARCHIVE_CARD_MUTATION)
+  const [restoreCardMutation] = useMutation(RESTORE_CARD_MUTATION)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [optimisticCards, setOptimisticCards] = useState<FeedCardRecord[]>([])
@@ -159,9 +179,12 @@ export const Success = ({
   )
   const totalPages = Math.max(1, Math.ceil(visibleTotal / pageSize))
   const visibleTotalLabel = new Intl.NumberFormat().format(visibleTotal)
-  const visibleCards = mergedCards.filter(
-    (card) => !hiddenCardIds.has(card.id) && !card.archivedAt && !card.deletedAt
-  )
+  const visibleCards = mergedCards.filter((card) => {
+    if (hiddenCardIds.has(card.id)) return false
+    if (mode === 'ARCHIVE') return !card.deletedAt
+    if (mode === 'TRASH') return true
+    return !card.archivedAt && !card.deletedAt
+  })
 
   useEffect(() => {
     if (
@@ -265,20 +288,46 @@ export const Success = ({
     })
   }
 
+  const handleUnarchive = (id: string) => {
+    setHiddenCardIds((current) => new Set(current).add(id))
+    if (selectedCard?.id === id) setSelectedCard(null)
+    void unarchiveCardMutation({ variables: { id } }).catch(() => {
+      setHiddenCardIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    })
+  }
+
+  const handleRestore = (id: string) => {
+    setHiddenCardIds((current) => new Set(current).add(id))
+    if (selectedCard?.id === id) setSelectedCard(null)
+    void restoreCardMutation({ variables: { id } }).catch(() => {
+      setHiddenCardIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    })
+  }
+
+  const headerLabel = mode === 'ARCHIVE' ? 'Archive' : mode === 'TRASH' ? 'Trash' : 'Library'
+
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
-      {/* Card count */}
-      <div className="mb-5 flex items-center justify-between">
+      {/* Library header */}
+      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
         <div
-          className="inline-flex items-center gap-2"
+          className="inline-flex items-baseline gap-1.5"
           role="status"
           aria-live="polite"
         >
           <span
-            className="text-xs uppercase tracking-[0.1em] font-medium"
+            className="text-[10px] uppercase tracking-[0.12em] font-medium sm:text-xs"
             style={{ color: 'var(--foreground-muted)' }}
           >
-            LIBRARY
+            {headerLabel}
           </span>
           <strong
             className="text-sm font-semibold"
@@ -289,7 +338,10 @@ export const Success = ({
           >
             {visibleTotalLabel}
           </strong>
-          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+          <span
+            className="text-[10px] sm:text-xs"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
             cards
           </span>
         </div>
@@ -328,40 +380,79 @@ export const Success = ({
         />
       )}
 
-      {/* Pagination controls */}
-      {totalPages > 1 && (
-        <div className="mt-8 flex flex-col items-center gap-3 pb-4">
-          <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            Page {page} of {totalPages} — showing {visibleCards.length} of{' '}
-            {visibleTotal}
-          </p>
-          <div className="flex items-center gap-2">
-            {page > 1 && onPrevPage && (
-              <button
-                onClick={onPrevPage}
-                className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: 'var(--surface-card)',
-                  color: 'var(--foreground)',
-                  border: '1px solid var(--border-default)',
-                }}
-              >
-                Previous
-              </button>
-            )}
-            {hasMore && onNextPage && (
-              <button
-                onClick={onNextPage}
-                className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: 'var(--foreground)',
-                  color: 'var(--background)',
-                }}
-              >
-                Next page
-              </button>
-            )}
+      {/* Pagination — editable page X of Y */}
+      {totalPages > 1 && onPageChange && (
+        <div className="mt-6 flex items-center justify-center gap-1.5 pb-4">
+          <button
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            disabled={page <= 1}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors disabled:opacity-25"
+            style={{
+              backgroundColor: 'var(--surface-soft)',
+              color: 'var(--foreground)',
+            }}
+            aria-label="Previous page"
+          >
+            &lsaquo;
+          </button>
+
+          <div
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5"
+            style={{
+              backgroundColor: 'var(--surface-card)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <input
+              type="text"
+              inputMode="numeric"
+              value={page}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10)
+                if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                  onPageChange(val)
+                }
+              }}
+              onBlur={(e) => {
+                const val = parseInt(e.target.value, 10)
+                if (isNaN(val) || val < 1) onPageChange(1)
+                else if (val > totalPages) onPageChange(totalPages)
+              }}
+              className="w-8 bg-transparent text-center font-mono text-sm font-medium outline-none"
+              style={{ color: 'var(--foreground)' }}
+              aria-label="Current page"
+            />
+            <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+              /
+            </span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={totalPages}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10)
+                if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                  onPageChange(val)
+                }
+              }}
+              className="w-8 bg-transparent text-center font-mono text-sm outline-none"
+              style={{ color: 'var(--foreground-muted)' }}
+              aria-label="Total pages — type to jump"
+            />
           </div>
+
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors disabled:opacity-25"
+            style={{
+              backgroundColor: 'var(--surface-soft)',
+              color: 'var(--foreground)',
+            }}
+            aria-label="Next page"
+          >
+            &rsaquo;
+          </button>
         </div>
       )}
 
@@ -370,7 +461,8 @@ export const Success = ({
         card={selectedCard}
         isOpen={selectedCard !== null}
         onClose={() => setSelectedCard(null)}
-        onArchive={handleArchive}
+        onArchive={mode === 'ARCHIVE' ? undefined : handleArchive}
+        onRestore={mode === 'ARCHIVE' ? handleUnarchive : mode === 'TRASH' ? handleRestore : undefined}
       />
     </div>
   )

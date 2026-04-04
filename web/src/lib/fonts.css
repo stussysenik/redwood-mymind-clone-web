@@ -1,11 +1,16 @@
 /**
  * Self-hosted font declarations for BYOA typography pairings.
  *
- * 3 pairings, 6 families, 17 files total (woff2, latin subset):
+ * 5 pairings, 6 families + Rubik Mono One (logo):
  *   Editorial (default): Playfair Display + Inter + JetBrains Mono
  *   Technical:           IBM Plex Sans + JetBrains Mono
  *   Warm:                Fraunces + Source Sans 3 + JetBrains Mono
+ *   Helvetica:           Helvetica Neue (system)
+ *   Inter:               Inter + JetBrains Mono
  */
+
+/* Rubik Mono One — logo only */
+@import url('https://fonts.googleapis.com/css2?family=Rubik+Mono+One&display=swap');
 
 /* --------------------------------------------------------
    Playfair Display  (Editorial display)

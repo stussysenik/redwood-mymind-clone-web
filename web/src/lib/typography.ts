@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type TypographyPairing = 'editorial' | 'technical' | 'warm'
+export type TypographyPairing = 'editorial' | 'technical' | 'warm' | 'helvetica' | 'inter'
 
 export interface PairingInfo {
   id: TypographyPairing
@@ -33,6 +33,22 @@ export const PAIRINGS: PairingInfo[] = [
     label: 'Warm',
     display: 'Fraunces',
     body: 'Source Sans 3',
+    ui: 'JetBrains Mono',
+    specimen: 'The quick brown fox',
+  },
+  {
+    id: 'helvetica',
+    label: 'Helvetica',
+    display: 'Helvetica Neue',
+    body: 'Helvetica Neue',
+    ui: 'JetBrains Mono',
+    specimen: 'The quick brown fox',
+  },
+  {
+    id: 'inter',
+    label: 'Inter',
+    display: 'Inter',
+    body: 'Inter',
     ui: 'JetBrains Mono',
     specimen: 'The quick brown fox',
   },

@@ -1,18 +1,24 @@
 /**
- * Haptic feedback utility.
- * Uses the Web Vibration API — works on Android Chrome and iOS Safari (15.4+).
- * Silently no-ops on unsupported browsers/desktop.
+ * Haptic feedback via web-haptics library.
+ * Singleton instance — import `haptic` and call directly.
  */
-export function haptic(style: 'light' | 'medium' | 'heavy' | 'success' | 'error') {
-  if (typeof navigator === 'undefined' || !navigator.vibrate) return
+import { WebHaptics } from 'web-haptics'
 
-  const patterns: Record<typeof style, number | number[]> = {
-    light: 8,
-    medium: 16,
-    heavy: 28,
-    success: [10, 60, 15],
-    error: [20, 40, 20, 40, 20],
+let instance: WebHaptics | null = null
+
+function getInstance(): WebHaptics {
+  if (!instance) {
+    instance = new WebHaptics()
   }
+  return instance
+}
 
-  navigator.vibrate(patterns[style])
+type HapticStyle = 'soft' | 'light' | 'medium' | 'rigid' | 'heavy' | 'selection' | 'success' | 'warning' | 'error'
+
+export function haptic(style: HapticStyle = 'light') {
+  try {
+    getInstance().trigger(style)
+  } catch {
+    // Silently fail on unsupported environments
+  }
 }

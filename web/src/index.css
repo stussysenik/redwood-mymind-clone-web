@@ -183,6 +183,22 @@
   --font-sans: var(--font-body);
 }
 
+[data-typography="helvetica"] {
+  --font-display: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  --font-body: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  --font-ui: 'JetBrains Mono', 'Menlo', monospace;
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
+[data-typography="inter"] {
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-ui: 'JetBrains Mono', 'Menlo', monospace;
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
 /* Dark Mode Theme (system preference) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -576,7 +592,6 @@ h1, h2, h3 {
 }
 
 .app-bottom-nav {
-  padding-bottom: calc(8px + var(--safe-area-bottom));
   padding-left: max(8px, var(--safe-area-left));
   padding-right: max(8px, var(--safe-area-right));
 }

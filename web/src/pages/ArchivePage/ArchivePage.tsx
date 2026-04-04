@@ -1,5 +1,6 @@
-import { Metadata } from '@redwoodjs/web'
+import { useState } from 'react'
 
+import { Metadata } from '@redwoodjs/web'
 import { useLocation } from '@redwoodjs/router'
 
 import CardsCell from 'src/components/CardsCell'
@@ -10,6 +11,7 @@ const ArchivePage = () => {
   const { search } = useLocation()
   const searchParams = new URLSearchParams(search)
   const query = searchParams.get('q') ?? ''
+  const [page, setPage] = useState(1)
 
   return (
     <>
@@ -21,7 +23,7 @@ const ArchivePage = () => {
       {query.trim() ? (
         <SearchCell query={query.trim()} mode="ARCHIVE" />
       ) : (
-        <CardsCell page={1} pageSize={25} mode="ARCHIVE" />
+        <CardsCell page={page} pageSize={25} mode="ARCHIVE" onPageChange={setPage} />
       )}
     </>
   )

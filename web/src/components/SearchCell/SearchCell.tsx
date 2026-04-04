@@ -168,17 +168,17 @@ export const Success = ({
 
   return (
     <div className="px-4 py-6 sm:px-6">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
         <div
-          className="inline-flex items-center gap-2"
+          className="inline-flex items-baseline gap-1.5"
           role="status"
           aria-live="polite"
         >
           <span
-            className="text-xs uppercase tracking-[0.1em] font-medium"
+            className="text-[10px] uppercase tracking-[0.12em] font-medium sm:text-xs"
             style={{ color: 'var(--foreground-muted)' }}
           >
-            SEARCH
+            Search
           </span>
           <strong
             className="text-sm font-semibold"
@@ -189,7 +189,10 @@ export const Success = ({
           >
             {visibleTotalLabel}
           </strong>
-          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+          <span
+            className="text-[10px] sm:text-xs"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
             results
           </span>
         </div>

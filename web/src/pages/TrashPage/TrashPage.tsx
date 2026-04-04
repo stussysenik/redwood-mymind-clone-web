@@ -1,9 +1,13 @@
+import { useState } from 'react'
+
 import { Metadata } from '@redwoodjs/web'
 
 import CardsCell from 'src/components/CardsCell'
 import { TrashBulkActions } from 'src/components/TrashBulkActions/TrashBulkActions'
 
 const TrashPage = () => {
+  const [page, setPage] = useState(1)
+
   return (
     <>
       <Metadata title="Trash" />
@@ -12,7 +16,7 @@ const TrashPage = () => {
           <h2 className="font-display text-xl" style={{ color: 'var(--foreground)' }}>Trash</h2>
           <TrashBulkActions itemCount={0} />
         </div>
-        <CardsCell page={1} pageSize={25} mode="TRASH" />
+        <CardsCell page={page} pageSize={25} mode="TRASH" onPageChange={setPage} />
       </div>
     </>
   )

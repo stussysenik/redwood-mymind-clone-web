@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 
 import { Metadata } from '@redwoodjs/web'
 import { useLocation } from '@redwoodjs/router'
@@ -16,14 +16,6 @@ const HomePage = () => {
 
   const [page, setPage] = useState(1)
 
-  const handleNextPage = useCallback(() => {
-    setPage((p) => p + 1)
-  }, [])
-
-  const handlePrevPage = useCallback(() => {
-    setPage((p) => Math.max(1, p - 1))
-  }, [])
-
   return (
     <>
       <Metadata title="Home" description="Your saved knowledge" />
@@ -37,8 +29,7 @@ const HomePage = () => {
           page={page}
           pageSize={PAGE_SIZE}
           mode="DEFAULT"
-          onNextPage={handleNextPage}
-          onPrevPage={handlePrevPage}
+          onPageChange={setPage}
         />
       )}
     </>
