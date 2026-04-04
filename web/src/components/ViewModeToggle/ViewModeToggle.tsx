@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
 interface ViewModeOption {
   value: string
@@ -6,19 +6,19 @@ interface ViewModeOption {
   icon: ReactNode
 }
 
-interface ViewModeToggleProps {
+interface ViewModeToggleProps<T extends string = string> {
   ariaLabel: string
-  value: string
+  value: T
   options: ViewModeOption[]
-  onChange: (value: string) => void
+  onChange: Dispatch<SetStateAction<T>>
 }
 
-export function ViewModeToggle({
+export function ViewModeToggle<T extends string>({
   ariaLabel,
   value,
   options,
   onChange,
-}: ViewModeToggleProps) {
+}: ViewModeToggleProps<T>) {
   return (
     <div
       className="inline-flex items-center gap-1 rounded-full p-1"
@@ -39,7 +39,7 @@ export function ViewModeToggle({
             type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => onChange(option.value)}
+            onClick={() => onChange(option.value as T)}
             className="inline-flex min-h-[36px] items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all"
             style={{
               backgroundColor: isActive
