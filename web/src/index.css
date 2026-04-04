@@ -54,9 +54,14 @@
   --tag-cyan: #00A99D;
   --tag-amber: #FFE800;
 
-  /* Typography */
-  --font-serif: 'Libre Baskerville', 'Georgia', 'Charter', serif;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Typography — pairing system (3 roles) */
+  --font-display: 'Playfair Display', 'Georgia', 'Charter', serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-ui: 'JetBrains Mono', 'Menlo', monospace;
+
+  /* Legacy aliases (theme engine compat) */
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
 
   /* Spacing */
   --header-height: 56px;
@@ -154,6 +159,28 @@
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.24);
   --shimmer-base: rgba(0, 0, 0, 0.05);
   --shimmer-highlight: rgba(255, 255, 255, 0.72);
+}
+
+/* =============================================================================
+   TYPOGRAPHY PAIRINGS
+   ============================================================================= */
+
+/* Editorial (default) — already set in :root */
+
+[data-typography="technical"] {
+  --font-display: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-ui: 'JetBrains Mono', 'Menlo', monospace;
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
+[data-typography="warm"] {
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-body: 'Source Sans 3', system-ui, sans-serif;
+  --font-ui: 'JetBrains Mono', 'Menlo', monospace;
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
 }
 
 /* Dark Mode Theme (system preference) */
@@ -292,7 +319,7 @@ html.no-transition * {
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   position: relative;
   min-height: 100vh;
   isolation: isolate;
@@ -323,9 +350,9 @@ body::before {
     linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 240px);
 }
 
-/* Serif headings */
+/* Display headings */
 h1, h2, h3 {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
 }
 
 /* Custom scrollbar */
@@ -416,8 +443,12 @@ h1, h2, h3 {
   display: none;
 }
 
+.font-display {
+  font-family: var(--font-display);
+}
+
 .font-serif {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
 }
 
 /* Card base (unified foundation for all card types) */
