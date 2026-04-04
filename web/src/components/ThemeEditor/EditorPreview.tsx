@@ -47,7 +47,7 @@ function PreviewCard({
         )}
         <h3
           className="text-sm font-medium mt-0.5 line-clamp-2"
-          style={{ color: 'var(--foreground)', fontFamily: 'var(--font-sans)' }}
+          style={{ color: 'var(--foreground)', fontFamily: 'var(--font-body)' }}
         >
           {title}
         </h3>
@@ -56,7 +56,7 @@ function PreviewCard({
             className="text-xs mt-1.5 line-clamp-3 leading-relaxed"
             style={{
               color: 'var(--foreground-muted)',
-              fontFamily: 'var(--font-sans)',
+              fontFamily: 'var(--font-body)',
             }}
           >
             {content}
@@ -125,7 +125,7 @@ function PreviewTwitterCard() {
           className="text-sm leading-relaxed"
           style={{
             color: 'var(--foreground)',
-            fontFamily: 'var(--font-sans)',
+            fontFamily: 'var(--font-body)',
           }}
         >
           The future of AI is not about replacing humans &mdash; it&apos;s about
@@ -203,7 +203,7 @@ export function EditorPreview() {
           className="text-sm"
           style={{
             color: 'var(--foreground-muted)',
-            fontFamily: 'var(--font-sans)',
+            fontFamily: 'var(--font-body)',
           }}
         >
           Search your mind...
@@ -293,28 +293,28 @@ export function EditorPreview() {
             className="text-xl font-bold"
             style={{
               color: 'var(--foreground)',
-              fontFamily: 'var(--font-serif)',
+              fontFamily: 'var(--font-display)',
             }}
           >
-            Heading in Serif
+            Heading in Display
           </h2>
           <h3
             className="text-base font-semibold"
             style={{
               color: 'var(--foreground)',
-              fontFamily: 'var(--font-sans)',
+              fontFamily: 'var(--font-body)',
             }}
           >
-            Subheading in Sans
+            Subheading in Body Font
           </h3>
           <p
             className="text-sm leading-relaxed"
             style={{
               color: 'var(--foreground)',
-              fontFamily: 'var(--font-sans)',
+              fontFamily: 'var(--font-body)',
             }}
           >
-            Body text with the sans-serif font. This previews how regular
+            Body text with the body font. This previews how regular
             content looks with your chosen typography settings. The quick brown
             fox jumps over the lazy dog.
           </p>
@@ -322,7 +322,7 @@ export function EditorPreview() {
             className="text-xs"
             style={{
               color: 'var(--foreground-muted)',
-              fontFamily: 'var(--font-sans)',
+              fontFamily: 'var(--font-body)',
             }}
           >
             Muted caption text &mdash; used for secondary information like dates

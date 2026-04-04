@@ -374,8 +374,8 @@ export function ThemeEditor() {
     'accent-light': 'rgba(255, 107, 74, 0.1)',
     border: 'rgba(0, 0, 0, 0.06)',
     'border-hover': 'rgba(0, 0, 0, 0.12)',
-    'font-sans': "'Inter', system-ui, sans-serif",
-    'font-serif': "'Libre Baskerville', Georgia, serif",
+    'font-body': "'Inter', system-ui, sans-serif",
+    'font-display': "'Libre Baskerville', Georgia, serif",
     'radius-sm': '6',
     'radius-md': '10',
     'radius-lg': '14',
@@ -615,14 +615,14 @@ export function ThemeEditor() {
           {/* TYPOGRAPHY */}
           <EditorSection title="Typography">
             <FontSelect
-              label="Sans"
-              value={tokens['font-sans']}
-              onChange={(v) => updateToken('font-sans', v)}
+              label="Body"
+              value={tokens['font-body']}
+              onChange={(v) => updateToken('font-body', v)}
             />
             <FontSelect
-              label="Serif"
-              value={tokens['font-serif']}
-              onChange={(v) => updateToken('font-serif', v)}
+              label="Display"
+              value={tokens['font-display']}
+              onChange={(v) => updateToken('font-display', v)}
             />
           </EditorSection>
 
