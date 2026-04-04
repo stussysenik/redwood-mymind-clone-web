@@ -274,12 +274,25 @@ export const UA_GOOGLEBOT = 'Googlebot/2.1 (+http://www.google.com/bot.html)';
 // HELPER: Clean Instagram CDN URLs
 // =============================================================================
 
-function cleanCdnUrl(url: string): string {
-	return url
-		.replace(/&amp;/g, '&')       // HTML entity decode
-		.replace(/\\u0026/g, '&')
+function decodeEscapedInstagramText(value: string): string {
+	return value
+		.replace(/&amp;/g, '&') // HTML entity decode
+		.replace(/\\\\u0026/gi, '&')
+		.replace(/\\\\u0025/gi, '%')
+		.replace(/\\\\u003d/gi, '=')
+		.replace(/\\\\u002f/gi, '/')
+		.replace(/\\\\\//g, '/')
+		.replace(/\\\\"/g, '"')
+		.replace(/\\u0026/gi, '&')
+		.replace(/\\u0025/gi, '%')
+		.replace(/\\u003d/gi, '=')
+		.replace(/\\u002f/gi, '/')
 		.replace(/\\\//g, '/')
 		.replace(/\\"/g, '"');
+}
+
+function cleanCdnUrl(url: string): string {
+	return decodeEscapedInstagramText(url);
 }
 
 function uniqStrings(values: string[]): string[] {
@@ -338,6 +351,27 @@ function cleanCaption(raw: string): string {
 function parseAuthorFromOgTitle(ogTitle: string): string {
 	const m = ogTitle.match(/^(.+?)\s+on\s+Instagram/i) || ogTitle.match(/^@?(\S+)/);
 	return m?.[1]?.trim().replace(/^@/, '') ?? '';
+}
+
+function parseEmbedSidecarImages(html: string): string[] {
+	const normalizedHtml = decodeEscapedInstagramText(html);
+	const sidecarMatch = normalizedHtml.match(
+		/"edge_sidecar_to_children"\s*:\s*\{[\s\S]*?"edges"\s*:\s*\[([\s\S]*?)\]\s*\}/
+	);
+	if (!sidecarMatch) return [];
+
+	const images: string[] = [];
+	const displayUrlRegex = /"display_url"\s*:\s*"([^"]+)"/g;
+	let match: RegExpExecArray | null;
+
+	while ((match = displayUrlRegex.exec(sidecarMatch[1])) !== null) {
+		const cleanUrl = cleanCdnUrl(match[1]);
+		if (isContentImage(cleanUrl) && !images.includes(cleanUrl)) {
+			images.push(cleanUrl);
+		}
+	}
+
+	return images;
 }
 
 function isContentImage(url: string): boolean {
@@ -656,6 +690,7 @@ export async function fetchViaEmbedHTML(
 		}
 
 		const html = await res.text();
+		const normalizedHtml = decodeEscapedInstagramText(html);
 		const images: string[] = [];
 		let caption = '';
 		let author = '';
@@ -664,28 +699,14 @@ export async function fetchViaEmbedHTML(
 		// Parse embedded JSON data from script tags
 		// =====================================================================
 
-		// Strategy A: Look for edge_sidecar_to_children (carousel posts)
-		const sidecarMatch = html.match(/"edge_sidecar_to_children"\s*:\s*\{[^}]*"edges"\s*:\s*\[([\s\S]*?)\]\s*\}/);
-		if (sidecarMatch) {
-			const carouselUrls = sidecarMatch[1].match(/"display_url"\s*:\s*"([^"]+)"/g);
-			if (carouselUrls) {
-				for (const urlMatch of carouselUrls) {
-					const url = urlMatch.match(/"display_url"\s*:\s*"([^"]+)"/)?.[1];
-					if (url) {
-						const cleanUrl = cleanCdnUrl(url);
-						if (isContentImage(cleanUrl)) {
-							images.push(cleanUrl);
-						}
-					}
-				}
-			}
-		}
+		// Strategy A: decode escaped script payloads, then walk sidecar children.
+		images.push(...parseEmbedSidecarImages(html));
 
 		// Strategy B: Look for single post display_url
 		if (images.length === 0) {
 			const displayUrlRegex = /"display_url"\s*:\s*"([^"]+)"/g;
 			let match;
-			while ((match = displayUrlRegex.exec(html)) !== null) {
+			while ((match = displayUrlRegex.exec(normalizedHtml)) !== null) {
 				const cleanUrl = cleanCdnUrl(match[1]);
 				if (isContentImage(cleanUrl) && !images.includes(cleanUrl)) {
 					images.push(cleanUrl);
@@ -697,7 +718,7 @@ export async function fetchViaEmbedHTML(
 		if (images.length === 0) {
 			const resourcesRegex = /"display_resources"\s*:\s*\[([\s\S]*?)\]/g;
 			let resMatch;
-			while ((resMatch = resourcesRegex.exec(html)) !== null) {
+			while ((resMatch = resourcesRegex.exec(normalizedHtml)) !== null) {
 				const resourceRegex = /\{"config_width":(\d+),"config_height":(\d+),"src":"([^"]+)"\}/g;
 				let best: { url: string; width: number } | null = null;
 				let rMatch;

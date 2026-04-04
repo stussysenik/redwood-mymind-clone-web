@@ -5,6 +5,7 @@ import {
   isInstagramShareUrl,
   resolveInstagramShareUrl,
   fetchViaGraphQL,
+  fetchViaEmbedHTML,
   fetchViaInstaFix,
   INSTAFIX_MIRRORS,
 } from './instagramExtractor'
@@ -31,6 +32,42 @@ function htmlResponse(body: string, status = 200) {
     status,
     headers: { 'content-type': 'text/html; charset=utf-8' },
   })
+}
+
+function buildEscapedEmbedHtml(images: string[]) {
+  const payload = JSON.stringify({
+    edge_sidecar_to_children: {
+      edges: images.map((url, index) => ({
+        node: {
+          __typename: 'GraphImage',
+          display_url: url,
+          display_resources: [
+            {
+              config_width: 640,
+              config_height: 640,
+              src: `${url}?w=640`,
+            },
+          ],
+          is_video: false,
+          shortcode: `IMG${index + 1}`,
+        },
+      })),
+    },
+  })
+    .replace(/"/g, '\\"')
+    .replace(/\//g, '\\/')
+
+  return `
+    <html>
+      <head>
+        <meta property="og:title" content="@wavyland_ on Instagram" />
+        <meta property="og:description" content="Carousel caption" />
+      </head>
+      <body>
+        <script>window.__additionalDataLoaded("${payload}")</script>
+      </body>
+    </html>
+  `
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +433,36 @@ describe('fetchViaInstaFix', () => {
   })
 })
 
+describe('fetchViaEmbedHTML', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  it('extracts every sidecar image from escaped embed payloads', async () => {
+    mockFetch(() =>
+      htmlResponse(
+        buildEscapedEmbedHtml([
+          'https://instagram.fna.fbcdn.net/v/t51.82787-15/img1.jpg',
+          'https://instagram.fna.fbcdn.net/v/t51.82787-15/img2.jpg',
+          'https://instagram.fna.fbcdn.net/v/t51.82787-15/img3.jpg',
+          'https://instagram.fna.fbcdn.net/v/t51.82787-15/img4.jpg',
+        ])
+      )
+    )
+
+    const result = await fetchViaEmbedHTML('EMBED01', 'p')
+
+    expect(result).not.toBeNull()
+    expect(result!.images).toEqual([
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/img1.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/img2.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/img3.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/img4.jpg',
+    ])
+    expect(result!.slideCount).toBe(4)
+    expect(result!.authorHandle).toBe('wavyland_')
+    expect(result!.caption).toBe('Carousel caption')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // FULL EXTRACTION PIPELINE
 // ---------------------------------------------------------------------------
@@ -462,6 +529,46 @@ describe('extractInstagramPost', () => {
 
     expect(result).not.toBeNull()
     expect(result!.images.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('uses embed sidecar data when GraphQL is unavailable and InstaFix is truncated', async () => {
+    mockFetch((url) => {
+      if (url.includes('instagram.com/api/graphql')) {
+        return jsonResponse({ data: { xdt_shortcode_media: null } })
+      }
+      if (url.includes('/embed/captioned/')) {
+        return htmlResponse(
+          buildEscapedEmbedHtml([
+            'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed1.jpg',
+            'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed2.jpg',
+            'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed3.jpg',
+            'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed4.jpg',
+          ])
+        )
+      }
+      if (INSTAFIX_MIRRORS.some((mirror) => url.includes(mirror))) {
+        return htmlResponse(`
+          <html><head>
+            <meta property="og:image" content="https://scontent.cdninstagram.com/v/t51/truncated.jpg" />
+            <meta property="og:title" content="@fallbackuser" />
+          </head></html>
+        `)
+      }
+      return htmlResponse('<html></html>')
+    })
+
+    const result = await extractInstagramPost(
+      'https://www.instagram.com/p/FALLBACK01/?img_index=3'
+    )
+
+    expect(result).not.toBeNull()
+    expect(result!.source).toBe('embed-html')
+    expect(result!.images).toEqual([
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed1.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed2.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed3.jpg',
+      'https://instagram.fna.fbcdn.net/v/t51.82787-15/embed4.jpg',
+    ])
   })
 
   it('resolves share URLs before extraction', async () => {
