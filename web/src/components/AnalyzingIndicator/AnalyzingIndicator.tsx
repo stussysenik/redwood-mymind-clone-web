@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Analyzing Indicator Component
+ * BYOA - Analyzing Indicator Component
  *
  * Premium loading indicator shown on cards during AI enrichment.
  * Features animated gradient, pulse effects, and platform-aware styling.

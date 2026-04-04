@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Reddit Card Component
+ * BYOA - Reddit Card Component
  *
  * Renders Reddit posts with subreddit and upvote styling.
  *

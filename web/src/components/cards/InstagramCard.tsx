@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Instagram Card Component
+ * BYOA - Instagram Card Component
  *
  * Renders Instagram posts and reels with distinctive styling.
  *

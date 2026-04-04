@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Amazon Card Component
+ * BYOA - Amazon Card Component
  *
  * Renders products from Amazon with price and Prime badge.
  * Orange accent matching Amazon brand.

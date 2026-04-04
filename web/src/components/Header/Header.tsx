@@ -1,15 +1,10 @@
 /**
- * MyMind Clone - Header Component
+ * BYOA - Header Component
  *
- * Top navigation matching mymind.com with:
+ * Top navigation with:
  * - Brand logo on left
  * - Navigation tabs in center: Everything | Spaces | Serendipity
  * - User menu on right with Archive and Trash links
- *
- * Enhanced with:
- * - Atomic weight system for responsive visibility
- * - Physics-based animations
- * - Touch target compliance (44px minimum on mobile)
  *
  * @fileoverview Application header with navigation tabs
  */
@@ -75,37 +70,17 @@ export function Header({ buildVersion = 'dev' }: HeaderProps) {
 			style={{ backgroundColor: 'var(--header-backdrop)' }}
 		>
 			<div className="flex h-14 items-center px-4">
-				{/* Left: Brand - Logo icon is weight 10 (always visible), brand text is weight 3 */}
+				{/* Left: Brand */}
 				<div className="flex items-center min-w-[44px] md:min-w-[120px]">
 					<a
 						href="/"
-						className="flex items-center gap-2 group physics-press touch-target"
+						className="flex items-center gap-2 group touch-target"
 					>
-						{/* Logo icon - Weight 10: Always visible */}
-						{/* Custom "D" logo for Digital consumption experiment */}
-						<div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)] flex items-center justify-center
-						               group-hover:shadow-lg group-hover:shadow-[var(--accent-primary)]/25
-						               transition-all duration-200 group-hover:scale-105">
-							<svg
-								viewBox="0 0 24 24"
-								className="w-5 h-5"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2.5"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-							>
-								{/* Stylized D with spark */}
-								<path d="M7 4h4a8 8 0 0 1 0 16H7V4z" className="text-white" />
-								{/* Spark/dot accent */}
-								<circle cx="18" cy="6" r="2" className="fill-white/80 stroke-none" />
-							</svg>
-						</div>
-						{/* Brand text - Weight 3: Decorative, visible xl+ only (1024px+)
-						    Using CSS instead of JS to prevent hydration flash */}
-						<span className="hidden xl:block font-serif text-xl font-bold text-[var(--foreground)] tracking-tight
-						               whitespace-nowrap group-hover:text-[var(--accent-primary)] transition-colors">
-							digital consumption experiment.
+						<span className="font-mono text-base font-bold text-[var(--foreground)] tracking-tight">
+							byoa
+						</span>
+						<span className="hidden xl:block text-xs text-[var(--foreground-muted)] whitespace-nowrap">
+							build your own algorithm
 						</span>
 					</a>
 				</div>

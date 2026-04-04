@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 
-import { LayoutGrid, Network, Settings, FolderOpen, LogOut } from 'lucide-react'
+import { LayoutGrid, Network, Settings, FolderOpen, LogOut, Archive, Dices } from 'lucide-react'
 
 import { navigate, routes, useLocation } from '@redwoodjs/router'
 
 import { useAuth } from 'src/auth'
 import AddModal from 'src/components/AddModal'
+import { ShuffleModal } from 'src/components/ShuffleModal/ShuffleModal'
 import { ToastProvider } from 'src/components/Toast/Toast'
 import { LocalAIProvider } from 'src/lib/local-ai'
 
@@ -16,6 +17,7 @@ interface AppLayoutProps {
 
 const AppLayout = ({ children }: AppLayoutProps) => {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showShuffle, setShowShuffle] = useState(false)
   const [showAvatarDropdown, setShowAvatarDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
@@ -65,22 +67,20 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <header
         className="app-header sticky top-0 z-50 flex items-center justify-between"
         style={{
-          backgroundColor: 'var(--header-backdrop)',
-          backdropFilter: 'blur(12px)',
+          backgroundColor: 'var(--background)',
           borderBottom: '1px solid var(--border-default)',
         }}
       >
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <h1
-            className="text-lg font-bold cursor-pointer"
+            className="text-base font-mono font-bold cursor-pointer tracking-tight"
             style={{
-              fontFamily: 'var(--font-serif)',
-              color: 'var(--accent-primary)',
+              color: 'var(--foreground)',
             }}
             onClick={() => navigate(routes.home())}
           >
-            mymind
+            byoa
           </h1>
         </div>
 
@@ -127,6 +127,23 @@ const AppLayout = ({ children }: AppLayoutProps) => {
               <Network size={14} />
             </button>
           </div>
+
+          {/* Dice / Shuffle */}
+          <button
+            onClick={() => setShowShuffle(true)}
+            className="ml-2 flex items-center justify-center rounded-full transition-all hover:-translate-y-0.5"
+            style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: 'var(--surface-soft)',
+              color: 'var(--foreground-muted)',
+              border: '1px solid var(--border-default)',
+            }}
+            title="Shuffle — random discovery"
+            aria-label="Shuffle cards"
+          >
+            <Dices size={15} />
+          </button>
         </div>
 
         {/* Right: Avatar with dropdown */}
@@ -174,6 +191,24 @@ const AppLayout = ({ children }: AppLayoutProps) => {
               >
                 <FolderOpen size={16} style={{ color: 'var(--foreground-muted)' }} />
                 Spaces
+              </button>
+              <button
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors"
+                style={{ color: 'var(--foreground)' }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    'var(--surface-hover)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = 'transparent')
+                }
+                onClick={() => {
+                  setShowAvatarDropdown(false)
+                  navigate(routes.archive())
+                }}
+              >
+                <Archive size={16} style={{ color: 'var(--foreground-muted)' }} />
+                Archive
               </button>
               <button
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors"
@@ -321,6 +356,10 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
       {showAddModal && (
         <AddModal isOpen={true} onClose={() => setShowAddModal(false)} />
+      )}
+
+      {showShuffle && (
+        <ShuffleModal onClose={() => setShowShuffle(false)} />
       )}
     </div>
     </LocalAIProvider>

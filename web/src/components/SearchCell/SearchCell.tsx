@@ -5,7 +5,7 @@ import {
   useState,
 } from 'react'
 
-import { LayoutGrid, Rows3 } from 'lucide-react'
+import { AlignJustify, LayoutGrid, Rows3 } from 'lucide-react'
 import type { SearchCardsQuery, SearchCardsQueryVariables } from 'types/graphql'
 
 import {
@@ -29,8 +29,8 @@ import {
 import type { Card } from 'src/lib/types'
 
 export const QUERY = gql`
-  query SearchCardsQuery($query: String!, $type: String, $tag: String) {
-    searchCards(query: $query, type: $type, tag: $tag) {
+  query SearchCardsQuery($query: String!, $type: String, $tag: String, $mode: String) {
+    searchCards(query: $query, type: $type, tag: $tag, mode: $mode) {
       cards {
         id
         userId
@@ -103,8 +103,8 @@ export const Success = ({
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
   const [viewMode, setViewMode] = usePersistedViewMode(
-    'mymind_search_view_mode',
-    ['grid', 'list'] as const,
+    'byoa_search_view_mode',
+    ['grid', 'list', 'dense'] as const,
     'grid'
   )
   const visibleTotal = Math.max(0, total - hiddenCardIds.size)
@@ -170,23 +170,18 @@ export const Success = ({
     <div className="px-4 py-6 sm:px-6">
       <div className="mb-5 flex items-center justify-between">
         <div
-          className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+          className="inline-flex items-center gap-2"
           role="status"
           aria-live="polite"
-          style={{
-            backgroundColor: 'var(--surface-elevated)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
         >
           <span
-            className="text-[10px] uppercase tracking-[0.18em]"
+            className="text-xs uppercase tracking-[0.1em] font-medium"
             style={{ color: 'var(--foreground-muted)' }}
           >
-            Search
+            SEARCH
           </span>
           <strong
-            className="text-sm"
+            className="text-sm font-semibold"
             style={{
               color: 'var(--foreground)',
               fontVariantNumeric: 'tabular-nums',
@@ -212,6 +207,11 @@ export const Success = ({
               value: 'list',
               label: 'List',
               icon: <Rows3 className="h-4 w-4" />,
+            },
+            {
+              value: 'dense',
+              label: 'Dense',
+              icon: <AlignJustify className="h-4 w-4" />,
             },
           ]}
         />

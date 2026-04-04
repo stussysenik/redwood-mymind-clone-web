@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Twitter/X Card Component
+ * BYOA - Twitter/X Card Component
  *
  * Renders tweets in a distinctive Twitter/X style.
  *

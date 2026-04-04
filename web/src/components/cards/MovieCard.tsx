@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Movie/Film Card Component
+ * BYOA - Movie/Film Card Component
  *
  * Renders IMDB and Letterboxd movie/film entries.
  *

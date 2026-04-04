@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Card Component
+ * BYOA - Card Component
  *
  * Routes to platform-specific card renderers based on URL.
  * Falls back to generic card for unknown platforms.

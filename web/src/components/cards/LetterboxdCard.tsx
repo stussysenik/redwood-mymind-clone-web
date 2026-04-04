@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Letterboxd Card Component
+ * BYOA - Letterboxd Card Component
  *
  * Renders films from Letterboxd with rating, year, and director.
  * Green accent matching Letterboxd brand.

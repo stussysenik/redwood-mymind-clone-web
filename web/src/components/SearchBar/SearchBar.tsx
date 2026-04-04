@@ -19,10 +19,12 @@ import { useDebounce } from '../../hooks/useDebounce';
 // =============================================================================
 
 interface SearchBarProps {
-	/** Placeholder text */
-	placeholder?: string;
-	/** Callback when search query changes */
-	onSearch?: (query: string) => void;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Callback when search query changes */
+  onSearch?: (query: string) => void;
+  /** Search mode to retain in URL (e.g. ARCHIVE) */
+  mode?: string;
 }
 
 // =============================================================================
@@ -33,8 +35,9 @@ interface SearchBarProps {
  * Search bar with serif italic placeholder.
  */
 export function SearchBar({
-	placeholder = 'Search...',
-	onSearch
+  placeholder = 'Search...',
+  onSearch,
+  mode
 }: SearchBarProps) {
 	const { search } = useLocation();
 	const searchParams = new URLSearchParams(search);
@@ -68,9 +71,13 @@ export function SearchBar({
 			params.delete('q');
 		}
 
-		params.delete('mode');
+    if (mode) {
+      params.set('mode', mode);
+    } else {
+      params.delete('mode');
+    }
 
-		const nextQuery = params.toString();
+    const nextQuery = params.toString();
 		return nextQuery ? `?${nextQuery}` : '/';
 	}, [query, searchParamsString]);
 
@@ -96,7 +103,11 @@ export function SearchBar({
 		} else {
 			params.delete('q');
 		}
-		params.delete('mode');
+    if (mode) {
+      params.set('mode', mode);
+    } else {
+      params.delete('mode');
+    }
 
 		const nextQuery = params.toString();
 		startTransition(() => {
@@ -115,7 +126,11 @@ export function SearchBar({
 		setQuery('');
 		const params = new URLSearchParams(searchParamsString);
 		params.delete('q');
-		params.delete('mode');
+    if (mode) {
+      params.set('mode', mode);
+    } else {
+      params.delete('mode');
+    }
 		const nextQuery = params.toString();
 
 		startTransition(() => {

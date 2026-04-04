@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - YouTube Card Component
+ * BYOA - YouTube Card Component
  *
  * Renders YouTube videos with thumbnail and play button.
  *

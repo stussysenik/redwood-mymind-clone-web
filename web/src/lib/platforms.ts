@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Platform Detection Utilities
+ * BYOA - Platform Detection Utilities
  *
  * Detects platform from URLs and provides platform-specific metadata.
  *

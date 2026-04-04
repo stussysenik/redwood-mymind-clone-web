@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - CardGridClient Component (RedwoodJS)
+ * BYOA - CardGridClient Component (RedwoodJS)
  *
  * Client-side card grid with masonry layout, search filtering,
  * view toggle (grid/list), card size slider, pagination, and
@@ -447,7 +447,7 @@ export function CardGridClient({
   // Pagination state
   const [effectivePageSize, setEffectivePageSize] = useState<number>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('mymind_page_size')
+      const saved = localStorage.getItem('byoa_page_size')
       if (saved) {
         const parsed = parseInt(saved, 10)
         if ((PAGE_SIZE_OPTIONS as readonly number[]).includes(parsed))
@@ -513,7 +513,7 @@ export function CardGridClient({
 
   // Load card size preferences on mount
   useEffect(() => {
-    const savedSize = localStorage.getItem('mymind_card_size')
+    const savedSize = localStorage.getItem('byoa_card_size')
     if (savedSize) {
       const parsed = parseFloat(savedSize)
       if (!isNaN(parsed) && parsed >= 0.7 && parsed <= 1.5) {
@@ -522,7 +522,7 @@ export function CardGridClient({
     }
 
     const savedMobileColumns = localStorage.getItem(
-      'mymind_mobile_grid_columns'
+      'byoa_mobile_grid_columns'
     )
     if (savedMobileColumns === '2') {
       setMobileGridColumns(2)
@@ -531,15 +531,15 @@ export function CardGridClient({
 
   // Save card size to localStorage when changed
   useEffect(() => {
-    localStorage.setItem('mymind_card_size', String(cardSize))
+    localStorage.setItem('byoa_card_size', String(cardSize))
   }, [cardSize])
 
   useEffect(() => {
-    localStorage.setItem('mymind_mobile_grid_columns', String(mobileGridColumns))
+    localStorage.setItem('byoa_mobile_grid_columns', String(mobileGridColumns))
   }, [mobileGridColumns])
 
   useEffect(() => {
-    localStorage.setItem('mymind_page_size', String(effectivePageSize))
+    localStorage.setItem('byoa_page_size', String(effectivePageSize))
   }, [effectivePageSize])
 
   // Optimistic card insert from AddModal
@@ -1270,7 +1270,7 @@ export function CardGridClient({
           <h3 className="mb-2 text-2xl font-serif text-[var(--foreground)]">
             {similarityId
               ? 'No similar cards found'
-              : 'Your mind is waiting'}
+              : 'Nothing saved yet'}
           </h3>
           <p className="mx-auto mb-8 max-w-md leading-relaxed text-[var(--foreground-muted)]">
             {currentQuery ? (

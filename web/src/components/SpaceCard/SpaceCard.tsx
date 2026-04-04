@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Space Card Component
+ * BYOA - Space Card Component
  *
  * Displays a single space card with hover hide/delete functionality.
  * Hide = non-destructive (cards keep their tags)

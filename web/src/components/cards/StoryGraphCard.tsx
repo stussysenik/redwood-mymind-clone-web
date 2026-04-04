@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - StoryGraph Card Component
+ * BYOA - StoryGraph Card Component
  *
  * Renders books from The StoryGraph with rating and moods.
  * Purple accent matching StoryGraph brand.

@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - FocusCard Component
+ * BYOA - FocusCard Component
  *
  * Large, centered card for focused exploration in Serendipity mode.
  * Displays a single card prominently with animated transitions.

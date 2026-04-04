@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Toast Notification Component
+ * BYOA - Toast Notification Component
  *
  * Minimal toast component for success/error/warning feedback.
  * Includes a confirmation variant with action buttons.

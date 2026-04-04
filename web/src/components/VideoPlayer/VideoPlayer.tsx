@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - VideoPlayer Component
+ * BYOA - VideoPlayer Component
  *
  * Embedded video player for native-like playback.
  * Supports YouTube, Vimeo, and other embeddable platforms.

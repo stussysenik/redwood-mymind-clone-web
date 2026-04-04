@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Suggested Spaces Component
+ * BYOA - Suggested Spaces Component
  *
  * Horizontal scroll of auto-detected space suggestions based on tag clusters.
  * Each suggestion has a "Create" action that creates a new auto-generated space

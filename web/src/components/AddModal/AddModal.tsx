@@ -14,6 +14,7 @@ import { getPlatformInfo } from 'src/lib/platforms';
 import { useLocalAI } from 'src/lib/local-ai';
 import { posthog } from 'src/lib/posthog';
 import { useToast } from 'src/components/Toast/Toast';
+import Papa from 'papaparse';
 
 const SAVE_CARD_MUTATION = gql`
   mutation SaveCard($input: SaveCardInput!) {
@@ -100,6 +101,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
 	// Batch link upload state — per-link status tracking for parallel saves
 	const [batchLinks, setBatchLinks] = useState<Map<string, LinkSaveStatus> | null>(null);
+	const [batchPayloads, setBatchPayloads] = useState<SavePayload[] | null>(null);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -160,32 +162,72 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 			setMode('auto');
 			setSaveStatus('idle');
 			setBatchLinks(null);
+			setBatchPayloads(null);
 		}
 	}, [isOpen]);
 
-	const handleImageFile = (file: File) => {
-		if (!file.type.startsWith('image/')) {
-			setError('Please select an image file');
-			return;
-		}
-		if (file.size > 5 * 1024 * 1024) {
-			setError('Image must be less than 5MB');
+	const handleFile = (file: File) => {
+		if (file.type.startsWith('image/')) {
+			if (file.size > 5 * 1024 * 1024) {
+				setError('Image must be less than 5MB');
+				return;
+			}
+			setImageFile(file);
+			setError(null);
+			setBatchPayloads(null); // Clear any CSV data
+
+			const reader = new FileReader();
+			reader.onload = (e) => setImagePreview(e.target?.result as string);
+			reader.readAsDataURL(file);
 			return;
 		}
 
-		setImageFile(file);
-		setError(null);
+		if (file.name.endsWith('.csv') || file.type.includes('csv')) {
+			Papa.parse<any>(file, {
+				header: true,
+				skipEmptyLines: true,
+				complete: (results) => {
+					const payloads: SavePayload[] = [];
+					for (const row of results.data) {
+						const url = row.url || row.URL || row.Url || row.link || row.Link;
+						const text = row.notes || row.Notes || row.text || row.Text || row.content || row.Content;
+						const title = row.title || row.Title || row.name || row.Name;
+						
+						if (url && /^https?:\/\//i.test(url)) {
+							payloads.push({ url, type: 'website', title });
+						} else if (text) {
+							payloads.push({ 
+								type: 'note', 
+								content: text, 
+								title: title || (text.slice(0, 50) + (text.length > 50 ? '...' : '')) 
+							});
+						}
+					}
+					
+					if (payloads.length > 0) {
+						setBatchPayloads(payloads);
+						setMode('auto');
+						setContent(payloads.map(p => p.url || p.content).filter(Boolean).join('\n'));
+						showToast(`Loaded ${payloads.length} items from CSV`, 'success');
+					} else {
+						setError('No readable bookmarks or notes found in CSV');
+					}
+				},
+				error: (err: any) => {
+					setError(`CSV Parse Error: ${err.message}`);
+				}
+			});
+			return;
+		}
 
-		const reader = new FileReader();
-		reader.onload = (e) => setImagePreview(e.target?.result as string);
-		reader.readAsDataURL(file);
+		setError('Unsupported file type. Please upload an image or a CSV file.');
 	};
 
 	const handleDrop = (e: React.DragEvent) => {
 		e.preventDefault();
 		setIsDragOver(false);
 		const file = e.dataTransfer.files[0];
-		if (file) handleImageFile(file);
+		if (file) handleFile(file);
 	};
 
 	const handleSubmit = useCallback(async () => {
@@ -202,40 +244,48 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		setError(null);
 
 		try {
-			// BATCH MODE: Multiple links detected — parallel with per-link progress
-			if (isMultiMode) {
-				const links = detectedLinks;
+			const activeBatchPayloads = batchPayloads?.length ? batchPayloads : (isMultiMode ? detectedLinks.map(url => ({ url, type: 'website' } as SavePayload)) : null);
 
-				// Initialize all links as pending
+			// BATCH MODE: Multiple items detected — parallel with per-item progress
+			if (activeBatchPayloads && activeBatchPayloads.length > 1) {
+				const items = activeBatchPayloads;
+
+				// Initialize all items as pending
 				const statusMap = new Map<string, LinkSaveStatus>(
-					links.map((url) => [url, 'pending'])
+					items.map((item, idx) => [item.url || `note-${idx}`, 'pending'])
 				);
 				setBatchLinks(new Map(statusMap));
 
-				const updateStatus = (url: string, status: LinkSaveStatus) => {
-					statusMap.set(url, status);
+				const updateStatus = (key: string, status: LinkSaveStatus) => {
+					statusMap.set(key, status);
 					setBatchLinks(new Map(statusMap));
 				};
 
 				// Run saves in parallel, 3 at a time
-				await promisePool(links, 3, async (url) => {
-					updateStatus(url, 'saving');
+				await promisePool(items, 3, async (item: SavePayload) => {
+					const key = item.url || `note-${items.indexOf(item)}`;
+					updateStatus(key, 'saving');
 					try {
 						const result = await saveCard({
-							variables: { input: { url, type: 'website' } },
+							variables: { input: { 
+								url: item.url, 
+								type: item.type,
+								title: item.title,
+								content: item.content
+							} },
 						});
 						if (result.data?.saveCard?.id) {
-							updateStatus(url, 'done');
+							updateStatus(key, 'done');
 							// Fire per-card event so each card appears immediately in the grid
 							window.dispatchEvent(new CustomEvent('card-saved', {
 								detail: result.data.saveCard,
 							}));
 						} else {
-							updateStatus(url, 'failed');
+							updateStatus(key, 'failed');
 						}
 					} catch (err) {
-						console.error(`[AddModal] Failed to save ${url}:`, err);
-						updateStatus(url, 'failed');
+						console.error(`[AddModal] Failed to save ${key}:`, err);
+						updateStatus(key, 'failed');
 					}
 				});
 
@@ -243,20 +293,21 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 				const failedCount = [...statusMap.values()].filter((s) => s === 'failed').length;
 
 				if (doneCount === 0) {
-					throw new Error('Failed to save any links');
+					throw new Error('Failed to save any items');
 				}
 
 				if (failedCount > 0) {
-					// Keep modal open so user can retry failed links
-					showToast(`Saved ${doneCount} of ${links.length} cards`, 'success');
+					// Keep modal open so user can retry failed items
+					showToast(`Saved ${doneCount} of ${items.length} items`, 'success');
 					setIsSubmitting(false);
 					setSaveStatus('idle');
 					return;
 				}
 
 				// All succeeded — vanish
-				showToast(`Saved ${doneCount} cards`, 'success');
+				showToast(`Saved ${doneCount} items`, 'success');
 				setBatchLinks(null);
+				setBatchPayloads(null);
 				vanishAndClose();
 				return;
 			}
@@ -360,28 +411,35 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 		}
 		setBatchLinks(new Map(statusMap));
 
-		const updateStatus = (url: string, status: LinkSaveStatus) => {
-			statusMap.set(url, status);
+		const updateStatus = (key: string, status: LinkSaveStatus) => {
+			statusMap.set(key, status);
 			setBatchLinks(new Map(statusMap));
 		};
 
-		await promisePool(failedUrls, 3, async (url) => {
-			updateStatus(url, 'saving');
+		await promisePool(failedUrls, 3, async (key) => {
+			updateStatus(key, 'saving');
 			try {
+				const payload = batchPayloads?.find(p => p.url === key || `note-${batchPayloads.indexOf(p)}` === key);
+				
 				const result = await saveCard({
-					variables: { input: { url, type: 'website' } },
+					variables: { input: { 
+						url: payload?.url || key, 
+						type: payload?.type || 'website',
+						title: payload?.title,
+						content: payload?.content
+					} },
 				});
 				if (result.data?.saveCard?.id) {
-					updateStatus(url, 'done');
+					updateStatus(key, 'done');
 					window.dispatchEvent(new CustomEvent('card-saved', {
 						detail: result.data.saveCard,
 					}));
 				} else {
-					updateStatus(url, 'failed');
+					updateStatus(key, 'failed');
 				}
 			} catch (err) {
-				console.error(`[AddModal] Retry failed for ${url}:`, err);
-				updateStatus(url, 'failed');
+				console.error(`[AddModal] Retry failed for ${key}:`, err);
+				updateStatus(key, 'failed');
 			}
 		});
 
@@ -510,7 +568,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 										for (let i = 0; i < items.length; i++) {
 											if (items[i].type.indexOf('image') !== -1) {
 												const file = items[i].getAsFile()
-												if (file) handleImageFile(file)
+												if (file) handleFile(file)
 												e.preventDefault()
 												return
 											}
@@ -529,15 +587,15 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 									transition-all duration-150
 									rounded-lg p-2 -m-2
 								"
-								rows={isMultiMode ? 6 : (mode === 'link' ? 2 : 5)}
+								rows={batchPayloads ? 6 : (isMultiMode ? 6 : (mode === 'link' ? 2 : 5))}
 								disabled={isSubmitting}
 							/>
 
 							{/* Batch Mode Badge — shown before saving starts */}
-							{isMultiMode && !batchLinks && (
+							{(isMultiMode || batchPayloads) && !batchLinks && (
 								<div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-badge-pulse">
 									<Upload className="w-4 h-4" />
-									<span className="text-sm font-medium">{detectedLinks.length} links detected - will save all</span>
+									<span className="text-sm font-medium">{batchPayloads ? batchPayloads.length : detectedLinks.length} items detected - will save all</span>
 									<Sparkles className="w-3 h-3 ml-auto animate-pulse" />
 								</div>
 							)}
@@ -563,9 +621,14 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 													)}
 												</div>
 												{entries.map(([url, status]) => {
-													let domain: string;
-													try { domain = new URL(url).hostname.replace(/^www\./, ''); }
-													catch { domain = url.slice(0, 40); }
+													let displayLabel: string;
+													if (url.startsWith('note-')) {
+														displayLabel = 'Note';
+													} else {
+														try { displayLabel = new URL(url).hostname.replace(/^www\./, ''); }
+														catch { displayLabel = url.slice(0, 40); }
+													}
+													
 													return (
 														<div key={url} className="flex items-center gap-2 text-sm leading-snug">
 															{status === 'pending' && (
@@ -586,7 +649,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 																status === 'saving' ? 'text-[var(--foreground)]' :
 																'text-[var(--foreground-muted)]'
 															}`}>
-																{domain}
+																{displayLabel}
 															</span>
 														</div>
 													);
@@ -645,9 +708,9 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								ref={fileInputRef}
 								type="file"
 								className="hidden"
-								accept="image/*"
+								accept="image/*,.csv"
 								onChange={(e) => {
-									if (e.target.files?.[0]) handleImageFile(e.target.files[0]);
+									if (e.target.files?.[0]) handleFile(e.target.files[0]);
 								}}
 							/>
 

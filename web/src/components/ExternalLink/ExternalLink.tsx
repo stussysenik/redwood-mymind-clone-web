@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - ExternalLink Component
+ * BYOA - ExternalLink Component
  *
  * Smart external link component that provides app-like navigation
  * with return-to-app context tracking.
@@ -35,7 +35,7 @@ interface ExternalLinkProps {
 /**
  * Context storage key for tracking last viewed card
  */
-const LAST_VIEW_KEY = 'mymind_last_card_view';
+const LAST_VIEW_KEY = 'byoa_last_card_view';
 
 /**
  * Stores the current context for return navigation

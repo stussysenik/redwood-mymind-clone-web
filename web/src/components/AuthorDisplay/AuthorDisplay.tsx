@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Author Display Component
+ * BYOA - Author Display Component
  *
  * Shared component for displaying author information consistently
  * across social media cards (Twitter, Instagram, YouTube, Reddit, TikTok).

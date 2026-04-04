@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - SerendipityClient Component
+ * BYOA - SerendipityClient Component
  *
  * Interactive focused discovery experience for Serendipity mode.
  * Features single-card focus view with swipe/keyboard navigation.

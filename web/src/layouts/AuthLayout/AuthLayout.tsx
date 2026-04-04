@@ -13,13 +13,13 @@ const AuthLayout = ({ children }: AuthLayoutProps) => {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1
-            className="text-3xl font-bold mb-2"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--accent-primary)' }}
+            className="text-2xl font-mono font-bold mb-2"
+            style={{ color: 'var(--foreground)' }}
           >
-            mymind
+            byoa
           </h1>
           <p style={{ color: 'var(--foreground-muted)', fontSize: '14px' }}>
-            Your visual knowledge manager
+            build your own algorithm
           </p>
         </div>
         {children}

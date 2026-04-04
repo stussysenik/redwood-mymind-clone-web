@@ -5,7 +5,7 @@ import {
   useState,
 } from 'react'
 
-import { LayoutGrid, Rows3 } from 'lucide-react'
+import { AlignJustify, LayoutGrid, Rows3 } from 'lucide-react'
 import type { CardsQuery, CardsQueryVariables } from 'types/graphql'
 
 import {
@@ -103,7 +103,7 @@ export const Empty = () => (
       className="font-serif text-2xl italic"
       style={{ color: 'var(--foreground-muted)' }}
     >
-      Your mind, organized
+      Nothing saved yet
     </p>
   </div>
 )
@@ -132,8 +132,8 @@ export const Success = ({
   const [optimisticCards, setOptimisticCards] = useState<FeedCardRecord[]>([])
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
   const [viewMode, setViewMode] = usePersistedViewMode(
-    'mymind_library_view_mode',
-    ['grid', 'list'] as const,
+    'byoa_library_view_mode',
+    ['grid', 'list', 'dense'] as const,
     'grid'
   )
   const mergedCards = useMemo(
@@ -270,23 +270,18 @@ export const Success = ({
       {/* Card count */}
       <div className="mb-5 flex items-center justify-between">
         <div
-          className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+          className="inline-flex items-center gap-2"
           role="status"
           aria-live="polite"
-          style={{
-            backgroundColor: 'var(--surface-elevated)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
         >
           <span
-            className="text-[10px] uppercase tracking-[0.18em]"
+            className="text-xs uppercase tracking-[0.1em] font-medium"
             style={{ color: 'var(--foreground-muted)' }}
           >
-            Library
+            LIBRARY
           </span>
           <strong
-            className="text-sm"
+            className="text-sm font-semibold"
             style={{
               color: 'var(--foreground)',
               fontVariantNumeric: 'tabular-nums',
@@ -312,6 +307,11 @@ export const Success = ({
               value: 'list',
               label: 'List',
               icon: <Rows3 className="h-4 w-4" />,
+            },
+            {
+              value: 'dense',
+              label: 'Dense',
+              icon: <AlignJustify className="h-4 w-4" />,
             },
           ]}
         />

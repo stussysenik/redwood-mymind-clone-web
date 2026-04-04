@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - TagScroller Component
+ * BYOA - TagScroller Component
  *
  * Horizontal scrolling tag/filter bar matching mymind.com.
  * Now uses PLATFORM-BASED pills instead of content-type pills.

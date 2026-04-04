@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - User Menu Component
+ * BYOA - User Menu Component
  *
  * Displays user email and sign out button.
  * Enhanced with:

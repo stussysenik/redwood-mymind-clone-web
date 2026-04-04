@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - TypeScript Type Definitions
+ * BYOA - TypeScript Type Definitions
  *
  * Core types shared across the RedwoodJS web side.
  * These mirror the source app's types exactly.

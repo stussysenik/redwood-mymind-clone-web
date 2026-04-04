@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Tag Display Component
+ * BYOA - Tag Display Component
  *
  * Consistent tag/hashtag display with colored dots.
  * Used across all card types for visual consistency.

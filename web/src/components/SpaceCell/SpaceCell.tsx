@@ -5,7 +5,7 @@ import {
   useState,
 } from 'react'
 
-import { ChevronLeft, LayoutGrid, Rows3 } from 'lucide-react'
+import { AlignJustify, ChevronLeft, LayoutGrid, Rows3 } from 'lucide-react'
 import type { SpaceQuery, SpaceQueryVariables } from 'types/graphql'
 
 import { Link, routes } from '@redwoodjs/router'
@@ -129,8 +129,8 @@ export const Success = ({
   const [hiddenCardIds, setHiddenCardIds] = useState<Set<string>>(new Set())
   const [liveCards, setLiveCards] = useState<Record<string, FeedCardRecord>>({})
   const [viewMode, setViewMode] = usePersistedViewMode(
-    'mymind_space_view_mode',
-    ['grid', 'list'] as const,
+    'byoa_space_view_mode',
+    ['grid', 'list', 'dense'] as const,
     'grid'
   )
   const cards = space?.cards || []
@@ -278,6 +278,11 @@ export const Success = ({
               value: 'list',
               label: 'List',
               icon: <Rows3 className="h-4 w-4" />,
+            },
+            {
+              value: 'dense',
+              label: 'Dense',
+              icon: <AlignJustify className="h-4 w-4" />,
             },
           ]}
         />

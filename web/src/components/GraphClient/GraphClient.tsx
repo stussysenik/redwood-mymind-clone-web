@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Graph Client Component
+ * BYOA - Graph Client Component
  *
  * Force-directed knowledge graph with:
  * - Type initials inside each node (A/V/N/S...) so you instantly know the category
@@ -160,7 +160,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 	const [viewMode, setViewMode] = usePersistedViewMode(
-		'mymind_graph_view_mode',
+		'byoa_graph_view_mode',
 		['graph', 'list'] as const,
 		'graph'
 	);

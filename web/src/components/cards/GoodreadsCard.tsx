@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Goodreads Card Component
+ * BYOA - Goodreads Card Component
  *
  * Renders books from Goodreads with rating and author.
  * Brown/cream accent matching Goodreads brand.

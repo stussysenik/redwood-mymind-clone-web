@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Trash Bulk Actions Component
+ * BYOA - Trash Bulk Actions Component
  *
  * Bulk action buttons for the trash view: Restore All and Empty Trash.
  *

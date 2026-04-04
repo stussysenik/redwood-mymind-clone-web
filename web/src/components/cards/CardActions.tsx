@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Card Actions Component
+ * BYOA - Card Actions Component
  *
  * Shared component for consistent card action buttons across all platform cards.
  * Provides Archive, Delete, and Restore actions that appear on hover.

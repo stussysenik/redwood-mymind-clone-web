@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Create Space Component
+ * BYOA - Create Space Component
  *
  * Modal form for creating a new space.
  * Uses GraphQL mutation via useMutation hook.

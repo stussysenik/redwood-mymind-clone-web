@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react'
 
 import {
   FeedCardBody,
+  FeedCardDenseRow,
   FeedCardListItem,
   FeedCardVisual,
   type FeedCardRecord,
@@ -9,7 +10,7 @@ import {
 
 interface FeedCollectionViewProps {
   cards: FeedCardRecord[]
-  viewMode: 'grid' | 'list'
+  viewMode: 'grid' | 'list' | 'dense'
   onOpenCard: (card: FeedCardRecord) => void
 }
 
@@ -28,6 +29,26 @@ export function FeedCollectionView({
   viewMode,
   onOpenCard,
 }: FeedCollectionViewProps) {
+  if (viewMode === 'dense') {
+    return (
+      <div
+        className="overflow-hidden rounded-xl"
+        style={{
+          border: '1px solid var(--border-subtle)',
+          backgroundColor: 'var(--surface-card)',
+        }}
+      >
+        {cards.map((card) => (
+          <FeedCardDenseRow
+            key={card.id}
+            card={card}
+            onOpen={() => onOpenCard(card)}
+          />
+        ))}
+      </div>
+    )
+  }
+
   if (viewMode === 'list') {
     return (
       <div className="grid gap-4 xl:grid-cols-2">

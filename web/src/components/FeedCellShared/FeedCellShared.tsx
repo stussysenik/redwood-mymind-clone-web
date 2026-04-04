@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { navigate } from '@redwoodjs/router'
-
 import {
   BookOpen,
   Film,
@@ -16,6 +14,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+import { navigate } from '@redwoodjs/router'
+
 import { AnalyzingIndicator } from 'src/components/AnalyzingIndicator'
 import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
 import {
@@ -24,7 +24,10 @@ import {
   getProcessingState,
 } from 'src/lib/enrichment-timing'
 import { getTrustedCardVisualSources } from 'src/lib/imageProxy'
-import { ENRICHMENT_PROGRESS_STAGES, toProgressEnrichmentStage } from 'src/lib/semantic'
+import {
+  ENRICHMENT_PROGRESS_STAGES,
+  toProgressEnrichmentStage,
+} from 'src/lib/semantic'
 import type { Card, CardMetadata, CardType } from 'src/lib/types'
 
 export interface FeedCardRecord {
@@ -110,10 +113,26 @@ function getDomainLabel(url: string | null | undefined): string | null {
   }
 }
 
+function getHumanSourceLabel(url: string | null | undefined): string | null {
+  const domain = getDomainLabel(url)
+  if (!domain) {
+    return null
+  }
+
+  const root = domain.split('.')[0]?.replace(/[-_]+/g, ' ').trim()
+  if (!root) {
+    return domain
+  }
+
+  return root.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
 function getVisualBadges(card: FeedCardRecord): string[] {
   const badges: string[] = []
   const domainLabel = getDomainLabel(card.url)
-  const images = Array.isArray(card.metadata?.images) ? card.metadata.images : []
+  const images = Array.isArray(card.metadata?.images)
+    ? card.metadata.images
+    : []
   const mediaTypes = Array.isArray(card.metadata?.mediaTypes)
     ? card.metadata.mediaTypes
     : []
@@ -143,6 +162,57 @@ function getVisualSources(
   }
 
   return getTrustedCardVisualSources(card)
+}
+
+function getDisplayTitle(card: FeedCardRecord): string {
+  const title = card.title?.trim()
+  if (title) {
+    return title
+  }
+
+  if (getProcessingState(card.metadata) !== 'idle') {
+    const source = getHumanSourceLabel(card.url)
+    return source ? `Saving from ${source}` : 'Saving item'
+  }
+
+  return 'Untitled'
+}
+
+function getProcessingCopy(card: FeedCardRecord): {
+  stageLabel: string
+  detail: string
+} | null {
+  const processingState = getProcessingState(card.metadata)
+
+  if (processingState === 'idle' || processingState === 'failed') {
+    return null
+  }
+
+  const progressStage = toProgressEnrichmentStage(
+    card.metadata?.enrichmentStage
+  )
+  const stageLabel =
+    ENRICHMENT_PROGRESS_STAGES.find((stage) => stage.name === progressStage)
+      ?.label ?? 'Analyzing'
+
+  const timing = card.metadata?.enrichmentTiming
+  const elapsedMs = timing?.startedAt
+    ? Math.max(0, Date.now() - timing.startedAt)
+    : 0
+  const estimatedTotalMs = timing?.estimatedTotalMs ?? 15000
+  const progress = getEnrichmentProgress(elapsedMs, estimatedTotalMs)
+
+  let detail = formatRemainingTime(progress.remainingMs)
+  if (processingState === 'slow') {
+    detail = 'Taking longer than usual'
+  } else if (processingState === 'stuck') {
+    detail = 'Still running in background'
+  }
+
+  return {
+    stageLabel,
+    detail,
+  }
 }
 
 function renderGradient(
@@ -219,9 +289,13 @@ function NoteCardVisual({
 export function FeedCardVisual({
   card,
   variant = 'stacked',
+  showBadges = true,
+  showProcessingIndicator = true,
 }: {
   card: FeedCardRecord
   variant?: 'stacked' | 'row'
+  showBadges?: boolean
+  showProcessingIndicator?: boolean
 }) {
   const [failedSources, setFailedSources] = useState<string[]>([])
   const isNote = isNoteCard(card)
@@ -240,10 +314,10 @@ export function FeedCardVisual({
     <div
       className="overflow-hidden"
       style={{
-        borderRadius: variant === 'row' ? '18px' : '12px 12px 0 0',
-        aspectRatio: variant === 'row' ? '1 / 1' : '4 / 3',
-        minHeight: variant === 'row' ? 160 : undefined,
+        borderRadius: variant === 'row' ? '14px' : '12px 12px 0 0',
+        aspectRatio: '4 / 3',
         backgroundColor: 'var(--shimmer-base)',
+        width: '100%',
       }}
     >
       <img
@@ -268,7 +342,11 @@ export function FeedCardVisual({
       />
     </div>
   ) : isNote ? (
-    <NoteCardVisual title={card.title} content={card.content} variant={variant} />
+    <NoteCardVisual
+      title={card.title}
+      content={card.content}
+      variant={variant}
+    />
   ) : (
     renderGradient(card, variant)
   )
@@ -276,7 +354,7 @@ export function FeedCardVisual({
   return (
     <div className="relative">
       {visual}
-      {visualBadges.length > 0 && (
+      {showBadges && visualBadges.length > 0 && (
         <div
           className="absolute bottom-2 left-2 z-[1] flex flex-wrap gap-1.5"
           aria-hidden="true"
@@ -297,42 +375,27 @@ export function FeedCardVisual({
           ))}
         </div>
       )}
-      {processingState !== 'idle' && processingState !== 'failed' && (
-        <div className="absolute left-2 top-2 z-10">
-          <AnalyzingIndicator
-            variant="light"
-            size="sm"
-            showStage
-            serverStage={card.metadata?.enrichmentStage}
-          />
-        </div>
-      )}
+      {showProcessingIndicator &&
+        processingState !== 'idle' &&
+        processingState !== 'failed' && (
+          <div className="absolute left-2 top-2 z-10">
+            <AnalyzingIndicator
+              variant="light"
+              size="sm"
+              showStage
+              serverStage={card.metadata?.enrichmentStage}
+            />
+          </div>
+        )}
     </div>
   )
 }
 
 function FeedCardStatus({ card }: { card: FeedCardRecord }) {
-  const processingState = getProcessingState(card.metadata)
+  const processingCopy = getProcessingCopy(card)
 
-  if (processingState === 'idle' || processingState === 'failed') {
+  if (!processingCopy) {
     return null
-  }
-
-  const progressStage = toProgressEnrichmentStage(card.metadata?.enrichmentStage)
-  const stageLabel =
-    ENRICHMENT_PROGRESS_STAGES.find((stage) => stage.name === progressStage)
-      ?.label ?? 'Analyzing'
-
-  const timing = card.metadata?.enrichmentTiming
-  const elapsedMs = timing?.startedAt ? Math.max(0, Date.now() - timing.startedAt) : 0
-  const estimatedTotalMs = timing?.estimatedTotalMs ?? 15000
-  const progress = getEnrichmentProgress(elapsedMs, estimatedTotalMs)
-
-  let detail = formatRemainingTime(progress.remainingMs)
-  if (processingState === 'slow') {
-    detail = 'Taking longer than usual'
-  } else if (processingState === 'stuck') {
-    detail = 'Still running in background'
   }
 
   return (
@@ -340,8 +403,8 @@ function FeedCardStatus({ card }: { card: FeedCardRecord }) {
       className="mt-2 text-[11px] font-medium"
       style={{ color: 'var(--foreground-muted)' }}
     >
-      {stageLabel}
-      {detail ? ` · ${detail}` : ''}
+      {processingCopy.stageLabel}
+      {processingCopy.detail ? ` · ${processingCopy.detail}` : ''}
     </p>
   )
 }
@@ -506,7 +569,7 @@ export function FeedCardDenseRow({
 
   return (
     <div
-      className="group flex w-full cursor-pointer items-center gap-3 border-b px-3 py-2 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+      className="group flex w-full cursor-pointer items-center gap-3 border-b px-2 py-1.5 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
       role="button"
       tabIndex={0}
       aria-label={
@@ -526,25 +589,25 @@ export function FeedCardDenseRow({
       }}
     >
       <TypeIcon
-        className="h-4 w-4 shrink-0"
+        className="h-3.5 w-3.5 shrink-0"
         style={{ color: 'var(--foreground-muted)' }}
       />
       <span
-        className="min-w-0 flex-1 truncate text-sm"
+        className="min-w-0 flex-1 truncate text-[13px] tracking-tight font-medium"
         style={{ color: 'var(--foreground)' }}
       >
         {card.title || 'Untitled'}
       </span>
       {domain && (
         <span
-          className="hidden shrink-0 font-mono text-xs sm:inline"
+          className="hidden shrink-0 font-mono text-[11px] sm:inline"
           style={{ color: 'var(--foreground-muted)' }}
         >
           {domain}
         </span>
       )}
       <span
-        className="shrink-0 font-mono text-xs tabular-nums"
+        className="shrink-0 font-mono text-[11px] tabular-nums"
         style={{ color: 'var(--foreground-muted)' }}
       >
         {dateLabel}
@@ -563,7 +626,16 @@ export function FeedCardListItem({
   showSummary?: boolean
 }) {
   const summary = card.metadata?.summary
-  const visualBadges = getVisualBadges(card)
+  const domainLabel = getDomainLabel(card.url)
+  const visualBadges = getVisualBadges(card).filter(
+    (badge) => badge !== domainLabel
+  )
+  const processingCopy = getProcessingCopy(card)
+  const displayTitle = getDisplayTitle(card)
+  const fallbackSummary =
+    !summary && processingCopy
+      ? 'Capturing the visual, title, and source details before it settles into your library.'
+      : null
 
   return (
     <div
@@ -571,7 +643,9 @@ export function FeedCardListItem({
       role="button"
       tabIndex={0}
       aria-label={
-        card.title ? `Open ${card.type} card: ${card.title}` : `Open ${card.type} card`
+        card.title
+          ? `Open ${card.type} card: ${card.title}`
+          : `Open ${card.type} card`
       }
       onClick={onOpen}
       onKeyDown={(event) => {
@@ -580,70 +654,94 @@ export function FeedCardListItem({
           onOpen()
         }
       }}
-      style={{
-        backgroundColor: 'var(--surface-card)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 22,
-        boxShadow: 'var(--shadow-sm)',
-        overflow: 'hidden',
-      }}
     >
-      <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
-        <div className="h-full p-3 md:p-3.5">
-          <FeedCardVisual card={card} variant="row" />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '160px 1fr',
+          gap: '12px',
+          padding: '12px',
+        }}
+      >
+        <div style={{ minWidth: 0, flexShrink: 0 }}>
+          <FeedCardVisual
+            card={card}
+            variant="row"
+            showBadges={false}
+            showProcessingIndicator={false}
+          />
         </div>
-        <div className="flex min-w-0 flex-col justify-between px-4 pb-4 pt-2 md:px-2 md:py-4 md:pr-4">
-          <div>
-            {visualBadges.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {visualBadges.map((badge) => (
-                  <span
-                    key={`${card.id}-${badge}`}
-                    className="rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em]"
-                    style={{
-                      backgroundColor: 'var(--surface-soft)',
-                      color: 'var(--foreground-muted)',
-                    }}
-                  >
-                    {badge}
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ minWidth: 0 }}>
+            {domainLabel && (
+              <p
+                className="text-[10px] font-mono uppercase tracking-[0.12em] mb-1.5"
+                style={{
+                  color: 'var(--foreground-muted)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {domainLabel}
+                {visualBadges.length > 0 && (
+                  <span className="ml-2">
+                    {visualBadges.join(' · ')}
                   </span>
-                ))}
-              </div>
+                )}
+              </p>
             )}
 
             <h3
-              className="text-base font-semibold leading-tight sm:text-lg"
+              className="font-serif leading-[1.3]"
               style={{
                 color: 'var(--foreground)',
+                fontSize: '1.05rem',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
-                textWrap: 'pretty',
+                letterSpacing: '-0.02em',
               }}
             >
-              {card.title || 'Untitled'}
+              {displayTitle}
             </h3>
 
-            {showSummary && summary && (
+            {showSummary && (summary || fallbackSummary) && (
               <p
-                className="mt-3 text-sm leading-relaxed"
+                className="mt-1.5 text-[12px] leading-[1.6]"
                 style={{
                   color: 'var(--foreground-muted)',
                   display: '-webkit-box',
-                  WebkitLineClamp: 3,
+                  WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                   wordBreak: 'break-word',
                 }}
               >
-                {summary}
+                {summary || fallbackSummary}
               </p>
             )}
           </div>
 
-          <div className="mt-4">
-            <FeedCardStatus card={card} />
+          <div className="mt-auto pt-3">
+            {processingCopy ? (
+              <div className="flex flex-wrap items-center gap-2.5">
+                <AnalyzingIndicator
+                  variant="light"
+                  size="sm"
+                  label={processingCopy.stageLabel}
+                />
+                {processingCopy.detail && (
+                  <span
+                    className="text-[11px] font-medium"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    {processingCopy.detail}
+                  </span>
+                )}
+              </div>
+            ) : null}
             <FeedCardTags card={card} maxTags={5} />
           </div>
         </div>

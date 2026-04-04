@@ -1,5 +1,5 @@
 /**
- * MyMind Clone - Spaces Grid Client Component
+ * BYOA - Spaces Grid Client Component
  *
  * Client component that displays database-backed spaces.
  * Supports soft-delete via API and shows real space data.
