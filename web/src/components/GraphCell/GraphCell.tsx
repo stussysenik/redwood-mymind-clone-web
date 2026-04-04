@@ -29,7 +29,7 @@ export const Loading = () => (
   <div
     className="flex items-center justify-center"
     style={{
-      height: 'calc(100vh - var(--header-height))',
+      height: 'calc(100dvh - var(--header-height))',
       backgroundColor: 'var(--background)',
     }}
   >
@@ -43,7 +43,7 @@ export const Empty = () => (
   <div
     className="flex items-center justify-center"
     style={{
-      height: 'calc(100vh - var(--header-height))',
+      height: 'calc(100dvh - var(--header-height))',
       backgroundColor: 'var(--background)',
     }}
   >
@@ -72,7 +72,7 @@ export const Success = ({
     <div
       className="overflow-hidden relative"
       style={{
-        height: 'calc(100vh - var(--header-height))',
+        height: 'calc(100dvh - var(--header-height))',
         backgroundColor: 'var(--background)',
       }}
     >

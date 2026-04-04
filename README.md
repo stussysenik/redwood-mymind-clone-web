@@ -1,125 +1,119 @@
-# README
+# BYOA — Build Your Own Algorithm
 
-![Demo](demo.gif)
+A visual knowledge engine for saving, organizing, and rediscovering everything that inspires you. URLs, images, notes, tweets, videos — all searchable, all connected.
 
+Built with [RedwoodJS](https://redwoodjs.com), Supabase, Prisma, and React.
 
-Welcome to [RedwoodJS](https://redwoodjs.com)!
+## Table of Contents
 
-> **Prerequisites**
->
-> - Redwood requires [Node.js](https://nodejs.org/en/) (=20.x) and [Yarn](https://yarnpkg.com/)
-> - Are you on Windows? For best results, follow our [Windows development setup](https://redwoodjs.com/docs/how-to/windows-development-setup) guide
+- [Features](#features)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Development](#development)
+- [Deployment](#deployment)
+- [Project Structure](#project-structure)
 
-Start by installing dependencies:
+## Features
+
+- **Smart Save** — Paste any URL, image, or text. BYOA extracts metadata, screenshots, and dominant colors automatically.
+- **AI Tagging** — Content is classified and tagged using an AI pipeline (GLM + embeddings).
+- **Visual Feed** — Masonry grid with natural aspect-ratio images. Grid, list, and dense view modes.
+- **Graph View** — Force-directed knowledge graph showing tag-based connections between cards.
+- **Semantic Search** — Full-text + vector search powered by Pinecone and Prisma.
+- **Spaces** — Organize cards into collections with smart filters.
+- **Archive & Trash** — Soft-delete lifecycle with search across all states.
+- **Theme System** — Multiple theme packs and skins with typography picker.
+- **Mobile-First** — Haptic feedback, bottom navigation, swipe gestures, responsive everything.
+- **Platform Extractors** — Native support for Twitter/X, Instagram, YouTube, and general web content.
+
+## Architecture
 
 ```
+web/          React frontend (Vite + Tailwind)
+api/          RedwoodJS API (GraphQL + Prisma)
+e2e/          Playwright end-to-end tests
+```
+
+**Data layer:** Supabase (PostgreSQL) + Prisma ORM
+**Search:** Prisma full-text + Pinecone vector embeddings
+**AI:** Classification pipeline with GLM client
+**Deploy:** Railway (Dockerfile + railway.toml)
+
+## Getting Started
+
+**Prerequisites:** Node.js 20.x, Yarn
+
+```bash
+# Install dependencies
 yarn install
-```
 
-Then start the development server:
+# Set up environment variables
+cp .env.example .env
+# Fill in Supabase, Pinecone, and AI keys
 
-```
-yarn redwood dev
-```
-
-Your browser should automatically open to [http://localhost:8910](http://localhost:8910) where you'll see the Welcome Page, which links out to many great resources.
-
-> **The Redwood CLI**
->
-> Congratulations on running your first Redwood CLI command! From dev to deploy, the CLI is with you the whole way. And there's quite a few commands at your disposal:
->
-> ```
-> yarn redwood --help
-> ```
->
-> For all the details, see the [CLI reference](https://redwoodjs.com/docs/cli-commands).
-
-## Prisma and the database
-
-Redwood wouldn't be a full-stack framework without a database. It all starts with the schema. Open the [`schema.prisma`](api/db/schema.prisma) file in `api/db` and replace the `UserExample` model with the following `Post` model:
-
-```prisma
-model Post {
-  id        Int      @id @default(autoincrement())
-  title     String
-  body      String
-  createdAt DateTime @default(now())
-}
-```
-
-Redwood uses [Prisma](https://www.prisma.io/), a next-gen Node.js and TypeScript ORM, to talk to the database. Prisma's schema offers a declarative way of defining your app's data models. And Prisma [Migrate](https://www.prisma.io/migrate) uses that schema to make database migrations hassle-free:
-
-```
+# Run database migrations
 yarn rw prisma migrate dev
 
-# ...
-
-? Enter a name for the new migration: › create posts
+# Start development server
+yarn rw dev
 ```
 
-> `rw` is short for `redwood`
+App opens at [http://localhost:8910](http://localhost:8910).
 
-You'll be prompted for the name of your migration. `create posts` will do.
+## Development
 
-Now let's generate everything we need to perform all the CRUD (Create, Retrieve, Update, Delete) actions on our `Post` model:
+```bash
+# Dev server
+yarn rw dev
 
-```
-yarn redwood generate scaffold post
-```
+# Type check
+yarn rw type-check
 
-Navigate to [http://localhost:8910/posts/new](http://localhost:8910/posts/new), fill in the title and body, and click "Save".
+# Build
+yarn rw build
 
-Did we just create a post in the database? Yup! With `yarn rw generate scaffold <model>`, Redwood created all the pages, components, and services necessary to perform all CRUD actions on our posts table.
-
-## Frontend first with Storybook
-
-Don't know what your data models look like? That's more than ok—Redwood integrates Storybook so that you can work on design without worrying about data. Mockup, build, and verify your React components, even in complete isolation from the backend:
-
-```
+# Storybook
 yarn rw storybook
-```
 
-Seeing "Couldn't find any stories"? That's because you need a `*.stories.{tsx,jsx}` file. The Redwood CLI makes getting one easy enough—try generating a [Cell](https://redwoodjs.com/docs/cells), Redwood's data-fetching abstraction:
-
-```
-yarn rw generate cell examplePosts
-```
-
-The Storybook server should hot reload and now you'll have four stories to work with. They'll probably look a little bland since there's no styling. See if the Redwood CLI's `setup ui` command has your favorite styling library:
-
-```
-yarn rw setup ui --help
-```
-
-## Testing with Jest
-
-It'd be hard to scale from side project to startup without a few tests. Redwood fully integrates Jest with both the front- and back-ends, and makes it easy to keep your whole app covered by generating test files with all your components and services:
-
-```
+# Tests
 yarn rw test
+
+# Generate new component/page/cell
+yarn rw generate cell MyComponent
 ```
 
-To make the integration even more seamless, Redwood augments Jest with database [scenarios](https://redwoodjs.com/docs/testing#scenarios) and [GraphQL mocking](https://redwoodjs.com/docs/testing#mocking-graphql-calls).
+## Deployment
 
-## Ship it
+BYOA deploys to Railway via Docker:
 
-Redwood is designed for both serverless deploy targets like Netlify and Vercel and serverful deploy targets like Render and AWS:
-
-```
-yarn rw setup deploy --help
-```
-
-Don't go live without auth! Lock down your app with Redwood's built-in, database-backed authentication system ([dbAuth](https://redwoodjs.com/docs/authentication#self-hosted-auth-installation-and-setup)), or integrate with nearly a dozen third-party auth providers:
-
-```
-yarn rw setup auth --help
+```bash
+yarn rw build
+yarn rw deploy
 ```
 
-## Next Steps
+See `Dockerfile` and `railway.toml` for configuration.
 
-The best way to learn Redwood is by going through the comprehensive [tutorial](https://redwoodjs.com/docs/tutorial/foreword) and joining the community (via the [Discourse forum](https://community.redwoodjs.com) or the [Discord server](https://discord.gg/redwoodjs)).
+## Project Structure
 
-## Quick Links
+```
+web/src/
+  components/     50+ React components
+    Card/           Smart card router (URL, image, note, tweet, etc.)
+    CardsCell/      Paginated card grid with archive/unarchive
+    SearchCell/     Search results with mode-aware filtering
+    GraphClient/    Force-directed graph visualization
+    AddModal/       Smart input for saving content
+  pages/          Route-level pages (Home, Archive, Trash, Graph, Spaces, Settings)
+  layouts/        AppLayout (header, bottom nav, FAB)
+  lib/            Theme system, local AI, utilities
+  hooks/          Custom React hooks
 
-- Stay updated: read [Forum announcements](https://community.redwoodjs.com/c/announcements/5), follow us on [Twitter](https://twitter.com/redwoodjs), and subscribe to the [newsletter](https://redwoodjs.com/newsletter)
-- [Learn how to contribute](https://redwoodjs.com/docs/contributing)
+api/src/
+  services/       Business logic (cards, search, spaces, enrichment)
+  lib/
+    scraper/        URL/content scrapers (Twitter, Instagram, YouTube)
+    ai/             Classification pipeline, GLM client, prompts
+    pinecone.ts     Vector database integration
+  graphql/        SDL schema definitions
+  db/             Prisma schema
+```

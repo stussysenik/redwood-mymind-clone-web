@@ -21,7 +21,7 @@ export function GraphFilterPanel({
 }: GraphFilterPanelProps) {
 	return (
 		<div
-			className="absolute bottom-4 left-4 z-50 flex items-center gap-3"
+			className="absolute bottom-20 left-4 z-40 flex items-center gap-3 sm:bottom-4"
 			style={{ pointerEvents: 'auto' }}
 		>
 			{/* Stats */}

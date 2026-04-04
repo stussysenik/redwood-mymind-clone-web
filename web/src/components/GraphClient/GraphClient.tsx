@@ -265,18 +265,22 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		if (!fg || forcesConfigured.current) return;
 		forcesConfigured.current = true;
 
-		const chargeStrength = isMobile ? -300 : -500;
-		const distanceMax = isMobile ? 300 : 400;
+		const nodeCount = graphData?.nodes?.length ?? 0;
+		const chargeStrength = isMobile
+			? Math.min(-200, -100 - nodeCount * 0.5)
+			: Math.min(-300, -150 - nodeCount * 0.8);
+		const distanceMax = isMobile ? 400 : 600;
 
 		fg.d3Force('charge')?.strength(chargeStrength).distanceMax(distanceMax);
 		fg.d3Force('link')?.distance((link: FGLink) => {
 			const w = link.weight ?? 1;
-			const base = isMobile ? 40 : 60;
-			const scale = isMobile ? 80 : 120;
+			const base = isMobile ? 50 : 80;
+			const scale = isMobile ? 100 : 150;
 			return base + (1 / w) * scale;
 		});
+		fg.d3Force('center')?.strength(0.05);
 		fg.d3ReheatSimulation();
-	}, [isMobile]);
+	}, [isMobile, graphData?.nodes?.length]);
 
 	// -------------------------------------------------------------------------
 	// BUILD GRAPH DATA
@@ -746,9 +750,9 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					onBackgroundClick={handleBackgroundClick}
 					onEngineStop={configureForces}
 					backgroundColor="#00000000"
-					cooldownTicks={isMobile ? 100 : 200}
-					d3AlphaDecay={isMobile ? 0.05 : 0.01}
-					d3VelocityDecay={0.4}
+					cooldownTicks={isMobile ? 150 : 300}
+					d3AlphaDecay={isMobile ? 0.04 : 0.008}
+					d3VelocityDecay={0.3}
 				/>
 			) : null}
 
