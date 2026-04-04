@@ -162,7 +162,7 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 					className="relative w-full overflow-hidden"
 					style={{
 						backgroundColor: card.metadata?.colors?.[0] || 'rgb(243, 244, 246)',
-						aspectRatio: '5/3'
+						aspectRatio: 'auto'
 					}}
 				>
 					<img
@@ -197,7 +197,7 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 		const screenshotUrl = getFallbackScreenshotUrl(card.url);
 		if (hasValidUrl && !screenshotError && !isSocialUrl && screenshotUrl) {
 			return (
-				<div className="relative aspect-[1.618/1] w-full overflow-hidden bg-gray-50">
+				<div className="relative w-full overflow-hidden bg-gray-50">
 					<div className="absolute inset-0 animate-shimmer" />
 					<img
 						src={screenshotUrl}

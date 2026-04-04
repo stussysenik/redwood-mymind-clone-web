@@ -315,7 +315,7 @@ export function FeedCardVisual({
       className="overflow-hidden"
       style={{
         borderRadius: variant === 'row' ? '14px' : '12px 12px 0 0',
-        aspectRatio: '4 / 3',
+        aspectRatio: 'auto',
         backgroundColor: 'var(--shimmer-base)',
         width: '100%',
       }}
