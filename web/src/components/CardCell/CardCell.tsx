@@ -72,7 +72,7 @@ export const Success = ({
       )}
       <div className="p-6">
         <h2
-          className="font-serif text-xl mb-2"
+          className="font-display text-xl mb-2"
           style={{ color: 'var(--foreground)' }}
         >
           {card.title || 'Untitled'}

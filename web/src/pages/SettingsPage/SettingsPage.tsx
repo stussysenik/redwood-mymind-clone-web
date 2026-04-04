@@ -59,7 +59,7 @@ const SettingsPage = () => {
     <>
       <Metadata title="Settings" />
       <div className="px-4 sm:px-6 py-6 max-w-lg mx-auto">
-        <h2 className="font-serif text-xl mb-6" style={{ color: 'var(--foreground)' }}>
+        <h2 className="font-display text-xl mb-6" style={{ color: 'var(--foreground)' }}>
           Settings
         </h2>
 

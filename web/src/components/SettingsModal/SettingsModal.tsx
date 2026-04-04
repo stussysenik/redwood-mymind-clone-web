@@ -144,7 +144,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           }}
         >
           <h2
-            className="font-serif text-lg font-bold"
+            className="font-display text-lg font-bold"
             style={{ color: 'var(--foreground)' }}
           >
             Settings

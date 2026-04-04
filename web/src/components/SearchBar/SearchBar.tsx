@@ -227,7 +227,7 @@ export function SearchBar({
             focus:outline-none
             font-medium tracking-tight text-[var(--foreground)]
           `}
-					style={{ fontFamily: 'var(--font-serif)' }}
+					style={{ fontFamily: 'var(--font-display)' }}
 					aria-label="Search cards"
 					autoComplete="off"
 					spellCheck={false}

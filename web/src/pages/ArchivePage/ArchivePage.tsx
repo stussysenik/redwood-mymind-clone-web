@@ -15,7 +15,7 @@ const ArchivePage = () => {
     <>
       <Metadata title="Archive" />
       <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-1 sm:pb-2" style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <h2 className="font-serif text-xl mb-4 px-1" style={{ color: 'var(--foreground)' }}>Archive</h2>
+        <h2 className="font-display text-xl mb-4 px-1" style={{ color: 'var(--foreground)' }}>Archive</h2>
         <SearchBar mode="ARCHIVE" />
       </div>
       {query.trim() ? (

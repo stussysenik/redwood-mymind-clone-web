@@ -875,7 +875,7 @@ export function CardDetailModal({
                     </div>
                   </div>
                   {/* Tweet text */}
-                  <p className="mb-5 whitespace-pre-wrap font-serif text-lg leading-relaxed text-gray-800 md:text-xl">
+                  <p className="mb-5 whitespace-pre-wrap font-display text-lg leading-relaxed text-gray-800 md:text-xl">
                     {decodeHtmlEntities(card.content || card.title || '')}
                   </p>
                   {/* Tweet image(s) */}
@@ -1124,7 +1124,7 @@ export function CardDetailModal({
                         </div>
                       </div>
                       {/* Tweet text */}
-                      <p className="mb-5 whitespace-pre-wrap font-serif text-lg leading-relaxed text-gray-800 md:text-xl">
+                      <p className="mb-5 whitespace-pre-wrap font-display text-lg leading-relaxed text-gray-800 md:text-xl">
                         {decodeHtmlEntities(cleanText)}
                       </p>
                       {/* Link preview card for embedded URLs */}
@@ -1204,7 +1204,7 @@ export function CardDetailModal({
                   hsl(${((card.title?.charCodeAt(2) || 100) + 240) % 360}, 50%, 85%) 100%)`,
                 }}
               >
-                <p className="max-w-lg text-center font-serif text-xl leading-relaxed text-gray-700">
+                <p className="max-w-lg text-center font-display text-xl leading-relaxed text-gray-700">
                   {decodeHtmlEntities(card.content || card.title || '')}
                 </p>
                 <p className="mt-4 text-sm font-medium text-gray-500">
@@ -1214,10 +1214,10 @@ export function CardDetailModal({
             ) : (
               /* Note/text content - show nicely formatted */
               <div className="max-w-2xl p-12 text-center">
-                <h2 className="mb-6 font-serif text-3xl leading-tight text-gray-800">
+                <h2 className="mb-6 font-display text-3xl leading-tight text-gray-800">
                   {decodeHtmlEntities(card.title || '')}
                 </h2>
-                <p className="whitespace-pre-wrap font-serif text-xl leading-relaxed text-gray-600">
+                <p className="whitespace-pre-wrap font-display text-xl leading-relaxed text-gray-600">
                   {decodeHtmlEntities(card.content || 'No content provided')}
                 </p>
               </div>
@@ -1265,7 +1265,7 @@ export function CardDetailModal({
                     type="text"
                     value={title}
                     onChange={(e) => handleTitleChange(e.target.value)}
-                    className="-ml-2 mb-3 min-h-[44px] w-full rounded border border-transparent bg-transparent px-2 py-1 font-serif text-lg font-medium leading-snug text-gray-900 transition-colors focus:border-gray-200 focus:bg-gray-50 focus:outline-none md:text-xl"
+                    className="-ml-2 mb-3 min-h-[44px] w-full rounded border border-transparent bg-transparent px-2 py-1 font-display text-lg font-medium leading-snug text-gray-900 transition-colors focus:border-gray-200 focus:bg-gray-50 focus:outline-none md:text-xl"
                     placeholder="Untitled"
                     title={title}
                     style={{ textOverflow: 'ellipsis' }}

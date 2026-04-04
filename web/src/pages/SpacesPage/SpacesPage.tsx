@@ -36,7 +36,7 @@ const SpacesPage = () => {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <h2
-              className="font-serif text-2xl"
+              className="font-display text-2xl"
               style={{ color: 'var(--foreground)' }}
             >
               Spaces

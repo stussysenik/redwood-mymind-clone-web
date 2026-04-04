@@ -100,7 +100,7 @@ export const Empty = () => (
     style={{ minHeight: '60vh' }}
   >
     <p
-      className="font-serif text-2xl italic"
+      className="font-display text-2xl italic"
       style={{ color: 'var(--foreground-muted)' }}
     >
       Nothing saved yet

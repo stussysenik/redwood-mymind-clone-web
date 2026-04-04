@@ -170,7 +170,7 @@ export function FocusCard({
 
       {/* Card Info */}
       <div className="mt-6 px-4 text-center">
-        <h2 className="font-serif text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
+        <h2 className="font-display text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
           {decodeHtmlEntities(card.title || 'Untitled')}
         </h2>
 

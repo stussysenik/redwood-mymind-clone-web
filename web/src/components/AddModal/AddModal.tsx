@@ -578,7 +578,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 								}}
 								placeholder="Save something... (paste multiple links to batch import)"
 								className="
-									w-full text-2xl font-serif text-[var(--foreground)]
+									w-full text-2xl font-display text-[var(--foreground)]
 									placeholder:text-[var(--foreground-muted)] placeholder:transition-opacity placeholder:duration-150
 									bg-transparent border-none resize-none leading-relaxed custom-scrollbar
 									focus:outline-none focus:ring-0
@@ -780,7 +780,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 					{isDragOver && (
 						<div className="absolute inset-0 bg-[var(--accent-primary)]/10 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-[var(--accent-primary)] border-dashed m-1 rounded-xl z-50">
 							<Upload className="w-16 h-16 text-[var(--accent-primary)] mb-4 animate-bounce" />
-							<h3 className="text-2xl font-serif text-[var(--accent-primary)] font-bold">Drop visual</h3>
+							<h3 className="text-2xl font-display text-[var(--accent-primary)] font-bold">Drop visual</h3>
 						</div>
 					)}
 				</div>

@@ -268,7 +268,7 @@ function NoteCardVisual({
       }}
     >
       <p
-        className="text-center font-serif"
+        className="text-center font-display"
         style={{
           fontSize: 16,
           lineHeight: 1.5,
@@ -693,7 +693,7 @@ export function FeedCardListItem({
             )}
 
             <h3
-              className="font-serif leading-[1.3]"
+              className="font-display leading-[1.3]"
               style={{
                 color: 'var(--foreground)',
                 fontSize: '1.05rem',

@@ -41,7 +41,7 @@ export const Empty = () => (
       <Sparkles className="h-6 w-6 text-[var(--accent-primary)]" />
     </div>
     <p
-      className="mb-2 font-serif text-lg"
+      className="mb-2 font-display text-lg"
       style={{ color: 'var(--foreground)' }}
     >
       No spaces yet

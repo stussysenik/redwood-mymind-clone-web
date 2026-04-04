@@ -212,7 +212,7 @@ export const Success = ({
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1
-            className="font-serif text-2xl"
+            className="font-display text-2xl"
             style={{ color: 'var(--foreground)' }}
           >
             {space.name}
@@ -294,7 +294,7 @@ export const Success = ({
           className="py-20 text-center"
           style={{ color: 'var(--foreground-muted)' }}
         >
-          <p className="font-serif text-lg italic">
+          <p className="font-display text-lg italic">
             No cards match this space yet
           </p>
         </div>

@@ -175,7 +175,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
           <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
             <div className="text-center">
               <h2
-                className="font-serif text-3xl"
+                className="font-display text-3xl"
                 style={{ color: 'var(--foreground)', letterSpacing: '-0.03em' }}
               >
                 How many cards?
@@ -190,7 +190,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
 
             {/* Number display */}
             <div
-              className="text-center font-serif tabular-nums"
+              className="text-center font-display tabular-nums"
               style={{
                 fontSize: '5rem',
                 lineHeight: 1,
@@ -310,7 +310,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
 
                   {/* Title */}
                   <h3
-                    className="font-serif cursor-pointer hover:underline"
+                    className="font-display cursor-pointer hover:underline"
                     style={{
                       fontSize: '1.35rem',
                       lineHeight: 1.25,

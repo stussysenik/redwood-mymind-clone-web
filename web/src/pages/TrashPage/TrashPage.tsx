@@ -9,7 +9,7 @@ const TrashPage = () => {
       <Metadata title="Trash" />
       <div className="px-4 sm:px-6 py-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <h2 className="font-serif text-xl" style={{ color: 'var(--foreground)' }}>Trash</h2>
+          <h2 className="font-display text-xl" style={{ color: 'var(--foreground)' }}>Trash</h2>
           <TrashBulkActions itemCount={0} />
         </div>
         <CardsCell page={1} pageSize={25} mode="TRASH" />

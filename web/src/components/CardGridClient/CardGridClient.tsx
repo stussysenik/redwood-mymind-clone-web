@@ -998,7 +998,7 @@ export function CardGridClient({
       {similarityId && (
         <div className="mb-8 flex flex-col items-start justify-between gap-4 rounded-2xl border border-[var(--border-default)] bg-[var(--surface-accent)] p-6 animate-in slide-in-from-top-4 md:flex-row md:items-center">
           <div>
-            <h3 className="mb-1 flex items-center gap-2 font-serif text-xl text-[var(--foreground)]">
+            <h3 className="mb-1 flex items-center gap-2 font-display text-xl text-[var(--foreground)]">
               <Sparkles className="w-5 h-5 text-[var(--accent-primary)]" />
               Similar Minds
             </h3>
@@ -1267,7 +1267,7 @@ export function CardGridClient({
               </svg>
             </div>
           </div>
-          <h3 className="mb-2 text-2xl font-serif text-[var(--foreground)]">
+          <h3 className="mb-2 text-2xl font-display text-[var(--foreground)]">
             {similarityId
               ? 'No similar cards found'
               : 'Nothing saved yet'}
