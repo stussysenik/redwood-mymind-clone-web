@@ -14,6 +14,7 @@
 
 import { useState, useRef, useCallback, memo, lazy, Suspense } from 'react';
 import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Twitter, Volume2, MessageSquare, Archive, Film, Users } from 'lucide-react';
+import { useMutation } from '@redwoodjs/web';
 import { AnalyzingIndicator } from 'src/components/AnalyzingIndicator';
 import { TagDisplay, TagShimmerPlaceholder } from 'src/components/TagDisplay';
 import type { Card as CardType } from 'src/lib/types';
@@ -35,6 +36,16 @@ const LetterboxdCard = lazy(() => import('src/components/cards/LetterboxdCard').
 const GoodreadsCard = lazy(() => import('src/components/cards/GoodreadsCard').then(m => ({ default: m.GoodreadsCard })));
 const AmazonCard = lazy(() => import('src/components/cards/AmazonCard').then(m => ({ default: m.AmazonCard })));
 const StoryGraphCard = lazy(() => import('src/components/cards/StoryGraphCard').then(m => ({ default: m.StoryGraphCard })));
+
+const RE_EXTRACT_IMAGE = gql`
+  mutation ReExtractImage($cardId: String!) {
+    reExtractImage(cardId: $cardId) {
+      id
+      imageUrl
+      metadata
+    }
+  }
+`
 
 // =============================================================================
 // PROPS
@@ -136,9 +147,12 @@ export const Card = memo(function Card({ card, index, onDelete, onArchive, onRes
 const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive, onRestore, onClick }: CardProps) {
 	const [imageError, setImageError] = useState(false);
 	const [screenshotError, setScreenshotError] = useState(false);
+	const [scrapedImageError, setScrapedImageError] = useState(false);
 	const articleRef = useRef<HTMLElement>(null);
 	const { reportHover } = useWebGPU();
 	const isPriority = (index ?? Infinity) < PRIORITY_CARD_COUNT;
+	const [reExtract] = useMutation(RE_EXTRACT_IMAGE);
+	const reExtractAttempted = useRef(false);
 
 	const platformInfo = getPlatformInfo(card.url);
 	const domain = extractDomain(card.url);
@@ -150,12 +164,24 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 	// (targeted UPDATE events update cards in-place, no polling needed)
 
 	/**
-	 * Renders the card visual content.
+	 * Renders the card visual content with a 6-tier fallback chain:
+	 * 1. Primary imageUrl
+	 * 2. metadata.images[0]
+	 * 3. metadata.scrapedImageUrl
+	 * 4. Microlink screenshot (including social URLs)
+	 * 5. Note card special rendering
+	 * 6. Gradient placeholder + silent re-extract trigger
 	 */
 	const renderVisual = () => {
 		const hasValidUrl = card.url && !card.url.startsWith('file:') && !card.url.startsWith('local-');
+		const scrapedImageUrl = getBrowserImageUrl(
+			(card.metadata?.scrapedImageUrl as string) || null
+		);
+		const metaFirstImage = getBrowserImageUrl(
+			Array.isArray(card.metadata?.images) ? (card.metadata.images as string[])[0] : null
+		);
 
-		// 1. Primary Image - Fixed aspect ratio with color placeholder for CLS prevention
+		// Tier 1: Primary Image
 		if (browserImageUrl && !imageError) {
 			return (
 				<div
@@ -172,14 +198,12 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 						loading={isPriority ? "eager" : "lazy"}
 						onError={() => setImageError(true)}
 					/>
-					{/* Platform/Domain Badge for generic websites */}
 					{domain && (
 						<div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
 							<Globe className="w-3 h-3 text-white/80" />
 							<span className="text-xs font-medium text-white truncate max-w-[100px]">{domain}</span>
 						</div>
 					)}
-					{/* Video Play Button */}
 					{isVideo && (
 						<div className="absolute inset-0 flex items-center justify-center">
 							<div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg backdrop-blur-sm">
@@ -191,11 +215,39 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 			);
 		}
 
-		// 2. Fallback: Automatic Screenshot (Microlink) - Fixed Golden Ratio for consistency
-		// Skip for social platforms that block screenshots (twitter/x show login walls)
-		const isSocialUrl = card.url && (card.url.includes('twitter.com') || card.url.includes('x.com') || card.url.includes('instagram.com'));
+		// Tier 2: metadata.images[0]
+		if (metaFirstImage && metaFirstImage !== browserImageUrl && !screenshotError) {
+			return (
+				<div className="relative w-full overflow-hidden" style={{ backgroundColor: card.metadata?.colors?.[0] || 'rgb(243, 244, 246)' }}>
+					<img
+						src={metaFirstImage}
+						alt={card.title || 'Card image'}
+						className="object-cover w-full h-full"
+						loading="lazy"
+						onError={() => setScreenshotError(true)}
+					/>
+				</div>
+			);
+		}
+
+		// Tier 3: metadata.scrapedImageUrl
+		if (scrapedImageUrl && !scrapedImageError) {
+			return (
+				<div className="relative w-full overflow-hidden" style={{ backgroundColor: card.metadata?.colors?.[0] || 'rgb(243, 244, 246)' }}>
+					<img
+						src={scrapedImageUrl}
+						alt="Scraped preview"
+						className="object-cover w-full h-full"
+						loading="lazy"
+						onError={() => setScrapedImageError(true)}
+					/>
+				</div>
+			);
+		}
+
+		// Tier 4: Microlink screenshot (now includes social URLs too)
 		const screenshotUrl = getFallbackScreenshotUrl(card.url);
-		if (hasValidUrl && !screenshotError && !isSocialUrl && screenshotUrl) {
+		if (hasValidUrl && screenshotUrl && !screenshotError) {
 			return (
 				<div className="relative w-full overflow-hidden bg-gray-50">
 					<div className="absolute inset-0 animate-shimmer" />
@@ -206,18 +258,17 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 						loading="lazy"
 						onError={() => setScreenshotError(true)}
 					/>
-					{/* Platform/Domain Badge */}
-					<div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
-						<Globe className="w-3 h-3 text-white/80" />
-						<span className="text-xs font-medium text-white truncate max-w-[100px]">{domain || 'Website'}</span>
-					</div>
+					{domain && (
+						<div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md z-20">
+							<Globe className="w-3 h-3 text-white/80" />
+							<span className="text-xs font-medium text-white truncate max-w-[100px]">{domain || 'Website'}</span>
+						</div>
+					)}
 				</div>
 			);
 		}
 
-		// 3. Last Resort: Type Icon
-
-		// Note card without image
+		// Tier 5: Note card special rendering
 		if (card.type === 'note') {
 			return (
 				<div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 min-h-[120px]">
@@ -232,7 +283,16 @@ const GenericCard = memo(function GenericCard({ card, index, onDelete, onArchive
 			);
 		}
 
-		// Placeholder with dynamic gradient and Golden Ratio
+		// Tier 6: Gradient placeholder + trigger silent re-extract
+		if (!reExtractAttempted.current && card.id) {
+			reExtractAttempted.current = true;
+			const sessionKey = `byoa-reextract-${card.id}`;
+			if (!sessionStorage.getItem(sessionKey)) {
+				sessionStorage.setItem(sessionKey, '1');
+				reExtract({ variables: { cardId: card.id } }).catch(() => {});
+			}
+		}
+
 		const getGradient = (str: string) => {
 			let hash = 0;
 			for (let i = 0; i < str.length; i++) {

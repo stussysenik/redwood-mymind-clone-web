@@ -74,6 +74,7 @@ export const schema = gql`
     archiveCard(id: String!): Card! @requireAuth
     unarchiveCard(id: String!): Card! @requireAuth
     restoreCard(id: String!): Card! @requireAuth
+    reExtractImage(cardId: String!): Card! @requireAuth
     bulkCardAction(action: BulkAction!): BulkResult! @requireAuth
   }
 `

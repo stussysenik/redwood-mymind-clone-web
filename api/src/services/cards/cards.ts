@@ -7,6 +7,8 @@ import { detectPlatform } from 'src/lib/platforms'
 import { buildInitialLocalClassificationState, normalizeLocalClassification } from 'src/lib/ai/localClassification'
 import { normalizeTagList, stripGeneratedTagNoise } from 'src/lib/semantic'
 import { enrichCardPipeline } from 'src/services/enrichment/enrichment'
+import { createCompositeImage, fetchImageBuffers } from 'src/lib/scraper/compositeImage'
+import { buildMicrolinkScreenshotUrl } from 'src/lib/scraper/fallbackPreview'
 
 function normalizePersistedTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -294,4 +296,95 @@ export const bulkCardAction: MutationResolvers['bulkCardAction'] = async ({
   }
 
   return { success: true, affectedCount: result.count }
+}
+
+export const reExtractImage: MutationResolvers['reExtractImage'] = async ({
+  cardId,
+}) => {
+  const userId = context.currentUser!.id
+
+  const card = await db.card.findFirst({
+    where: { id: cardId, userId, deletedAt: null },
+  })
+  if (!card) throw new Error('Card not found')
+
+  const metadata = (card.metadata || {}) as Record<string, unknown>
+
+  // Rate limit: max 1 re-extract per card per 24h
+  const lastReExtract = metadata.lastReExtractAt as string | undefined
+  if (lastReExtract) {
+    const elapsed = Date.now() - new Date(lastReExtract).getTime()
+    if (elapsed < 24 * 60 * 60 * 1000) {
+      return card
+    }
+  }
+
+  let newImageUrl: string | null = null
+
+  // Strategy 1: Instagram carousel composite
+  const images = (metadata.images as string[]) || []
+  if (images.length >= 2 && !card.imageUrl) {
+    try {
+      const buffers = await fetchImageBuffers(images)
+      if (buffers.length >= 2) {
+        const composite = await createCompositeImage(buffers)
+        const { createClient } = await import('@supabase/supabase-js')
+        const supabase = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+        const path = `cards/${cardId}/composite.jpg`
+        const { error: uploadError } = await supabase.storage
+          .from('card-media')
+          .upload(path, composite, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          })
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('card-media')
+            .getPublicUrl(path)
+          newImageUrl = urlData.publicUrl
+        }
+      }
+    } catch {
+      // Composite failed, continue to next strategy
+    }
+  }
+
+  // Strategy 2: Microlink screenshot for any URL
+  if (!newImageUrl && card.url) {
+    try {
+      const screenshotUrl = buildMicrolinkScreenshotUrl(card.url)
+      if (screenshotUrl) {
+        const res = await fetch(screenshotUrl, {
+          signal: AbortSignal.timeout(15000),
+        })
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || ''
+          if (contentType.startsWith('image/')) {
+            newImageUrl = screenshotUrl
+          }
+        }
+      }
+    } catch {
+      // Screenshot failed
+    }
+  }
+
+  // Update card
+  const updatedMetadata = {
+    ...metadata,
+    lastReExtractAt: new Date().toISOString(),
+    reExtractSuccess: !!newImageUrl,
+  }
+
+  return db.card.update({
+    where: { id: cardId },
+    data: {
+      ...(newImageUrl ? { imageUrl: newImageUrl } : {}),
+      metadata: updatedMetadata,
+    },
+  })
 }

@@ -110,6 +110,11 @@ export interface CardMetadata {
   videoPositions?: number[]
   mediaPersisted?: boolean
   originalCdnUrls?: string[]
+  scrapedImageUrl?: string
+
+  // Re-extraction state
+  lastReExtractAt?: string
+  reExtractSuccess?: boolean
 
   // Enrichment timing
   enrichmentTiming?: {

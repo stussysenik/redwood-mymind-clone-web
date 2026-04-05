@@ -20,6 +20,7 @@ import { GraphListView } from 'src/components/GraphListView/GraphListView';
 import { GraphTooltip } from 'src/components/GraphTooltip/GraphTooltip';
 import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle';
 import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode';
+import { haptic } from 'src/lib/haptics';
 import type { GraphNode } from 'src/lib/graph';
 import type { Card } from 'src/lib/types';
 import { Loader2, Network, Rows3 } from 'lucide-react';
@@ -166,6 +167,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	);
 	const [ForceGraphCanvas, setForceGraphCanvas] = useState<ComponentType<any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 	const [graphLoadError, setGraphLoadError] = useState<string | null>(null);
+	const [currentZoom, setCurrentZoom] = useState(1);
 
 	// Card detail modal state
 	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -429,8 +431,10 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 			if (focusedNodeId === node.id || isDoubleTap) {
 				// Second click on the focused node OR double-tap — open card detail modal
+				haptic('medium');
 				setSelectedCardId(node.id);
 			} else {
+				haptic('light');
 				setFocusedNodeId(node.id);
 				const fg = fgRef.current;
 				if (fg) {
@@ -454,6 +458,10 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const handleBackgroundClick = useCallback(() => {
 		if (focusedNodeId) closeFocus();
 	}, [focusedNodeId, closeFocus]);
+
+	const handleZoom = useCallback(({ k }: { k: number }) => {
+		setCurrentZoom(k);
+	}, []);
 
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
@@ -484,6 +492,26 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		(node: FGNode, ctx: CanvasRenderingContext2D) => {
 			const x = node.x ?? 0;
 			const y = node.y ?? 0;
+
+			// Viewport culling — skip nodes outside visible canvas
+			const canvas = ctx.canvas;
+			const transform = ctx.getTransform();
+			const screenX = x * transform.a + transform.e;
+			const screenY = y * transform.d + transform.f;
+			const pad = 60;
+			if (
+				screenX < -pad ||
+				screenX > canvas.width + pad ||
+				screenY < -pad ||
+				screenY > canvas.height + pad
+			) {
+				return;
+			}
+
+			// LOD — hide text at far zoom levels to improve render perf
+			const showLabels = currentZoom > 1.0;
+			const showInitials = currentZoom > 0.5;
+
 			const connections = node.connections ?? 0;
 			const color = node.color ?? '#6B7280';
 			const type = node.type ?? 'article';
@@ -508,13 +536,15 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				ctx.globalAlpha = 1;
 
 				// Type initial inside orphan (tiny)
-				ctx.font = '600 5px Inter, system-ui, sans-serif';
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'middle';
-				ctx.fillStyle = color;
-				ctx.globalAlpha = inFocusMode ? 0.14 : 0.28;
-				ctx.fillText(TYPE_INITIALS[type] || '?', x, y);
-				ctx.globalAlpha = 1;
+				if (showInitials) {
+					ctx.font = '600 5px Inter, system-ui, sans-serif';
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'middle';
+					ctx.fillStyle = color;
+					ctx.globalAlpha = inFocusMode ? 0.14 : 0.28;
+					ctx.fillText(TYPE_INITIALS[type] || '?', x, y);
+					ctx.globalAlpha = 1;
+				}
 				return;
 			}
 
@@ -546,36 +576,40 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 			ctx.globalAlpha = 1;
 
 			// TYPE INITIAL inside the node — white letter, bold, centered
-			const initial = TYPE_INITIALS[type] || '?';
-			const initialSize = Math.max(8, radius * 0.75);
-			ctx.font = `700 ${initialSize}px Inter, system-ui, sans-serif`;
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillStyle = '#FFFFFF';
-			ctx.globalAlpha = alpha * 0.9;
-			ctx.fillText(initial, x, y);
-			ctx.globalAlpha = 1;
-
-			// Title label below node
-			const title = node.title;
-			const showLabel = !inFocusMode || isFocused || isNeighbor || isHovered;
-			if (title && showLabel && alpha > DIM_ALPHA) {
-				const prominent = isHovered || isFocused;
-				const dark = isDarkMode();
-				const label = prominent ? truncate(title, 36) : truncate(title, 20);
-				const fontSize = prominent ? 12 : 10;
-				ctx.font = `${prominent ? '600 ' : ''}${fontSize}px Inter, system-ui, sans-serif`;
+			if (showInitials) {
+				const initial = TYPE_INITIALS[type] || '?';
+				const initialSize = Math.max(8, radius * 0.75);
+				ctx.font = `700 ${initialSize}px Inter, system-ui, sans-serif`;
 				ctx.textAlign = 'center';
-				ctx.textBaseline = 'top';
-				ctx.fillStyle = prominent
-					? (dark ? '#F5EFE5' : '#2D2D2D')
-					: (dark ? '#A8A098' : '#5A5A5A');
-				ctx.globalAlpha = prominent ? 1 : Math.max(0.5, alpha * 0.9);
-				ctx.fillText(label, x, y + radius + 3);
+				ctx.textBaseline = 'middle';
+				ctx.fillStyle = '#FFFFFF';
+				ctx.globalAlpha = alpha * 0.9;
+				ctx.fillText(initial, x, y);
 				ctx.globalAlpha = 1;
 			}
+
+			// Title label below node
+			if (showLabels) {
+				const title = node.title;
+				const showLabel = !inFocusMode || isFocused || isNeighbor || isHovered;
+				if (title && showLabel && alpha > DIM_ALPHA) {
+					const prominent = isHovered || isFocused;
+					const dark = isDarkMode();
+					const label = prominent ? truncate(title, 36) : truncate(title, 20);
+					const fontSize = prominent ? 12 : 10;
+					ctx.font = `${prominent ? '600 ' : ''}${fontSize}px Inter, system-ui, sans-serif`;
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'top';
+					ctx.fillStyle = prominent
+						? (dark ? '#F5EFE5' : '#2D2D2D')
+						: (dark ? '#A8A098' : '#5A5A5A');
+					ctx.globalAlpha = prominent ? 1 : Math.max(0.5, alpha * 0.9);
+					ctx.fillText(label, x, y + radius + 3);
+					ctx.globalAlpha = 1;
+				}
+			}
 		},
-		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds]
+		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds, currentZoom]
 	);
 
 	const linkCanvasObject = useCallback(
@@ -597,6 +631,22 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 			if (isFocusedLink) edgeAlpha = Math.max(t, 0.5);
 
 			const sx = src.x, sy = src.y, tx = tgt.x, ty = tgt.y;
+
+			// Viewport culling — skip links where both endpoints are offscreen
+			const canvas = ctx.canvas;
+			const transform = ctx.getTransform();
+			const srcScreenX = sx * transform.a + transform.e;
+			const srcScreenY = sy * transform.d + transform.f;
+			const tgtScreenX = tx * transform.a + transform.e;
+			const tgtScreenY = ty * transform.d + transform.f;
+			const linkPad = 20;
+			const bothOffscreen =
+				(srcScreenX < -linkPad && tgtScreenX < -linkPad) ||
+				(srcScreenX > canvas.width + linkPad && tgtScreenX > canvas.width + linkPad) ||
+				(srcScreenY < -linkPad && tgtScreenY < -linkPad) ||
+				(srcScreenY > canvas.height + linkPad && tgtScreenY > canvas.height + linkPad);
+			if (bothOffscreen) return;
+
 			const mx = (sx + tx) / 2;
 			const my = (sy + ty) / 2;
 			const dx = tx - sx;
@@ -748,6 +798,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					onNodeHover={handleNodeHover}
 					onNodeClick={handleNodeClick}
 					onBackgroundClick={handleBackgroundClick}
+					onZoom={handleZoom}
 					onEngineStop={configureForces}
 					backgroundColor="#00000000"
 					cooldownTicks={isMobile ? 150 : 300}

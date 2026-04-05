@@ -7,6 +7,7 @@ import { navigate, routes, useLocation } from '@redwoodjs/router'
 
 import { useAuth } from 'src/auth'
 import { haptic } from 'src/lib/haptics'
+import { useShakeDetection } from 'src/hooks/useShakeDetection'
 import AddModal from 'src/components/AddModal'
 import { ShuffleModal } from 'src/components/ShuffleModal/ShuffleModal'
 import { ToastProvider } from 'src/components/Toast/Toast'
@@ -45,6 +46,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const { pathname } = useLocation()
   const { currentUser, logOut } = useAuth()
   const isGraphView = pathname === '/graph'
+
+  useShakeDetection(() => {
+    haptic('heavy')
+    setShowShuffle((prev) => !prev)
+  })
 
   // Close dropdown on outside click
   useEffect(() => {

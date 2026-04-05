@@ -54,15 +54,6 @@ export function getFallbackScreenshotUrl(
     return null
   }
 
-  const lower = normalizedUrl.toLowerCase()
-  if (
-    lower.includes('twitter.com') ||
-    lower.includes('x.com') ||
-    lower.includes('instagram.com')
-  ) {
-    return null
-  }
-
   const params = new URLSearchParams({
     url: normalizedUrl,
     screenshot: 'true',

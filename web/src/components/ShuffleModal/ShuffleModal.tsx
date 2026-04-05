@@ -55,42 +55,8 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
     skip: confirmedCount === null,
   })
 
-  // Shake-to-close: detect device shake via accelerometer
-  const shakeRef = useRef({ last: 0, count: 0 })
-  useEffect(() => {
-    // Request permission on iOS
-    const requestPermission = async () => {
-      const DM = DeviceMotionEvent as any
-      if (typeof DM.requestPermission === 'function') {
-        try { await DM.requestPermission() } catch { return }
-      }
-    }
-    requestPermission()
-
-    const handler = (e: DeviceMotionEvent) => {
-      const acc = e.accelerationIncludingGravity
-      if (!acc?.x || !acc?.y || !acc?.z) return
-      const force = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z)
-      const now = Date.now()
-      if (force > 25) {
-        if (now - shakeRef.current.last < 500) {
-          shakeRef.current.count++
-          if (shakeRef.current.count >= 3) {
-            haptic('heavy')
-            onClose()
-            shakeRef.current.count = 0
-          }
-        } else {
-          shakeRef.current.count = 1
-        }
-        shakeRef.current.last = now
-      }
-    }
-    window.addEventListener('devicemotion', handler)
-    return () => window.removeEventListener('devicemotion', handler)
-  }, [onClose])
-
   const cards: FeedCardRecord[] = data?.randomCards ?? []
+  const lastSliderHaptic = useRef(0)
 
   const handleStart = () => {
     setIndex(0)
@@ -142,7 +108,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
 
       {/* Modal */}
       <div
-        className="fixed inset-x-4 inset-y-6 z-[70] mx-auto flex flex-col overflow-hidden rounded-2xl shadow-2xl sm:inset-x-8 sm:inset-y-10"
+        className="fixed inset-x-2 inset-y-3 z-[70] mx-auto flex flex-col overflow-hidden rounded-2xl shadow-2xl sm:inset-x-8 sm:inset-y-10"
         style={{
           maxWidth: 680,
           left: '50%',
@@ -169,20 +135,19 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
             </span>
             {confirmedCount !== null && cards.length > 0 && (
               <span
-                className="tabular-nums text-xs px-2 py-0.5 rounded-full"
-                style={{
-                  backgroundColor: 'var(--surface-soft)',
-                  color: 'var(--foreground-muted)',
-                }}
+                className="tabular-nums text-sm font-semibold sm:text-base"
+                style={{ color: 'var(--foreground)' }}
               >
-                {index + 1} / {cards.length}
+                {index + 1}
+                <span style={{ color: 'var(--foreground-muted)', margin: '0 2px' }}>/</span>
+                {cards.length}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {confirmedCount !== null && (
               <button
-                onClick={handleReshuffle}
+                onClick={() => { haptic('medium'); handleReshuffle() }}
                 className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
                 style={{
                   backgroundColor: 'var(--surface-soft)',
@@ -245,7 +210,14 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
                 min={1}
                 max={25}
                 value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
+                onChange={(e) => {
+                  setCount(Number(e.target.value))
+                  const now = Date.now()
+                  if (now - lastSliderHaptic.current > 80) {
+                    haptic('selection')
+                    lastSliderHaptic.current = now
+                  }
+                }}
                 className="w-full"
                 style={{ accentColor: 'var(--accent-primary)' }}
               />
@@ -259,11 +231,11 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
             </div>
 
             {/* Quick picks */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {[5, 10, 15, 20, 25].map((n) => (
                 <button
                   key={n}
-                  onClick={() => setCount(n)}
+                  onClick={() => { haptic('selection'); setCount(n) }}
                   className="rounded-full px-3 py-1 text-sm font-medium transition-all"
                   style={{
                     backgroundColor:
@@ -279,7 +251,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
             </div>
 
             <button
-              onClick={handleStart}
+              onClick={() => { haptic('medium'); handleStart() }}
               className="rounded-full px-8 py-3 font-semibold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
               style={{ backgroundColor: 'var(--accent-primary)' }}
             >
@@ -386,51 +358,59 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
 
             {/* Navigation footer */}
             <div
-              className="flex items-center justify-between px-5 py-3"
+              className="flex items-center justify-between px-3 py-3 sm:px-5"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
               <button
-                onClick={prev}
+                onClick={() => { prev(); haptic('light') }}
                 disabled={index === 0}
-                className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-30"
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all disabled:opacity-30 min-w-[44px] min-h-[44px] justify-center sm:px-4"
                 style={{
                   backgroundColor: 'var(--surface-soft)',
                   color: 'var(--foreground)',
                 }}
               >
                 <ChevronLeft size={16} />
-                Prev
+                <span className="hidden sm:inline">Prev</span>
               </button>
 
-              {/* Dot indicators */}
-              <div className="flex gap-1.5">
-                {cards.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setIndex(i)}
-                    className="rounded-full transition-all"
-                    style={{
-                      width: i === index ? 18 : 6,
-                      height: 6,
-                      backgroundColor:
-                        i === index
-                          ? 'var(--accent-primary)'
-                          : 'var(--border-default)',
-                    }}
-                  />
-                ))}
+              {/* Progress bar */}
+              <div
+                className="relative mx-3 flex-1 cursor-pointer"
+                style={{ height: 3, backgroundColor: 'var(--border-default)', borderRadius: 2 }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const fraction = (e.clientX - rect.left) / rect.width
+                  const target = Math.floor(fraction * cards.length)
+                  setIndex(Math.max(0, Math.min(cards.length - 1, target)))
+                  haptic('light')
+                }}
+                role="progressbar"
+                aria-valuenow={index + 1}
+                aria-valuemin={1}
+                aria-valuemax={cards.length}
+              >
+                <div
+                  style={{
+                    width: `${((index + 1) / cards.length) * 100}%`,
+                    height: '100%',
+                    backgroundColor: 'var(--accent-primary)',
+                    borderRadius: 2,
+                    transition: 'width 200ms ease',
+                  }}
+                />
               </div>
 
               <button
-                onClick={next}
+                onClick={() => { next(); haptic('light') }}
                 disabled={index === cards.length - 1}
-                className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-30"
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all disabled:opacity-30 min-w-[44px] min-h-[44px] justify-center sm:px-4"
                 style={{
                   backgroundColor: 'var(--surface-soft)',
                   color: 'var(--foreground)',
                 }}
               >
-                Next
+                <span className="hidden sm:inline">Next</span>
                 <ChevronRight size={16} />
               </button>
             </div>

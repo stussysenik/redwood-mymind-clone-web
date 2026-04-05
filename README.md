@@ -12,6 +12,7 @@ Built with [RedwoodJS](https://redwoodjs.com), Supabase, Prisma, and React.
 - [Development](#development)
 - [Deployment](#deployment)
 - [Project Structure](#project-structure)
+- [Documentation](#documentation)
 
 ## Features
 
@@ -23,8 +24,10 @@ Built with [RedwoodJS](https://redwoodjs.com), Supabase, Prisma, and React.
 - **Spaces** — Organize cards into collections with smart filters.
 - **Archive & Trash** — Soft-delete lifecycle with search across all states.
 - **Theme System** — Multiple theme packs and skins with typography picker.
-- **Mobile-First** — Haptic feedback, bottom navigation, swipe gestures, responsive everything.
+- **Mobile-First** — Haptic feedback, shake-to-shuffle, bottom navigation, swipe gestures, responsive everything.
 - **Platform Extractors** — Native support for Twitter/X, Instagram, YouTube, and general web content.
+- **Image Resilience** — 6-tier fallback chain ensures every card has a visual. Silent re-extraction when images fail.
+- **Graph Performance** — Viewport culling, Level of Detail rendering, and Web Worker physics simulation for 1000+ nodes.
 
 ## Architecture
 
@@ -117,3 +120,12 @@ api/src/
   graphql/        SDL schema definitions
   db/             Prisma schema
 ```
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [VISION.md](VISION.md) | Design pillars, target user, north star metrics |
+| [TECHSTACK.md](TECHSTACK.md) | Complete technology inventory with versions and purposes |
+| [ROADMAP.md](ROADMAP.md) | Completed milestones and planned features |
+| [PROGRESS.md](PROGRESS.md) | Detailed changelog of what shipped and when |

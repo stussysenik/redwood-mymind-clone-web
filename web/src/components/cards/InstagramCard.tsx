@@ -6,15 +6,26 @@
  * @fileoverview Instagram card with gradient and play button
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Play, Instagram, Globe } from 'lucide-react';
 import { ExternalLinkIcon } from '@radix-ui/react-icons';
+import { useMutation } from '@redwoodjs/web';
 import type { Card } from 'src/lib/types';
 import { TagDisplay, TagShimmerPlaceholder } from '../TagDisplay';
 import { AuthorDisplay } from '../AuthorDisplay';
 import { CardProcessingBadge, isCardProcessing } from './CardProcessingBadge';
 import { MASONRY_IMAGE_SIZES, PRIORITY_CARD_COUNT } from 'src/lib/image-config';
 import { getBrowserImageUrls } from 'src/lib/imageProxy';
+
+const RE_EXTRACT_IMAGE_INSTAGRAM = gql`
+  mutation ReExtractImageInstagram($cardId: String!) {
+    reExtractImage(cardId: $cardId) {
+      id
+      imageUrl
+      metadata
+    }
+  }
+`
 
 // =============================================================================
 // TYPES
@@ -40,6 +51,8 @@ export function InstagramCard({ card, index, onDelete, onArchive, onRestore, onC
 	const [imageError, setImageError] = useState(false);
 	const [fallbackIndex, setFallbackIndex] = useState(0);
 	const [isHovered, setIsHovered] = useState(false);
+	const [reExtract] = useMutation(RE_EXTRACT_IMAGE_INSTAGRAM);
+	const reExtractAttempted = useRef(false);
 	const isReel = card.url?.includes('/reel/') || card.url?.includes('/reels/');
 	// Use new author fields if available, fallback to legacy
 	const authorName = card.metadata.authorName || '';
@@ -76,6 +89,15 @@ export function InstagramCard({ card, index, onDelete, onArchive, onRestore, onC
 		} else {
 			// All fallbacks exhausted - show gradient placeholder
 			setImageError(true);
+			// Trigger silent re-extract once per session when all fallbacks fail
+			if (!reExtractAttempted.current && card.id) {
+				reExtractAttempted.current = true;
+				const sessionKey = `byoa-reextract-${card.id}`;
+				if (!sessionStorage.getItem(sessionKey)) {
+					sessionStorage.setItem(sessionKey, '1');
+					reExtract({ variables: { cardId: card.id } }).catch(() => {});
+				}
+			}
 		}
 	};
 
