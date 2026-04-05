@@ -7,12 +7,14 @@ import { useAuth } from 'src/auth'
 const Routes = () => {
   return (
     <Router useAuth={useAuth}>
+      <Route path="/landing" page={LandingPage} name="landing" />
+
       <Set wrap={AuthLayout}>
         <Route path="/login" page={LoginPage} name="login" />
         <Route path="/signup" page={SignupPage} name="signup" />
       </Set>
 
-      <Private unauthenticated="login">
+      <Private unauthenticated="landing">
         <Set wrap={AppLayout}>
           <Route path="/" page={HomePage} name="home" />
           <Route path="/spaces" page={SpacesPage} name="spaces" />
