@@ -7,6 +7,8 @@ import { useAuth } from 'src/auth'
 import { useLocalAI } from 'src/lib/local-ai'
 import { LOCAL_AI_RUNTIME } from 'src/lib/local-ai/config'
 import { Sun, Moon, Monitor, Brain, Download, LogOut, Type, Palette } from 'lucide-react'
+import ExportBuilder from 'src/components/ExportBuilder/ExportBuilder'
+import { useTheme } from 'src/lib/theme'
 
 import { useTypography, PAIRINGS } from 'src/lib/typography'
 
@@ -58,30 +60,10 @@ if (typeof window !== 'undefined') {
   if (stored !== DEFAULT_ACCENT) applyAccentPreview(stored)
 }
 
-type Theme = 'light' | 'dark' | 'system'
-
-function getStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'system'
-  return (localStorage.getItem('byoa-theme') as Theme) || 'system'
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement
-  if (theme === 'system') {
-    root.removeAttribute('data-theme')
-    // Let prefers-color-scheme handle it
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    root.classList.toggle('dark', isDark)
-  } else {
-    root.setAttribute('data-theme', theme)
-    root.classList.toggle('dark', theme === 'dark')
-  }
-}
-
 const SettingsPage = () => {
   const { currentUser, logOut } = useAuth()
   const localAI = useLocalAI()
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const { theme, setTheme } = useTheme()
   const { pairing, setPairing } = useTypography()
   const [savedAccent, setSavedAccent] = useState(getStoredAccent) // committed color
   const [previewColor, setPreviewColor] = useState(getStoredAccent) // live picker color
@@ -139,21 +121,7 @@ const SettingsPage = () => {
     return () => document.removeEventListener('mousedown', handle)
   }, [showPicker, isDirty, savedAccent])
 
-  useEffect(() => {
-    applyTheme(theme)
-    localStorage.setItem('byoa-theme', theme)
-  }, [theme])
-
-  // Listen for system theme changes when in system mode
-  useEffect(() => {
-    if (theme !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyTheme('system')
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [theme])
-
-  const themeOptions: { value: Theme; icon: typeof Sun; label: string }[] = [
+  const themeOptions: { value: 'light' | 'dark' | 'system'; icon: typeof Sun; label: string }[] = [
     { value: 'light', icon: Sun, label: 'Light' },
     { value: 'dark', icon: Moon, label: 'Dark' },
     { value: 'system', icon: Monitor, label: 'System' },
@@ -471,16 +439,7 @@ const SettingsPage = () => {
             className="p-4 rounded-xl"
             style={{ backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-default)' }}
           >
-            <button
-              disabled
-              className="w-full py-2.5 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed"
-              style={{
-                backgroundColor: 'var(--surface-soft)',
-                color: 'var(--foreground-muted)',
-              }}
-            >
-              Export All Data (Coming Soon)
-            </button>
+            <ExportBuilder />
           </div>
         </section>
 

@@ -6,6 +6,7 @@ import { RedwoodApolloProvider } from '@redwoodjs/web/apollo'
 
 import FatalErrorPage from 'src/pages/FatalErrorPage'
 import { AuthProvider, useAuth } from 'src/auth'
+import { ThemeProvider } from 'src/lib/theme'
 
 import './index.css'
 
@@ -31,11 +32,13 @@ const App = ({ children }: AppProps) => (
   <Sentry.ErrorBoundary fallback={<FatalErrorPage />}>
     <FatalErrorBoundary page={FatalErrorPage}>
       <RedwoodProvider titleTemplate="%PageTitle | %AppTitle">
-        <AuthProvider>
-          <RedwoodApolloProvider useAuth={useAuth}>
-            {children}
-          </RedwoodApolloProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <RedwoodApolloProvider useAuth={useAuth}>
+              {children}
+            </RedwoodApolloProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </RedwoodProvider>
     </FatalErrorBoundary>
   </Sentry.ErrorBoundary>

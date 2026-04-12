@@ -1,5 +1,43 @@
 # BYOA Progress Log
 
+## 2026-04-12 — Data Export Builder + Cloudflare R2 Transition
+
+**Feature: Data Export Builder**
+- Server-side export system that generates self-contained zip archives.
+- **Multi-format Support:** CSV (mymind-compatible), JSON (full fidelity), JSONL (streaming), and Markdown (Obsidian/Notion).
+- **Category Toggles:** Selectable data streams (Core, Content, Media, Metadata).
+- **Media Bundling:** Server-side fetch and bundling of images and carousels into `media/` folder.
+- **Asynchronous Processing:** Background job system with 2-second polling and progress indicator.
+- **Cloudflare R2 Integration:** Replaced Supabase Storage with R2 (S3-compatible) for export storage due to usage limits.
+- **Signed URLs:** Exports served via 1-hour expiring signed URLs.
+
+### Files Created/Modified
+| File | Status | Description |
+|---|---|---|
+| `api/src/graphql/export.sdl.ts` | New | GraphQL schema for exports |
+| `api/src/services/export/export.ts` | New | Orchestrator, serializers, and media downloader |
+| `api/src/lib/r2.ts` | New | S3-compatible client for Cloudflare R2 |
+| `web/src/components/ExportBuilder/ExportBuilder.tsx` | New | Frontend UI with toggles and progress |
+| `web/src/pages/SettingsPage/SettingsPage.tsx` | Modified | Integrated ExportBuilder |
+| `api/package.json` | Modified | Added `archiver`, `@aws-sdk/client-s3`, `node-fetch`, `uuid` |
+| `scripts/preflight.py` | New | Deployment preflight check (env vars, build, R2 connectivity) |
+| `.env.example` | Modified | Documented all required env vars including R2 |
+
+### Bug Fixes (pre-deploy)
+- **`r2.ts`:** `uploadToR2` was returning a signed PUT URL — downloads would have failed. Fixed to generate a `GetObjectCommand` signed URL after upload.
+- **`r2.ts`:** `getSignedDownloadUrl` was also using `PutObjectCommand`. Fixed to `GetObjectCommand`.
+- **`export.ts`:** `node-fetch` v3 ignores `{ timeout }` option (v2 API). Replaced with `{ signal: AbortSignal.timeout(10000) }`.
+
+### Required Railway Env Vars (new)
+```
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<key>
+R2_SECRET_ACCESS_KEY=<secret>
+R2_BUCKET_NAME=byoa-exports
+```
+
+---
+
 ## 2026-04-05 — Shake Toggle, Haptics, Graph Performance, Image Re-extraction
 
 **Streams delivered:** 6 parallel streams, 9 tasks

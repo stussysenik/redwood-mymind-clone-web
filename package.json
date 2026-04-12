@@ -6,6 +6,9 @@
       "web"
     ]
   },
+  "scripts": {
+    "dev": "yarn rw dev"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@redwoodjs/cli-storybook-vite": "8.9.0",

@@ -18,6 +18,7 @@ import { getSkins } from 'src/lib/themes/skins'
 import type { SkinInfo } from 'src/lib/themes/skins'
 
 export type Theme = 'light' | 'dark' | 'system'
+export type InteractionMode = 'standard' | 'fluid' | 'overdrive'
 
 interface ThemeContextValue {
   // Existing
@@ -33,13 +34,16 @@ interface ThemeContextValue {
   skin: string
   setSkin: (skin: string) => void
   availableSkins: SkinInfo[]
+  // Interaction
+  interactionMode: InteractionMode
+  setInteractionMode: (mode: InteractionMode) => void
 }
 
 const STORAGE_KEY = 'byoa-theme'
 const DEFAULT_THEME: Theme = 'light'
 
 const PACK_STORAGE_KEY = 'byoa-theme-pack'
-export const DEFAULT_PACK = 'byoa'
+export const DEFAULT_PACK = 'default'
 /** The sentinel value meaning "no custom theme pack, just light/dark" */
 export const NO_PACK = 'default'
 
@@ -48,12 +52,16 @@ export const DEFAULT_SKIN = 'native'
 /** The sentinel value meaning "no skin override" */
 export const NO_SKIN = 'default'
 
+const INTERACTION_STORAGE_KEY = 'byoa-interaction-mode'
+export const DEFAULT_INTERACTION: InteractionMode = 'fluid'
+
 // Migrate old localStorage keys from mymind-* to byoa-*
 if (typeof localStorage !== 'undefined') {
   const migrations: [string, string][] = [
     ['mymind-theme', 'byoa-theme'],
     ['mymind-theme-pack', 'byoa-theme-pack'],
     ['mymind-skin', 'byoa-skin'],
+    ['mymind-interaction-mode', 'byoa-interaction-mode'],
   ]
   for (const [oldKey, newKey] of migrations) {
     const old = localStorage.getItem(oldKey)
@@ -73,12 +81,34 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = DEFAULT_THEME,
+  defaultTheme = 'light',
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme)
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) return stored as Theme
+    }
+    return 'light'
+  })
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
-  const [themePack, setThemePackState] = useState<string>(DEFAULT_PACK)
-  const [skin, setSkinState] = useState<string>(DEFAULT_SKIN)
+  const [themePack, setThemePackState] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK
+    }
+    return DEFAULT_PACK
+  })
+  const [skin, setSkinState] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(SKIN_STORAGE_KEY) || DEFAULT_SKIN
+    }
+    return DEFAULT_SKIN
+  })
+  const [interactionMode, setInteractionModeState] = useState<InteractionMode>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return (localStorage.getItem(INTERACTION_STORAGE_KEY) as InteractionMode) || DEFAULT_INTERACTION
+    }
+    return DEFAULT_INTERACTION
+  })
 
   const getSystemTheme = useCallback((): 'light' | 'dark' => {
     if (typeof window === 'undefined') return 'light'
@@ -98,14 +128,8 @@ export function ThemeProvider({
     if (typeof document === 'undefined') return
 
     const root = document.documentElement
-    root.removeAttribute('data-theme')
-
-    if (resolved === 'dark') {
-      root.setAttribute('data-theme', 'dark')
-    } else {
-      root.setAttribute('data-theme', 'light')
-    }
-
+    root.setAttribute('data-theme', resolved)
+    root.classList.toggle('dark', resolved === 'dark')
     root.style.colorScheme = resolved
   }, [])
 
@@ -120,14 +144,14 @@ export function ThemeProvider({
       if (pack === NO_PACK) {
         // Remove theme pack — fall back to light/dark system
         const resolved = computeResolvedTheme(theme)
-        root.setAttribute('data-theme', resolved)
-        root.style.colorScheme = resolved
+        applyTheme(resolved)
       } else {
         // Apply the theme pack
         root.setAttribute('data-theme', pack)
         const themeInfo = getTheme(pack)
         if (themeInfo) {
           root.style.colorScheme = themeInfo.colorMode
+          root.classList.toggle('dark', themeInfo.colorMode === 'dark')
         }
       }
 
@@ -158,6 +182,15 @@ export function ThemeProvider({
     } else {
       root.setAttribute('data-skin', newSkin)
     }
+  }, [])
+
+  const setInteractionMode = useCallback((mode: InteractionMode) => {
+    setInteractionModeState(mode)
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(INTERACTION_STORAGE_KEY, mode)
+    }
+    const root = document.documentElement
+    root.setAttribute('data-interaction-mode', mode)
   }, [])
 
   const setTheme = useCallback(
@@ -203,6 +236,11 @@ export function ThemeProvider({
       root.removeAttribute('data-skin')
     }
 
+    // Read and apply interaction mode
+    const storedInteraction = (localStorage.getItem(INTERACTION_STORAGE_KEY) as InteractionMode) || DEFAULT_INTERACTION
+    setInteractionModeState(storedInteraction)
+    root.setAttribute('data-interaction-mode', storedInteraction)
+
     // Read and apply stored theme pack
     const storedPack = localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK
     setThemePackState(storedPack)
@@ -212,6 +250,7 @@ export function ThemeProvider({
       const themeInfo = getTheme(storedPack)
       if (themeInfo) {
         root.style.colorScheme = themeInfo.colorMode
+        root.classList.toggle('dark', themeInfo.colorMode === 'dark')
       }
       // Load fonts for the stored pack
       if (themeInfo?.fonts) {
@@ -264,6 +303,8 @@ export function ThemeProvider({
     skin,
     setSkin,
     availableSkins,
+    interactionMode,
+    setInteractionMode,
   }
 
   return (
@@ -282,19 +323,33 @@ export function useTheme() {
 export const themeScript = `
 (function() {
   try {
-    var pack = localStorage.getItem('${PACK_STORAGE_KEY}') || '${DEFAULT_PACK}';
-    if (pack !== '${NO_PACK}') {
+    var STORAGE_KEY = '${STORAGE_KEY}';
+    var PACK_STORAGE_KEY = '${PACK_STORAGE_KEY}';
+    var SKIN_STORAGE_KEY = '${SKIN_STORAGE_KEY}';
+    var NO_PACK = '${NO_PACK}';
+    var NO_SKIN = '${NO_SKIN}';
+    var DEFAULT_PACK = '${DEFAULT_PACK}';
+    var DEFAULT_SKIN = '${DEFAULT_SKIN}';
+    var INTERACTION_STORAGE_KEY = '${INTERACTION_STORAGE_KEY}';
+    var DEFAULT_INTERACTION = '${DEFAULT_INTERACTION}';
+
+    var pack = localStorage.getItem(PACK_STORAGE_KEY) || DEFAULT_PACK;
+    var skin = localStorage.getItem(SKIN_STORAGE_KEY) || DEFAULT_SKIN;
+    var interaction = localStorage.getItem(INTERACTION_STORAGE_KEY) || DEFAULT_INTERACTION;
+
+    document.documentElement.setAttribute('data-interaction-mode', interaction);
+    
+    if (pack !== NO_PACK) {
       document.documentElement.setAttribute('data-theme', pack);
     } else {
-      var theme = localStorage.getItem('${STORAGE_KEY}');
-      var resolved = theme === 'dark' ? 'dark' :
-                     theme === 'light' ? 'light' :
-                     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', resolved);
-      document.documentElement.style.colorScheme = resolved;
+      var theme = localStorage.getItem(STORAGE_KEY) || 'system';
+      var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', isDark);
+      document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
     }
-    var skin = localStorage.getItem('${SKIN_STORAGE_KEY}') || '${DEFAULT_SKIN}';
-    if (skin !== '${NO_SKIN}') {
+    
+    if (skin !== NO_SKIN) {
       document.documentElement.setAttribute('data-skin', skin);
     }
   } catch (e) {}

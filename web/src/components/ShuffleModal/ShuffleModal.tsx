@@ -3,9 +3,20 @@
  *
  * Pick 1–25 random cards from your library and swipe through
  * them one by one in a focused full-screen overlay.
+ *
+ * Animation keyframes:
+ *   backdropIn      — backdrop fades in
+ *   modalSlideIn    — modal springs up from below
+ *   fadeSlideIn     — sections cascade in with stagger
+ *   diceRoll        — header icon bounces on open
+ *   countPop        — number display pops when value changes
+ *   cardEnterRight  — card enters from right on next()
+ *   cardEnterLeft   — card enters from left on prev()
+ *   breathe         — loading icon pulse
+ *   progressGlow    — progress bar leading-edge glow
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 import { ChevronLeft, ChevronRight, Dices, Shuffle, X } from 'lucide-react'
 
@@ -15,9 +26,8 @@ import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal'
 import { haptic } from 'src/lib/haptics'
 import {
   type FeedCardRecord,
-  toFeedCard,
   FeedCardVisual,
-  FeedCardTags,
+  toFeedCard,
 } from 'src/components/FeedCellShared/FeedCellShared'
 
 const RANDOM_CARDS_QUERY = gql`
@@ -48,7 +58,9 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
   const [count, setCount] = useState(10)
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null)
   const [index, setIndex] = useState(0)
+  const [cardDirection, setCardDirection] = useState<'right' | 'left'>('right')
   const [selectedCard, setSelectedCard] = useState<FeedCardRecord | null>(null)
+  const [isLaunching, setIsLaunching] = useState(false)
 
   const { data, loading, refetch } = useQuery(RANDOM_CARDS_QUERY, {
     variables: { limit: confirmedCount ?? 10 },
@@ -56,30 +68,60 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
   })
 
   const cards: FeedCardRecord[] = data?.randomCards ?? []
-  const lastSliderHaptic = useRef(0)
+
+  // Pixel-perfect slider fill:
+  // Browser places thumb center at: thumbRadius + fraction × (trackWidth − thumbDiameter)
+  // As CSS:  calc(14px + fraction × (100% − 28px))
+  const sliderFraction = ((count - 1) / 24).toFixed(5)
+  const sliderFill = `calc(14px + ${sliderFraction} * (100% - 28px))`
+
+  const handleCountChange = (newCount: number) => {
+    if (newCount !== count) {
+      haptic('selection')
+      setCount(newCount)
+    }
+  }
 
   const handleStart = () => {
-    setIndex(0)
-    setConfirmedCount(count)
+    haptic('heavy')
+    setIsLaunching(true)
+    setTimeout(() => {
+      setIndex(0)
+      setCardDirection('right')
+      setConfirmedCount(count)
+      setIsLaunching(false)
+    }, 280)
   }
 
   const handleReshuffle = () => {
+    haptic('medium')
     setIndex(0)
+    setCardDirection('right')
     refetch({ limit: confirmedCount ?? count })
   }
 
-  const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), [])
-  const next = useCallback(
-    () => setIndex((i) => Math.min(cards.length - 1, i + 1)),
-    [cards.length]
-  )
+  const prev = useCallback(() => {
+    if (index > 0) {
+      haptic('light')
+      setCardDirection('left')
+      setIndex(index - 1)
+    }
+  }, [index])
 
-  // Keyboard navigation
+  const next = useCallback(() => {
+    if (index < cards.length - 1) {
+      haptic('light')
+      setCardDirection('right')
+      setIndex(index + 1)
+    }
+  }, [index, cards.length])
+
   useEffect(() => {
-    if (confirmedCount === null) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') prev()
-      if (e.key === 'ArrowRight') next()
+      if (confirmedCount !== null) {
+        if (e.key === 'ArrowLeft') prev()
+        if (e.key === 'ArrowRight') next()
+      }
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', handler)
@@ -87,355 +129,621 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
   }, [confirmedCount, prev, next, onClose])
 
   const currentCard = cards[index]
-  const domainLabel = currentCard?.url
-    ? (() => {
-        try {
-          return new URL(currentCard.url).hostname.replace(/^www\./, '')
-        } catch {
-          return null
-        }
-      })()
-    : null
 
   return (
-    <>
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
+
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md"
-        style={{ animation: 'fadeIn 200ms ease' }}
+        className="fixed inset-0"
+        style={{
+          backgroundColor: 'rgba(0,0,0,0.48)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          animation: 'shuffleBackdropIn 350ms ease forwards',
+        }}
         onClick={onClose}
       />
 
       {/* Modal */}
       <div
-        className="fixed inset-x-2 inset-y-3 z-[70] mx-auto flex flex-col overflow-hidden rounded-2xl shadow-2xl sm:inset-x-8 sm:inset-y-10"
+        className="relative z-10 flex h-full w-full max-w-4xl flex-col overflow-hidden shadow-2xl sm:h-[85vh] sm:max-h-[800px] sm:w-[90vw] sm:rounded-3xl"
         style={{
-          maxWidth: 680,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          right: 'auto',
           backgroundColor: 'var(--surface-elevated)',
           border: '1px solid var(--border-default)',
-          animation: 'scaleIn 200ms var(--ease-snappy)',
+          animation: 'shuffleModalSlideIn 520ms var(--ease-spring)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+
+        {/* ── Grid overlay ──────────────────────────────────────────
+            Hairline editorial grid: 3 horizontal row dividers (red)
+            + 1 vertical centre axis (purple). Pointer-events: none.  */}
         <div
-          className="flex items-center justify-between px-5 py-3.5"
-          style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-hidden sm:rounded-3xl"
+          style={{ zIndex: 2 }}
         >
-          <div className="flex items-center gap-2.5">
-            <Dices size={18} style={{ color: 'var(--accent-primary)' }} />
-            <span
-              className="text-sm font-semibold tracking-tight"
-              style={{ color: 'var(--foreground)' }}
-            >
-              Shuffle
-            </span>
-            {confirmedCount !== null && cards.length > 0 && (
-              <span
-                className="tabular-nums text-sm font-semibold sm:text-base"
-                style={{ color: 'var(--foreground)' }}
-              >
-                {index + 1}
-                <span style={{ color: 'var(--foreground-muted)', margin: '0 2px' }}>/</span>
-                {cards.length}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {confirmedCount !== null && (
-              <button
-                onClick={() => { haptic('medium'); handleReshuffle() }}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-                style={{
-                  backgroundColor: 'var(--surface-soft)',
-                  color: 'var(--foreground-muted)',
-                }}
-                title="Draw new random cards"
-              >
-                <Shuffle size={12} />
-                Reshuffle
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-full transition-colors"
-              style={{ color: 'var(--foreground-muted)' }}
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          {[25, 50, 75].map((pct) => (
+            <div
+              key={pct}
+              className="absolute left-0 right-0"
+              style={{
+                top: `${pct}%`,
+                height: '1px',
+                background: 'rgba(215, 52, 28, 0.07)',
+              }}
+            />
+          ))}
+          <div
+            className="absolute bottom-0 top-0"
+            style={{
+              left: '50%',
+              width: '1px',
+              background: 'rgba(95, 55, 185, 0.08)',
+            }}
+          />
         </div>
 
-        {/* Body */}
-        {confirmedCount === null ? (
-          // — Picker screen —
-          <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
-            <div className="text-center">
-              <h2
-                className="font-display text-3xl"
-                style={{ color: 'var(--foreground)', letterSpacing: '-0.03em' }}
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div
+          className="relative flex shrink-0 items-center justify-between px-6 py-4"
+          style={{ zIndex: 10, animation: 'shuffleFadeSlideIn 380ms ease' }}
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full"
+              style={{
+                backgroundColor: 'var(--accent-light)',
+                animation: 'shuffleDiceRoll 620ms var(--ease-spring) 120ms both',
+              }}
+            >
+              <Dices size={18} style={{ color: 'var(--accent-primary)' }} />
+            </div>
+            <h2
+              className="text-sm font-semibold uppercase tracking-widest"
+              style={{ color: 'var(--foreground-muted)', fontSize: '11px' }}
+            >
+              Shuffle Mode
+            </h2>
+            {confirmedCount !== null && cards.length > 0 && (
+              <div
+                className="ml-2 flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
+                style={{
+                  backgroundColor: 'var(--surface-soft)',
+                  color: 'var(--foreground)',
+                  animation: 'shuffleCountPop 280ms var(--ease-spring)',
+                }}
+                key={`${index + 1}-${cards.length}`}
               >
-                How many cards?
-              </h2>
-              <p
-                className="mt-2 text-sm"
-                style={{ color: 'var(--foreground-muted)' }}
+                {index + 1} / {cards.length}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="shuffle-close-btn flex h-10 w-10 items-center justify-center rounded-full"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* ── Content ─────────────────────────────────────────────── */}
+        <div className="relative flex flex-1 flex-col overflow-hidden" style={{ zIndex: 10 }}>
+
+          {confirmedCount === null ? (
+
+            /* ── Setup screen ─────────────────────────────────────── */
+            <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
+
+              {/* Title */}
+              <div
+                className="text-center"
+                style={{ animation: 'shuffleFadeSlideIn 420ms 60ms ease both' }}
               >
-                We'll pick them at random from your library.
+                <h2
+                  className="font-display text-3xl"
+                  style={{ color: 'var(--foreground)', letterSpacing: '-0.03em' }}
+                >
+                  How many cards?
+                </h2>
+                <p className="mt-2 text-sm" style={{ color: 'var(--foreground-muted)' }}>
+                  We'll pick them at random from your library.
+                </p>
+              </div>
+
+              {/* Count number — remounts on every change to re-fire countPop */}
+              <div style={{ animation: 'shuffleFadeSlideIn 420ms 140ms ease both' }}>
+                <div
+                  key={count}
+                  className="text-center font-display tabular-nums"
+                  style={{
+                    fontSize: '5rem',
+                    lineHeight: 1,
+                    color: 'var(--accent-primary)',
+                    letterSpacing: '-0.05em',
+                    minWidth: '5rem',
+                    animation: 'shuffleCountPop 300ms var(--ease-spring)',
+                  }}
+                >
+                  {count}
+                </div>
+              </div>
+
+              {/* Slider — 384px = 3 × 128px grid cell */}
+              <div
+                className="w-full max-w-sm"
+                style={{ animation: 'shuffleFadeSlideIn 420ms 220ms ease both' }}
+              >
+                <div className="relative py-3">
+                  <input
+                    type="range"
+                    min="1"
+                    max="25"
+                    aria-label="Number of cards to shuffle"
+                    className="shuffle-slider w-full"
+                    value={count}
+                    onChange={(e) => handleCountChange(parseInt(e.target.value))}
+                    onPointerDown={() => haptic('medium')}
+                    onPointerUp={() => haptic('rigid')}
+                    style={{ '--slider-fill': sliderFill } as React.CSSProperties}
+                  />
+                </div>
+                {/*
+                 * Label inset = thumbRadius (14px) so "1" and "25" sit directly
+                 * under the thumb centre at each endpoint — matches the CSS formula
+                 * calc(14px + fraction × (100% − 28px)).
+                 */}
+                <div
+                  className="mt-0.5 flex justify-between text-xs font-semibold tracking-wide"
+                  style={{ color: 'var(--foreground-muted)', paddingLeft: '14px', paddingRight: '14px' }}
+                >
+                  <span>1</span>
+                  <span>25</span>
+                </div>
+              </div>
+
+              {/* Preset chips — same 384px width, spread across full span */}
+              <div
+                className="flex w-full max-w-sm justify-between"
+                style={{ animation: 'shuffleFadeSlideIn 420ms 300ms ease both' }}
+              >
+                {[5, 10, 15, 20, 25].map((val) => {
+                  const active = count === val
+                  return (
+                    <button
+                      key={val}
+                      onClick={() => { haptic('soft'); handleCountChange(val) }}
+                      className="shuffle-preset-btn flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold tabular-nums"
+                      style={{
+                        backgroundColor: active ? 'var(--accent-primary)' : 'var(--surface-soft)',
+                        color: active ? 'white' : 'var(--foreground-muted)',
+                        transform: active ? 'scale(1.12)' : 'scale(1)',
+                        boxShadow: active ? '0 4px 18px rgba(255, 107, 74, 0.38)' : 'none',
+                        transition:
+                          'background-color 240ms ease, color 240ms ease, ' +
+                          'transform 380ms var(--ease-spring), box-shadow 240ms ease',
+                      }}
+                    >
+                      {val}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* CTA — w-full within 384px container so edges align with slider */}
+              <button
+                onClick={handleStart}
+                disabled={isLaunching}
+                className="shuffle-cta-btn mt-4 w-full max-w-sm rounded-full py-4 font-bold text-white"
+                style={{
+                  backgroundColor: 'var(--accent-primary)',
+                  boxShadow: '0 8px 32px rgba(255, 107, 74, 0.38)',
+                  animation: 'shuffleFadeSlideIn 420ms 390ms ease both',
+                  transform: isLaunching ? 'scale(0.95)' : undefined,
+                  opacity: isLaunching ? 0.85 : undefined,
+                  transition: 'transform 220ms var(--ease-spring), opacity 200ms ease',
+                }}
+              >
+                {isLaunching ? 'Drawing…' : `Draw ${count} cards`}
+              </button>
+            </div>
+
+          ) : loading ? (
+
+            /* ── Loading ──────────────────────────────────────────── */
+            <div
+              className="flex flex-1 flex-col items-center justify-center gap-6"
+              style={{ animation: 'shuffleFadeSlideIn 300ms ease' }}
+            >
+              <div style={{ animation: 'shuffleBreathe 1.4s ease-in-out infinite' }}>
+                <Dices size={52} style={{ color: 'var(--accent-primary)', opacity: 0.85 }} />
+              </div>
+              <p className="text-sm font-medium" style={{ color: 'var(--foreground-muted)' }}>
+                Gathering memories…
               </p>
             </div>
 
-            {/* Number display */}
+          ) : cards.length === 0 ? (
+
+            /* ── Empty ────────────────────────────────────────────── */
             <div
-              className="text-center font-display tabular-nums"
-              style={{
-                fontSize: '5rem',
-                lineHeight: 1,
-                color: 'var(--accent-primary)',
-                letterSpacing: '-0.05em',
-                minWidth: '5rem',
-              }}
+              className="flex flex-1 flex-col items-center justify-center gap-4 text-center"
+              style={{ animation: 'shuffleFadeSlideIn 300ms ease' }}
             >
-              {count}
-            </div>
-
-            {/* Slider */}
-            <div className="w-full max-w-xs">
-              <input
-                type="range"
-                min={1}
-                max={25}
-                value={count}
-                onChange={(e) => {
-                  setCount(Number(e.target.value))
-                  const now = Date.now()
-                  if (now - lastSliderHaptic.current > 80) {
-                    haptic('selection')
-                    lastSliderHaptic.current = now
-                  }
-                }}
-                className="w-full"
-                style={{ accentColor: 'var(--accent-primary)' }}
-              />
-              <div
-                className="mt-1 flex justify-between text-[11px]"
-                style={{ color: 'var(--foreground-muted)' }}
+              <Shuffle size={48} style={{ color: 'var(--border-default)' }} />
+              <p className="text-lg font-medium" style={{ color: 'var(--foreground)' }}>
+                No cards found
+              </p>
+              <button
+                onClick={() => setConfirmedCount(null)}
+                className="text-sm font-medium underline underline-offset-4"
+                style={{ color: 'var(--accent-primary)' }}
               >
-                <span>1</span>
-                <span>25</span>
-              </div>
+                Try a different amount
+              </button>
             </div>
 
-            {/* Quick picks */}
-            <div className="flex flex-wrap justify-center gap-2">
-              {[5, 10, 15, 20, 25].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => { haptic('selection'); setCount(n) }}
-                  className="rounded-full px-3 py-1 text-sm font-medium transition-all"
-                  style={{
-                    backgroundColor:
-                      count === n
-                        ? 'var(--accent-primary)'
-                        : 'var(--surface-soft)',
-                    color: count === n ? 'white' : 'var(--foreground-muted)',
-                  }}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+          ) : (
 
-            <button
-              onClick={() => { haptic('medium'); handleStart() }}
-              className="rounded-full px-8 py-3 font-semibold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-              style={{ backgroundColor: 'var(--accent-primary)' }}
+            /* ── Card display ─────────────────────────────────────── */
+            <div
+              className="flex flex-1 flex-col overflow-hidden px-4 pb-8 sm:px-8"
+              style={{ animation: 'shuffleFadeSlideIn 300ms ease' }}
             >
-              Draw {count} card{count !== 1 ? 's' : ''}
-            </button>
-          </div>
-        ) : loading ? (
-          // — Loading state —
-          <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            <Dices
-              size={36}
-              style={{ color: 'var(--accent-primary)', animation: 'spin 1s linear infinite' }}
-            />
-            <p
-              className="text-sm"
-              style={{ color: 'var(--foreground-muted)' }}
-            >
-              Shuffling your library…
-            </p>
-          </div>
-        ) : cards.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
-              No cards found.
-            </p>
-          </div>
-        ) : (
-          // — Card browser —
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Card display area */}
-            <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4">
-              {currentCard && (
-                <div
-                  key={currentCard.id}
-                  style={{ animation: 'fadeSlideIn 180ms var(--ease-snappy)' }}
-                >
-                  {/* Image */}
-                  {(currentCard.imageUrl ||
-                    currentCard.url ||
-                    (currentCard.metadata as Record<string, unknown>)?.screenshotUrl) && (
-                    <div
-                      className="mb-4 overflow-hidden rounded-xl cursor-pointer"
-                      style={{ maxHeight: 260 }}
-                      onClick={() => setSelectedCard(currentCard)}
-                    >
-                      <FeedCardVisual
-                        card={currentCard}
-                        variant="stacked"
-                        showBadges={false}
-                        showProcessingIndicator={false}
-                      />
-                    </div>
-                  )}
+              <div className="relative flex flex-1 items-center justify-center overflow-hidden py-4">
 
-                  {/* Domain */}
-                  {domainLabel && (
-                    <p
-                      className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.12em]"
-                      style={{ color: 'var(--foreground-muted)' }}
-                    >
-                      {domainLabel}
-                    </p>
-                  )}
-
-                  {/* Title */}
-                  <h3
-                    className="font-display cursor-pointer hover:underline"
+                {/* Nav ← (desktop) */}
+                <div className="absolute inset-y-0 left-0 hidden w-16 items-center justify-start sm:flex">
+                  <button
+                    onClick={prev}
+                    disabled={index === 0}
+                    className="shuffle-nav-btn flex h-12 w-12 items-center justify-center rounded-full shadow-lg disabled:pointer-events-none disabled:opacity-0"
                     style={{
-                      fontSize: '1.35rem',
-                      lineHeight: 1.25,
-                      letterSpacing: '-0.03em',
+                      backgroundColor: 'var(--surface-elevated)',
+                      border: '1px solid var(--border-default)',
                       color: 'var(--foreground)',
                     }}
-                    onClick={() => setSelectedCard(currentCard)}
                   >
-                    {currentCard.title || 'Untitled'}
-                  </h3>
+                    <ChevronLeft size={24} />
+                  </button>
+                </div>
 
-                  {/* Snippet */}
-                  {(currentCard.content ||
-                    currentCard.metadata?.summary) && (
-                    <p
-                      className="mt-2 text-sm leading-relaxed"
-                      style={{
-                        color: 'var(--foreground-muted)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 4,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
+                {/* Nav → (desktop) */}
+                <div className="absolute inset-y-0 right-0 hidden w-16 items-center justify-end sm:flex">
+                  <button
+                    onClick={next}
+                    disabled={index === cards.length - 1}
+                    className="shuffle-nav-btn flex h-12 w-12 items-center justify-center rounded-full shadow-lg disabled:pointer-events-none disabled:opacity-0"
+                    style={{
+                      backgroundColor: 'var(--surface-elevated)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--foreground)',
+                    }}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </div>
+
+                {/* Card — key includes index so direction always re-fires */}
+                <div
+                  key={`${currentCard.id}-${index}`}
+                  className="shuffle-card flex h-full w-full max-w-lg cursor-pointer flex-col overflow-hidden rounded-2xl shadow-xl"
+                  onClick={() => { haptic('medium'); setSelectedCard(currentCard) }}
+                  style={{
+                    backgroundColor: 'var(--background)',
+                    border: '1px solid var(--border-default)',
+                    animation:
+                      cardDirection === 'right'
+                        ? 'shuffleCardEnterRight 420ms var(--ease-spring)'
+                        : 'shuffleCardEnterLeft 420ms var(--ease-spring)',
+                  }}
+                >
+                  <div className="flex-1 overflow-hidden">
+                    <FeedCardVisual card={currentCard} />
+                  </div>
+                  <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                    <h3
+                      className="line-clamp-2 text-base font-semibold"
+                      style={{ color: 'var(--foreground)' }}
                     >
-                      {(currentCard.metadata?.summary as string) ||
-                        currentCard.content}
-                    </p>
-                  )}
-
-                  {/* Tags */}
-                  <div className="mt-3">
-                    <FeedCardTags card={currentCard} maxTags={6} />
+                      {currentCard.title || 'Untitled Card'}
+                    </h3>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span
+                        className="text-xs uppercase tracking-wider"
+                        style={{ color: 'var(--foreground-muted)' }}
+                      >
+                        {new Date(parseInt(currentCard.createdAt)).toLocaleDateString()}
+                      </span>
+                      <div
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: 'var(--accent-primary)' }}
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Navigation footer */}
-            <div
-              className="flex items-center justify-between px-3 py-3 sm:px-5"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
-              <button
-                onClick={() => { prev(); haptic('light') }}
-                disabled={index === 0}
-                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all disabled:opacity-30 min-w-[44px] min-h-[44px] justify-center sm:px-4"
-                style={{
-                  backgroundColor: 'var(--surface-soft)',
-                  color: 'var(--foreground)',
-                }}
-              >
-                <ChevronLeft size={16} />
-                <span className="hidden sm:inline">Prev</span>
-              </button>
-
-              {/* Progress bar */}
-              <div
-                className="relative mx-3 flex-1 cursor-pointer"
-                style={{ height: 3, backgroundColor: 'var(--border-default)', borderRadius: 2 }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  const fraction = (e.clientX - rect.left) / rect.width
-                  const target = Math.floor(fraction * cards.length)
-                  setIndex(Math.max(0, Math.min(cards.length - 1, target)))
-                  haptic('light')
-                }}
-                role="progressbar"
-                aria-valuenow={index + 1}
-                aria-valuemin={1}
-                aria-valuemax={cards.length}
-              >
-                <div
-                  style={{
-                    width: `${((index + 1) / cards.length) * 100}%`,
-                    height: '100%',
-                    backgroundColor: 'var(--accent-primary)',
-                    borderRadius: 2,
-                    transition: 'width 200ms ease',
-                  }}
-                />
               </div>
 
-              <button
-                onClick={() => { next(); haptic('light') }}
-                disabled={index === cards.length - 1}
-                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all disabled:opacity-30 min-w-[44px] min-h-[44px] justify-center sm:px-4"
-                style={{
-                  backgroundColor: 'var(--surface-soft)',
-                  color: 'var(--foreground)',
-                }}
-              >
-                <span className="hidden sm:inline">Next</span>
-                <ChevronRight size={16} />
-              </button>
+              {/* Progress + controls */}
+              <div className="mt-6 shrink-0 space-y-4">
+
+                {/* Progress bar with leading-edge glow */}
+                <div
+                  className="relative h-1.5 w-full overflow-hidden rounded-full"
+                  style={{ backgroundColor: 'var(--surface-soft)' }}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{
+                      width: `${((index + 1) / cards.length) * 100}%`,
+                      backgroundColor: 'var(--accent-primary)',
+                      transition: 'width 400ms var(--ease-spring)',
+                      boxShadow: '3px 0 10px rgba(255, 107, 74, 0.45)',
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handleReshuffle}
+                    className="shuffle-reshuffle-btn flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold"
+                    style={{ color: 'var(--foreground-muted)' }}
+                  >
+                    <Shuffle size={14} />
+                    Reshuffle
+                  </button>
+
+                  {/* Mobile nav */}
+                  <div className="flex gap-4 sm:hidden">
+                    <button
+                      onClick={prev}
+                      disabled={index === 0}
+                      className="flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+                      style={{ backgroundColor: 'var(--surface-soft)', color: 'var(--foreground)' }}
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      onClick={next}
+                      disabled={index === cards.length - 1}
+                      className="flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+                      style={{ backgroundColor: 'var(--surface-soft)', color: 'var(--foreground)' }}
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setConfirmedCount(null)}
+                    className="text-xs font-bold transition-all hover:opacity-60 active:scale-95"
+                    style={{ color: 'var(--accent-primary)' }}
+                  >
+                    Change amount
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Full detail on click */}
       {selectedCard && (
         <CardDetailModal
-          card={toFeedCard(selectedCard)}
           isOpen={true}
           onClose={() => setSelectedCard(null)}
-          onArchive={() => setSelectedCard(null)}
+          card={toFeedCard(selectedCard)}
         />
       )}
 
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes scaleIn { from { opacity: 0; transform: translateX(-50%) scale(0.96) } to { opacity: 1; transform: translateX(-50%) scale(1) } }
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
-        @keyframes spin { to { transform: rotate(360deg) } }
-      `}</style>
-    </>
+      <style dangerouslySetInnerHTML={{ __html: `
+
+        /* ── Entry animations ─────────────────────────────────────── */
+
+        @keyframes shuffleBackdropIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+
+        /* Modal springs up: starts 48px below, 94% scale */
+        @keyframes shuffleModalSlideIn {
+          from { opacity: 0; transform: translateY(48px) scale(0.94); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+
+        /* Generic staggered section entrance */
+        @keyframes shuffleFadeSlideIn {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header Dices icon rolls in with slight overshoot */
+        @keyframes shuffleDiceRoll {
+          0%   { opacity: 0; transform: rotate(-20deg) scale(0.6); }
+          55%  { opacity: 1; transform: rotate(10deg)  scale(1.15); }
+          80%  { transform: rotate(-4deg) scale(0.97); }
+          100% { opacity: 1; transform: rotate(0deg)   scale(1); }
+        }
+
+        /* Count number pops when value changes */
+        @keyframes shuffleCountPop {
+          0%   { opacity: 0; transform: scale(0.68); }
+          55%  { opacity: 1; transform: scale(1.12); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Card enters from right (next) */
+        @keyframes shuffleCardEnterRight {
+          from { opacity: 0; transform: translateX(52px) scale(0.93); }
+          to   { opacity: 1; transform: translateX(0)    scale(1); }
+        }
+
+        /* Card enters from left (prev) */
+        @keyframes shuffleCardEnterLeft {
+          from { opacity: 0; transform: translateX(-52px) scale(0.93); }
+          to   { opacity: 1; transform: translateX(0)     scale(1); }
+        }
+
+        /* Loading icon breathes */
+        @keyframes shuffleBreathe {
+          0%, 100% { transform: scale(1);    opacity: 0.80; }
+          50%       { transform: scale(1.14); opacity: 1; }
+        }
+
+        /* ── Interactive states ───────────────────────────────────── */
+
+        .shuffle-close-btn {
+          transition: background-color 180ms ease, transform 200ms var(--ease-spring);
+        }
+        .shuffle-close-btn:hover {
+          background-color: var(--surface-soft);
+          transform: scale(1.1);
+        }
+        .shuffle-close-btn:active {
+          transform: scale(0.88);
+        }
+
+        .shuffle-cta-btn {
+          transition:
+            transform 260ms var(--ease-spring),
+            box-shadow 220ms ease,
+            opacity    200ms ease;
+        }
+        .shuffle-cta-btn:not(:disabled):hover {
+          transform: translateY(-4px) scale(1.02);
+          box-shadow: 0 16px 48px rgba(255, 107, 74, 0.48);
+        }
+        .shuffle-cta-btn:not(:disabled):active {
+          transform: scale(0.95);
+          box-shadow: 0 4px 12px rgba(255, 107, 74, 0.30);
+        }
+
+        .shuffle-preset-btn:hover {
+          opacity: 0.85;
+        }
+        .shuffle-preset-btn:active {
+          transform: scale(0.90) !important;
+          transition-duration: 120ms !important;
+        }
+
+        .shuffle-nav-btn {
+          transition: transform 200ms var(--ease-spring), box-shadow 200ms ease, opacity 200ms ease;
+        }
+        .shuffle-nav-btn:hover {
+          transform: scale(1.12);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+        .shuffle-nav-btn:active {
+          transform: scale(0.90);
+        }
+
+        .shuffle-card {
+          transition: box-shadow 240ms ease, transform 240ms var(--ease-spring);
+        }
+        .shuffle-card:hover {
+          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.14);
+          transform: scale(1.015) translateY(-2px);
+        }
+        .shuffle-card:active {
+          transform: scale(0.984);
+        }
+
+        .shuffle-reshuffle-btn {
+          transition: background-color 180ms ease, transform 200ms var(--ease-spring), opacity 180ms ease;
+        }
+        .shuffle-reshuffle-btn:hover {
+          background-color: var(--surface-soft);
+          transform: scale(1.04);
+        }
+        .shuffle-reshuffle-btn:active {
+          transform: scale(0.94);
+        }
+
+        /* ── Shuffle Slider ───────────────────────────────────────── */
+
+        .shuffle-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          height: 8px;
+          border-radius: 9999px;
+          /*
+           * Fill uses the pixel-accurate formula so the gradient edge lines
+           * up exactly with the browser-rendered thumb centre:
+           *   calc(thumbRadius + fraction × (trackWidth − thumbDiameter))
+           * expressed in CSS as: calc(14px + fraction × (100% − 28px))
+           */
+          background: linear-gradient(
+            to right,
+            var(--accent-primary) var(--slider-fill, calc(14px + 0.375 * (100% - 28px))),
+            rgba(0, 0, 0, 0.08) var(--slider-fill, calc(14px + 0.375 * (100% - 28px)))
+          );
+          outline: none;
+          cursor: grab;
+        }
+        .shuffle-slider:active {
+          cursor: grabbing;
+        }
+
+        /* WebKit thumb */
+        .shuffle-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: var(--accent-primary);
+          border: 3px solid white;
+          box-shadow:
+            0 2px 10px rgba(255, 107, 74, 0.42),
+            0 0 0 2px rgba(255, 107, 74, 0.12);
+          cursor: grab;
+          transition:
+            transform  220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+            box-shadow 200ms ease;
+        }
+        .shuffle-slider:hover::-webkit-slider-thumb {
+          box-shadow:
+            0 4px 16px rgba(255, 107, 74, 0.52),
+            0 0 0 5px rgba(255, 107, 74, 0.14);
+        }
+        .shuffle-slider:active::-webkit-slider-thumb {
+          transform: scale(1.28);
+          box-shadow:
+            0 6px 24px rgba(255, 107, 74, 0.58),
+            0 0 0 7px rgba(255, 107, 74, 0.14);
+          cursor: grabbing;
+        }
+        .shuffle-slider::-webkit-slider-runnable-track {
+          height: 8px;
+          border-radius: 9999px;
+        }
+
+        /* Firefox thumb */
+        .shuffle-slider::-moz-range-thumb {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: var(--accent-primary);
+          border: 3px solid white;
+          box-shadow: 0 2px 10px rgba(255, 107, 74, 0.42);
+          cursor: grab;
+          transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .shuffle-slider:active::-moz-range-thumb {
+          transform: scale(1.28);
+        }
+        .shuffle-slider::-moz-range-progress {
+          background: var(--accent-primary);
+          height: 8px;
+          border-radius: 9999px;
+        }
+        .shuffle-slider::-moz-range-track {
+          background: rgba(0, 0, 0, 0.08);
+          height: 8px;
+          border-radius: 9999px;
+        }
+
+      `}} />
+    </div>
   )
 }
-
-export default ShuffleModal

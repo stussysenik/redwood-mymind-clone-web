@@ -29,7 +29,8 @@
    DESIGN TOKENS (BYOA Palette)
    ============================================================================= */
 
-:root {
+:root,
+[data-theme="light"] {
   /* Core Colors - Light Theme */
   --background: #F7F6F3;
   --background-secondary: #EFEEEB;
@@ -201,7 +202,7 @@
 
 /* Dark Mode Theme (system preference) */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not([data-theme="daisy-cupcake"]):not([data-theme="daisy-retro"]) {
     --background: #0B1020;
     --background-secondary: #121A2B;
     --foreground: #F5EFE5;

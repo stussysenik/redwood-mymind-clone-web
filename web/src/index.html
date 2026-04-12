@@ -10,6 +10,38 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/favicon.png" />
+  <script>
+    (function() {
+      try {
+        var STORAGE_KEY = 'byoa-theme';
+        var PACK_STORAGE_KEY = 'byoa-theme-pack';
+        var SKIN_STORAGE_KEY = 'byoa-skin';
+        var INTERACTION_STORAGE_KEY = 'byoa-interaction-mode';
+        
+        var theme = localStorage.getItem(STORAGE_KEY) || 'system';
+        var pack = localStorage.getItem(PACK_STORAGE_KEY) || 'default';
+        var skin = localStorage.getItem(SKIN_STORAGE_KEY) || 'native';
+        var interaction = localStorage.getItem(INTERACTION_STORAGE_KEY) || 'fluid';
+
+        document.documentElement.setAttribute('data-interaction-mode', interaction);
+
+        if (pack !== 'default') {
+          document.documentElement.setAttribute('data-theme', pack);
+          // For custom packs, we don't know the colorMode here, 
+          // but React will fix it up.
+        } else {
+          var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', isDark);
+          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+        }
+
+        if (skin !== 'default') {
+          document.documentElement.setAttribute('data-skin', skin);
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
 <body>
