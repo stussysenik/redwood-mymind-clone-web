@@ -4,7 +4,12 @@ import { logger } from 'src/lib/logger'
 import { captureRateLimiter } from 'src/lib/rateLimit'
 
 // Unicode-aware hashtag extraction.
-const HASHTAG_RE = /#([\p{L}\p{N}_-]+)/gu
+//
+// The leading `(^|\s)` boundary is important: without it, patterns like
+// "C#programming" or "step#1" get parsed as tags, destroying the literal
+// content the user actually wrote. The boundary ensures only start-of-string
+// or whitespace-preceded `#` tokens are treated as hashtags.
+const HASHTAG_RE = /(^|\s)#([\p{L}\p{N}_-]+)/gu
 
 type CaptureEvent = {
   httpMethod?: string
@@ -53,9 +58,11 @@ function parseBody(raw: string | null | undefined): Record<string, unknown> | nu
 function parseHashtags(note: string): { tags: string[]; stripped: string } {
   const tags: string[] = []
   const stripped = note
-    .replace(HASHTAG_RE, (_, tag: string) => {
+    .replace(HASHTAG_RE, (_match, lead: string, tag: string) => {
       tags.push(tag)
-      return ''
+      // Preserve the boundary char (whitespace or empty at start) so the
+      // surrounding words keep their spacing after the tag is stripped.
+      return lead
     })
     .replace(/\s+/g, ' ')
     .trim()

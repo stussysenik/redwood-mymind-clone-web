@@ -193,6 +193,43 @@ describe('capture fn — rate limit', () => {
       buildEvent({ headers: validAuthHeaders(), body: { url: 'https://example.com' } })
     )
     expect(over.statusCode).toBe(429)
-    expect(JSON.parse(over.body).error).toBe('rate_limited')
+    const overBody = JSON.parse(over.body)
+    expect(overBody.error).toBe('rate_limited')
+    expect(typeof overBody.retryAfter).toBe('number')
+    expect(overBody.retryAfter).toBeGreaterThan(0)
+  })
+})
+
+describe('capture fn — hashtag word-boundary safety', () => {
+  beforeEach(() => {
+    mockVerify.mockResolvedValue(fakeToken())
+    mockCreate.mockResolvedValue({ id: 'card_1' })
+  })
+
+  it('does not parse "#" embedded inside a word as a hashtag', async () => {
+    await handler(
+      buildEvent({
+        headers: validAuthHeaders(),
+        body: {
+          url: 'https://example.com',
+          note: 'C#programming is a #language',
+        },
+      })
+    )
+    const callArg = mockCreate.mock.calls[0][1]
+    expect(callArg.tags).toEqual(['language'])
+    expect(callArg.content).toMatch(/C#programming/)
+  })
+
+  it('extracts a hashtag at start of note without losing the boundary', async () => {
+    await handler(
+      buildEvent({
+        headers: validAuthHeaders(),
+        body: { url: 'https://example.com', note: '#alone leading' },
+      })
+    )
+    const callArg = mockCreate.mock.calls[0][1]
+    expect(callArg.tags).toEqual(['alone'])
+    expect(callArg.content).toBe('leading')
   })
 })
