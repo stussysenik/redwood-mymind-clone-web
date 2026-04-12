@@ -132,15 +132,31 @@ export const randomCards: QueryResolvers['randomCards'] = async ({
   )
 }
 
-export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
-  const userId = context.currentUser!.id
+// Shared card-creation path. Called by:
+//   1. saveCard GraphQL resolver (user is from context.currentUser)
+//   2. /functions/capture endpoint (user is resolved from an ApiToken)
+//
+// The serverless-fn path has no Redwood auth context, so the user id is
+// passed explicitly rather than read from `context.currentUser`.
+export async function createCardForUser(
+  userId: string,
+  input: {
+    url?: string | null
+    type?: string | null
+    title?: string | null
+    content?: string | null
+    imageUrl?: string | null
+    tags?: string[] | null
+    clientClassification?: unknown
+  }
+) {
   const clientClassification = normalizeLocalClassification(
-    input.clientClassification
+    input.clientClassification as any
   )
   const initialLocalState = buildInitialLocalClassificationState({
-    inputType: input.type,
-    inputTitle: input.title,
-    inputTags: input.tags,
+    inputType: input.type ?? undefined,
+    inputTitle: input.title ?? undefined,
+    inputTags: input.tags ?? undefined,
     clientClassification,
   })
   const contentLength =
@@ -173,12 +189,17 @@ export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
     },
   })
 
-  // Save is the single entry point for new-card enrichment.
-  enrichCardPipeline(card.id).catch((err) => {
+  // Fire and forget. Must not throw from this function if enrichment fails.
+  void enrichCardPipeline(card.id).catch((err) => {
     logger.error({ cardId: card.id, err }, 'Background enrichment failed')
   })
 
   return card
+}
+
+export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
+  const userId = context.currentUser!.id
+  return createCardForUser(userId, input)
 }
 
 export const updateCard: MutationResolvers['updateCard'] = async ({
