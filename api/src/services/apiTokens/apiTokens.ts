@@ -1,3 +1,13 @@
+// Personal API token service.
+//
+// Called from two places:
+//   1. The `apiTokens` GraphQL resolver (user from `context.currentUser`)
+//   2. The `/functions/capture` serverless fn (user resolved from the token itself)
+//
+// Because of (2) the service accepts `userId` as an explicit parameter rather
+// than reading `context.currentUser` like sibling services (cards, spaces).
+// Do not "fix" this for consistency — the serverless path has no Redwood
+// auth context available.
 import crypto from 'crypto'
 
 import type { ApiToken } from '@prisma/client'
@@ -55,8 +65,11 @@ export async function verifyApiToken(plaintext: string): Promise<ApiToken | null
 
   if (!token) return null
 
-  // Fire-and-forget lastUsedAt update; do not block the caller and do not throw.
-  db.apiToken
+  // Fire-and-forget `lastUsedAt` update. `verifyApiToken` is on the hot path
+  // of /functions/capture, and `lastUsedAt` is best-effort telemetry, not
+  // audit-grade — awaiting it would add a round-trip to every request.
+  // `void` makes "deliberately not awaited" explicit for future linters.
+  void db.apiToken
     .update({
       where: { id: token.id },
       data: { lastUsedAt: new Date() },
