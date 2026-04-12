@@ -151,12 +151,12 @@ export async function createCardForUser(
   }
 ) {
   const clientClassification = normalizeLocalClassification(
-    input.clientClassification as any
+    input.clientClassification
   )
   const initialLocalState = buildInitialLocalClassificationState({
-    inputType: input.type ?? undefined,
-    inputTitle: input.title ?? undefined,
-    inputTags: input.tags ?? undefined,
+    inputType: input.type,
+    inputTitle: input.title,
+    inputTags: input.tags,
     clientClassification,
   })
   const contentLength =
