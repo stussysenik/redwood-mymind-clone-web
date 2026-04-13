@@ -5,6 +5,8 @@
  * showing what a node is connected TO, not just its own properties.
  */
 
+import { memo } from 'react';
+
 import type { GraphNode } from 'src/lib/graph';
 
 interface GraphTooltipProps {
@@ -24,7 +26,7 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
 
 const DEFAULT_BADGE = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
 
-export function GraphTooltip({ node, position, connectedNames = [] }: GraphTooltipProps) {
+function GraphTooltipInner({ node, position, connectedNames = [] }: GraphTooltipProps) {
 	if (!node || !position) return null;
 
 	const badgeClass = TYPE_BADGE_COLORS[node.type] ?? DEFAULT_BADGE;
@@ -98,3 +100,5 @@ export function GraphTooltip({ node, position, connectedNames = [] }: GraphToolt
 		</div>
 	);
 }
+
+export const GraphTooltip = memo(GraphTooltipInner);

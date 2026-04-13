@@ -100,11 +100,13 @@ const TYPE_INITIALS: Record<string, string> = {
 const EDGE_COLOR = '#B8AD9E';
 const DIM_ALPHA = 0.08;
 
-// Detect dark mode for canvas text (CSS vars aren't available in canvas)
-function isDarkMode(): boolean {
-	if (typeof window === 'undefined') return false;
-	return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-}
+// Module-level canvas font constants — hoisted out of the hot render path so
+// the browser can cache parsed font descriptors and we avoid string allocations
+// on every requestAnimationFrame.
+const FONT_LABEL_PROMINENT = '600 12px Inter, system-ui, sans-serif';
+const FONT_LABEL_NORMAL    = '10px Inter, system-ui, sans-serif';
+const FONT_ORPHAN_INITIAL  = '600 5px Inter, system-ui, sans-serif';
+const FONT_TAG_LABEL       = '9px Inter, system-ui, sans-serif';
 
 function truncate(s: string | null | undefined, max: number): string {
 	if (!s) return '';
@@ -190,6 +192,17 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 	const isMobile = dimensions.width < 768;
 
+	// Dark mode — computed once at mount, updated via MediaQueryList event.
+	// Never call window.matchMedia inside the canvas render loop (60 fps).
+	const darkModeRef = useRef(
+		typeof window !== 'undefined'
+			? window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
+			: false
+	);
+
+	// RAF handle for tooltip throttle
+	const tooltipRafRef = useRef<number | null>(null);
+
 	// Track double-tap for mobile "open detail" gesture
 	const lastTapRef = useRef<{ nodeId: string; time: number } | null>(null);
 
@@ -228,6 +241,15 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		return () => {
 			isActive = false;
 		};
+	}, []);
+
+	// Keep darkModeRef in sync without polling — runs once, zero cost in canvas loop
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const mql = window.matchMedia('(prefers-color-scheme: dark)');
+		const handler = (e: MediaQueryListEvent) => { darkModeRef.current = e.matches; };
+		mql.addEventListener('change', handler);
+		return () => mql.removeEventListener('change', handler);
 	}, []);
 
 	useEffect(() => {
@@ -373,12 +395,12 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	}, [focusedNodeId, focusedNeighbors, neighborIndex]);
 
 	const maxWeight = useMemo(
-		() => Math.max(1, ...graphData.links.map((l) => l.weight)),
+		() => graphData.links.reduce((m, l) => Math.max(m, l.weight), 1),
 		[graphData.links]
 	);
 
 	const maxConnections = useMemo(
-		() => Math.max(1, ...graphData.nodes.map((n) => n.connections)),
+		() => graphData.nodes.reduce((m, n) => Math.max(m, n.connections), 1),
 		[graphData.nodes]
 	);
 
@@ -414,10 +436,21 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	useEffect(() => {
 		function handleMouseMove(e: MouseEvent) {
-			if (hoveredNode) setTooltipPos({ x: e.clientX, y: e.clientY });
+			if (!hoveredNode) return;
+			if (tooltipRafRef.current !== null) return; // frame already pending
+			tooltipRafRef.current = requestAnimationFrame(() => {
+				tooltipRafRef.current = null;
+				setTooltipPos({ x: e.clientX, y: e.clientY });
+			});
 		}
 		window.addEventListener('mousemove', handleMouseMove);
-		return () => window.removeEventListener('mousemove', handleMouseMove);
+		return () => {
+			window.removeEventListener('mousemove', handleMouseMove);
+			if (tooltipRafRef.current !== null) {
+				cancelAnimationFrame(tooltipRafRef.current);
+				tooltipRafRef.current = null;
+			}
+		};
 	}, [hoveredNode]);
 
 	const handleNodeClick = useCallback(
@@ -537,7 +570,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 				// Type initial inside orphan (tiny)
 				if (showInitials) {
-					ctx.font = '600 5px Inter, system-ui, sans-serif';
+					ctx.font = FONT_ORPHAN_INITIAL;
 					ctx.textAlign = 'center';
 					ctx.textBaseline = 'middle';
 					ctx.fillStyle = color;
@@ -579,6 +612,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 			if (showInitials) {
 				const initial = TYPE_INITIALS[type] || '?';
 				const initialSize = Math.max(8, radius * 0.75);
+				// initial font size varies with radius — unavoidable dynamic string
 				ctx.font = `700 ${initialSize}px Inter, system-ui, sans-serif`;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
@@ -594,10 +628,9 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				const showLabel = !inFocusMode || isFocused || isNeighbor || isHovered;
 				if (title && showLabel && alpha > DIM_ALPHA) {
 					const prominent = isHovered || isFocused;
-					const dark = isDarkMode();
+					const dark = darkModeRef.current; // read ref — zero cost
 					const label = prominent ? truncate(title, 36) : truncate(title, 20);
-					const fontSize = prominent ? 12 : 10;
-					ctx.font = `${prominent ? '600 ' : ''}${fontSize}px Inter, system-ui, sans-serif`;
+					ctx.font = prominent ? FONT_LABEL_PROMINENT : FONT_LABEL_NORMAL;
 					ctx.textAlign = 'center';
 					ctx.textBaseline = 'top';
 					ctx.fillStyle = prominent
@@ -609,7 +642,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				}
 			}
 		},
-		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds, currentZoom]
+		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds, currentZoom, darkModeRef]
 	);
 
 	const linkCanvasObject = useCallback(
@@ -669,11 +702,11 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				const lx = (mx + cpx) / 2;
 				const ly = (my + cpy) / 2;
 				const label = sharedTags.slice(0, 3).join(', ');
-				ctx.font = '9px Inter, system-ui, sans-serif';
+				ctx.font = FONT_TAG_LABEL;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 
-				const dark = isDarkMode();
+				const dark = darkModeRef.current; // read ref — zero cost
 				const metrics = ctx.measureText(label);
 				const pw = metrics.width + 8;
 				const ph = 14;
@@ -688,7 +721,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				ctx.fillText(label, lx, ly);
 			}
 		},
-		[focusedNodeId, maxWeight]
+		[focusedNodeId, maxWeight, darkModeRef]
 	);
 
 	const handleReset = useCallback(() => {
@@ -828,7 +861,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				</div>
 			)}
 
-			{/* Detail panel — replaces the old info bar */}
+			{/* Detail panel — bottom sheet on mobile, right panel on desktop */}
 			{viewMode === 'graph' && focusedNodeId && focusedNodeMeta && (
 				<GraphDetailPanel
 					nodeTitle={focusedNodeMeta.title}
@@ -838,6 +871,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					connections={focusedConnections}
 					onClose={closeFocus}
 					onCardClick={setSelectedCardId}
+					isMobile={isMobile}
 				/>
 			)}
 

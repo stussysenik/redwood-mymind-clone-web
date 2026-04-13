@@ -2,6 +2,8 @@
  * Graph Filter Panel — Minimal inline controls with orphan count.
  */
 
+import { memo } from 'react';
+
 interface GraphFilterPanelProps {
 	minWeight: number;
 	onMinWeightChange: (weight: number) => void;
@@ -11,7 +13,7 @@ interface GraphFilterPanelProps {
 	onReset: () => void;
 }
 
-export function GraphFilterPanel({
+function GraphFilterPanelInner({
 	minWeight,
 	onMinWeightChange,
 	nodeCount,
@@ -70,3 +72,5 @@ export function GraphFilterPanel({
 		</div>
 	);
 }
+
+export const GraphFilterPanel = memo(GraphFilterPanelInner);
