@@ -23,7 +23,7 @@ function readManifest(filePath: string): ThemeManifest {
 }
 
 function buildThemeCSS(manifest: ThemeManifest): string {
-  const { name, tokens, extras, fonts } = manifest
+  const { name, tokens, extras } = manifest
 
   // Derive optional tokens first, then let explicit tokens win
   const derived = deriveOptionalTokens(tokens)
@@ -37,15 +37,13 @@ function buildThemeCSS(manifest: ThemeManifest): string {
   // Optional verbatim CSS block
   const customCSS = extras?.customCSS ? `\n  ${extras.customCSS.trim()}` : ''
 
-  const block = `[data-theme="${name}"] {\n${declarations}${customCSS}\n}`
-
-  // Google Fonts @import rules go before the selector
-  if (fonts && fonts.length > 0) {
-    const imports = fonts.map((url) => `@import url('${url}');`).join('\n')
-    return `${imports}\n\n${block}`
-  }
-
-  return block
+  // @import statements are deliberately NOT emitted here. CSS requires every
+  // `@import` to precede any other statement in the same file; since this
+  // function is called once per theme and the results are concatenated,
+  // inlining an @import next to a selector block guarantees an illegal
+  // mid-file @import on the second theme onward. `compileThemes` collects
+  // all fonts across themes and emits them once at the very top of the file.
+  return `[data-theme="${name}"] {\n${declarations}${customCSS}\n}`
 }
 
 function buildThemeInfo(manifest: ThemeManifest): ThemeInfo {
@@ -165,6 +163,7 @@ export function compileThemes(
 
   const cssBlocks: string[] = []
   const themeInfos: ThemeInfo[] = []
+  const fontUrls = new Set<string>()
   let errorCount = 0
 
   for (const file of jsonFiles) {
@@ -191,14 +190,25 @@ export function compileThemes(
 
     cssBlocks.push(buildThemeCSS(manifest))
     themeInfos.push(buildThemeInfo(manifest))
+    if (manifest.fonts) {
+      for (const url of manifest.fonts) fontUrls.add(url)
+    }
 
     console.log(
       `[theme-compiler] ✓ ${manifest.name} (${manifest.colorMode}, ${manifest.category})`
     )
   }
 
-  // Write themes.css
-  const cssOutput = cssBlocks.join('\n\n') + (cssBlocks.length ? '\n' : '')
+  // Write themes.css — all @import statements hoisted to the top, once,
+  // deduplicated across themes. Per the CSS spec, @imports must precede
+  // every other statement in the file.
+  const importHeader =
+    fontUrls.size > 0
+      ? Array.from(fontUrls)
+          .map((url) => `@import url('${url}');`)
+          .join('\n') + '\n\n'
+      : ''
+  const cssOutput = importHeader + cssBlocks.join('\n\n') + (cssBlocks.length ? '\n' : '')
   const cssPath = join(absOutputDir, 'themes.css')
   writeFileSync(cssPath, cssOutput, 'utf-8')
   console.log(`[theme-compiler] Wrote ${cssPath}`)
