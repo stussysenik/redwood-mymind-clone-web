@@ -1,4 +1,4 @@
-import { createRateLimiter } from './rateLimit'
+import { captureRateLimiter, createRateLimiter } from './rateLimit'
 
 describe('createRateLimiter', () => {
   it('allows requests under the limit', () => {
@@ -20,7 +20,10 @@ describe('createRateLimiter', () => {
 
     const result = limiter.check('token_1', now + 3)
     expect(result.allowed).toBe(false)
-    if (!result.allowed) {
+    // `=== false` (not `!result.allowed`) — project tsconfig has no
+    // `strictNullChecks`, so truthy-based narrowing doesn't discriminate
+    // union branches.
+    if (result.allowed === false) {
       expect(result.retryAfter).toBeGreaterThan(0)
       expect(result.retryAfter).toBeLessThanOrEqual(60)
       expect(result.remaining).toBe(0)
@@ -61,10 +64,9 @@ describe('createRateLimiter', () => {
     expect(limiter.check('token_1', now + 2).allowed).toBe(true)
   })
 
-  it('exports a shared captureRateLimiter singleton', async () => {
-    const mod = await import('./rateLimit')
-    expect(mod.captureRateLimiter).toBeDefined()
-    expect(typeof mod.captureRateLimiter.check).toBe('function')
-    expect(typeof mod.captureRateLimiter.reset).toBe('function')
+  it('exports a shared captureRateLimiter singleton', () => {
+    expect(captureRateLimiter).toBeDefined()
+    expect(typeof captureRateLimiter.check).toBe('function')
+    expect(typeof captureRateLimiter.reset).toBe('function')
   })
 })

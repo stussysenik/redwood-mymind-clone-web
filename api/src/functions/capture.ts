@@ -130,7 +130,10 @@ export const handler = async (event: CaptureEvent): Promise<LambdaResponse> => {
   }
 
   const rate = captureRateLimiter.check(token.id)
-  if (!rate.allowed) {
+  // NOTE: `=== false` (not `!rate.allowed`) — project tsconfig has no
+  // `strictNullChecks`, so truthy-based narrowing doesn't discriminate
+  // union branches. Explicit equality check is the minimum-diff fix.
+  if (rate.allowed === false) {
     return error(429, 'rate_limited', { retryAfter: rate.retryAfter })
   }
 
@@ -146,7 +149,8 @@ export const handler = async (event: CaptureEvent): Promise<LambdaResponse> => {
   let imageUrl: string | null = null
   if (body.imageBase64 !== undefined) {
     const decoded = decodeImage(body.imageBase64, body.imageMimeType)
-    if (!decoded.ok) {
+    // `=== false` (not `!decoded.ok`) — see rate-limit comment above.
+    if (decoded.ok === false) {
       return error(decoded.status, decoded.error)
     }
     const ext = decoded.contentType.split('/')[1] || 'bin'
