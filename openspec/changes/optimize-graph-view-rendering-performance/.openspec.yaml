@@ -1,0 +1,6 @@
+id: optimize-graph-view-rendering-performance
+status: proposed
+created: 2026-04-13
+specs:
+  - server-graph-link-index
+  - client-graph-render-optimizations

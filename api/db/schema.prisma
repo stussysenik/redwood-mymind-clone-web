@@ -55,3 +55,35 @@ model Space {
   @@index([userId], map: "idx_spaces_user_id")
   @@map("spaces")
 }
+
+// ─── User Preferences ───────────────────────────────────────────────────────
+// Synced user preferences — one row per user, upserted on first save.
+// Default values in code mean the table can be empty for existing users.
+model UserPreferences {
+  userId        String   @id @map("user_id")
+  graphRenderer String   @default("canvas") @map("graph_renderer")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("user_preferences")
+}
+
+// ─── API Tokens ─────────────────────────────────────────────────────────────
+// Personal API tokens used by the iOS "BYOA Capture" Shortcut (and future
+// mobile-capture clients) to authenticate against /functions/capture.
+// The plaintext secret is shown to the user exactly once at creation time;
+// only the sha256 hash is stored at rest.
+model ApiToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id")
+  name       String
+  prefix     String    @unique
+  tokenHash  String    @map("token_hash")
+  scopes     String[]  @default(["cards:write"])
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId], map: "idx_api_tokens_user")
+  @@index([prefix, revokedAt], map: "idx_api_tokens_lookup")
+  @@map("api_tokens")
+}

@@ -736,7 +736,93 @@ export function buildScrapedCardUpdate(
 }
 
 // =============================================================================
-// graphData RESOLVER (unchanged)
+// =============================================================================
+// graphData LRU CACHE
+// In-process cache keyed on (userId, spaceId, tag, minWeight).
+// Max 50 entries, 120 s TTL. Invalidated on card mutations via clearGraphCache.
+// =============================================================================
+
+interface GraphDataResult {
+  nodes: {
+    id: string
+    title: string | null
+    imageUrl: string | null
+    type: string
+    tags: string[]
+    colors: string[]
+    connections: number
+  }[]
+  links: {
+    source: string
+    target: string
+    sharedTags: string[]
+    weight: number
+  }[]
+}
+
+interface CacheEntry {
+  value: GraphDataResult
+  expiresAt: number
+}
+
+const GRAPH_CACHE_TTL_MS = 120_000
+const GRAPH_CACHE_MAX = 50
+
+const _graphCache = new Map<string, CacheEntry>()
+const _graphCacheOrder: string[] = []
+
+function _graphCacheKey(
+  userId: string,
+  spaceId: string | null | undefined,
+  tag: string | null | undefined,
+  minWeight: number
+): string {
+  return `${userId}:${spaceId ?? ''}:${tag ?? ''}:${minWeight}`
+}
+
+function _graphCacheGet(key: string): GraphDataResult | null {
+  const entry = _graphCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    _graphCache.delete(key)
+    const idx = _graphCacheOrder.indexOf(key)
+    if (idx !== -1) _graphCacheOrder.splice(idx, 1)
+    return null
+  }
+  // Move to end (most recently used)
+  const idx = _graphCacheOrder.indexOf(key)
+  if (idx !== -1) _graphCacheOrder.splice(idx, 1)
+  _graphCacheOrder.push(key)
+  return entry.value
+}
+
+function _graphCacheSet(key: string, value: GraphDataResult): void {
+  if (_graphCache.has(key)) {
+    const idx = _graphCacheOrder.indexOf(key)
+    if (idx !== -1) _graphCacheOrder.splice(idx, 1)
+  } else if (_graphCache.size >= GRAPH_CACHE_MAX) {
+    // Evict LRU
+    const lru = _graphCacheOrder.shift()
+    if (lru) _graphCache.delete(lru)
+  }
+  _graphCache.set(key, { value, expiresAt: Date.now() + GRAPH_CACHE_TTL_MS })
+  _graphCacheOrder.push(key)
+}
+
+/** Invalidate all cached graph results for a user. Call after any card mutation. */
+export function clearGraphCache(userId: string): void {
+  const prefix = `${userId}:`
+  for (const key of [..._graphCache.keys()]) {
+    if (key.startsWith(prefix)) {
+      _graphCache.delete(key)
+      const idx = _graphCacheOrder.indexOf(key)
+      if (idx !== -1) _graphCacheOrder.splice(idx, 1)
+    }
+  }
+}
+
+// =============================================================================
+// graphData RESOLVER
 // =============================================================================
 
 export const graphData: QueryResolvers['graphData'] = async ({
@@ -758,6 +844,11 @@ export const graphData: QueryResolvers['graphData'] = async ({
 
     return Math.min(Math.max(parsed, 50), 5000)
   })()
+
+  // Return cached result if available
+  const cacheKey = _graphCacheKey(userId, spaceId, tag, minWeight)
+  const cached = _graphCacheGet(cacheKey)
+  if (cached) return cached
 
   // Fetch cards for graph
   const where: any = {
@@ -823,7 +914,39 @@ export const graphData: QueryResolvers['graphData'] = async ({
     connections: 0,
   }))
 
-  // Build graph links based on shared tags
+  // Build graph links using an inverted tag index — O(n·k + E) instead of O(n²)
+  // Step 1: build tag → [cardId] index
+  const tagIndex = new Map<string, string[]>()
+  for (const card of cardsWithVisibleTags) {
+    for (const t of card.tags || []) {
+      const bucket = tagIndex.get(t)
+      if (bucket) {
+        bucket.push(card.id)
+      } else {
+        tagIndex.set(t, [card.id])
+      }
+    }
+  }
+
+  // Step 2: enumerate card pairs per tag bucket, accumulate shared tags
+  const pairShared = new Map<string, Set<string>>()
+  for (const [tag, ids] of tagIndex) {
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i]
+        const b = ids[j]
+        const key = a < b ? `${a}::${b}` : `${b}::${a}`
+        const tags = pairShared.get(key)
+        if (tags) {
+          tags.add(tag)
+        } else {
+          pairShared.set(key, new Set([tag]))
+        }
+      }
+    }
+  }
+
+  // Step 3: emit links that meet minWeight threshold
   const links: {
     source: string
     target: string
@@ -831,20 +954,15 @@ export const graphData: QueryResolvers['graphData'] = async ({
     weight: number
   }[] = []
 
-  for (let i = 0; i < cardsWithVisibleTags.length; i++) {
-    for (let j = i + 1; j < cardsWithVisibleTags.length; j++) {
-      const sharedTags = (cardsWithVisibleTags[i].tags || []).filter((t) =>
-        (cardsWithVisibleTags[j].tags || []).includes(t)
-      )
-
-      if (sharedTags.length >= minWeight) {
-        links.push({
-          source: cardsWithVisibleTags[i].id,
-          target: cardsWithVisibleTags[j].id,
-          sharedTags,
-          weight: sharedTags.length,
-        })
-      }
+  for (const [key, tagSet] of pairShared) {
+    if (tagSet.size >= minWeight) {
+      const sep = key.indexOf('::')
+      links.push({
+        source: key.slice(0, sep),
+        target: key.slice(sep + 2),
+        sharedTags: [...tagSet],
+        weight: tagSet.size,
+      })
     }
   }
 
@@ -860,7 +978,9 @@ export const graphData: QueryResolvers['graphData'] = async ({
     connections: connectionMap[n.id] || 0,
   }))
 
-  return { nodes: nodesWithConnections, links }
+  const result: GraphDataResult = { nodes: nodesWithConnections, links }
+  _graphCacheSet(cacheKey, result)
+  return result
 }
 
 // =============================================================================

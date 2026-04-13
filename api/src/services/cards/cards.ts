@@ -6,7 +6,7 @@ import { logger } from 'src/lib/logger'
 import { detectPlatform } from 'src/lib/platforms'
 import { buildInitialLocalClassificationState, normalizeLocalClassification } from 'src/lib/ai/localClassification'
 import { normalizeTagList, stripGeneratedTagNoise } from 'src/lib/semantic'
-import { enrichCardPipeline } from 'src/services/enrichment/enrichment'
+import { enrichCardPipeline, clearGraphCache } from 'src/services/enrichment/enrichment'
 import { createCompositeImage, fetchImageBuffers } from 'src/lib/scraper/compositeImage'
 import { buildMicrolinkScreenshotUrl } from 'src/lib/scraper/fallbackPreview'
 
@@ -132,8 +132,24 @@ export const randomCards: QueryResolvers['randomCards'] = async ({
   )
 }
 
-export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
-  const userId = context.currentUser!.id
+// Shared card-creation path. Called by:
+//   1. saveCard GraphQL resolver (user is from context.currentUser)
+//   2. /functions/capture endpoint (user is resolved from an ApiToken)
+//
+// The serverless-fn path has no Redwood auth context, so the user id is
+// passed explicitly rather than read from `context.currentUser`.
+export async function createCardForUser(
+  userId: string,
+  input: {
+    url?: string | null
+    type?: string | null
+    title?: string | null
+    content?: string | null
+    imageUrl?: string | null
+    tags?: string[] | null
+    clientClassification?: unknown
+  }
+) {
   const clientClassification = normalizeLocalClassification(
     input.clientClassification
   )
@@ -173,11 +189,18 @@ export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
     },
   })
 
-  // Save is the single entry point for new-card enrichment.
-  enrichCardPipeline(card.id).catch((err) => {
+  // Fire and forget. Must not throw from this function if enrichment fails.
+  void enrichCardPipeline(card.id).catch((err) => {
     logger.error({ cardId: card.id, err }, 'Background enrichment failed')
   })
 
+  return card
+}
+
+export const saveCard: MutationResolvers['saveCard'] = async ({ input }) => {
+  const userId = context.currentUser!.id
+  const card = await createCardForUser(userId, input)
+  clearGraphCache(userId)
   return card
 }
 
@@ -204,7 +227,9 @@ export const updateCard: MutationResolvers['updateCard'] = async ({
     }
   }
 
-  return db.card.update({ where: { id }, data })
+  const card = await db.card.update({ where: { id }, data })
+  clearGraphCache(userId)
+  return card
 }
 
 export const deleteCard: MutationResolvers['deleteCard'] = async ({
@@ -215,14 +240,17 @@ export const deleteCard: MutationResolvers['deleteCard'] = async ({
   const existing = await db.card.findFirst({ where: { id, userId } })
   if (!existing) throw new Error('Card not found')
 
+  let card
   if (permanent) {
-    return db.card.delete({ where: { id } })
+    card = await db.card.delete({ where: { id } })
+  } else {
+    card = await db.card.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    })
   }
-
-  return db.card.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
+  clearGraphCache(userId)
+  return card
 }
 
 export const archiveCard: MutationResolvers['archiveCard'] = async ({ id }) => {
@@ -230,10 +258,12 @@ export const archiveCard: MutationResolvers['archiveCard'] = async ({ id }) => {
   const existing = await db.card.findFirst({ where: { id, userId } })
   if (!existing) throw new Error('Card not found')
 
-  return db.card.update({
+  const card = await db.card.update({
     where: { id },
     data: { archivedAt: new Date() },
   })
+  clearGraphCache(userId)
+  return card
 }
 
 export const unarchiveCard: MutationResolvers['unarchiveCard'] = async ({
@@ -243,10 +273,12 @@ export const unarchiveCard: MutationResolvers['unarchiveCard'] = async ({
   const existing = await db.card.findFirst({ where: { id, userId } })
   if (!existing) throw new Error('Card not found')
 
-  return db.card.update({
+  const card = await db.card.update({
     where: { id },
     data: { archivedAt: null },
   })
+  clearGraphCache(userId)
+  return card
 }
 
 export const restoreCard: MutationResolvers['restoreCard'] = async ({ id }) => {
@@ -254,10 +286,12 @@ export const restoreCard: MutationResolvers['restoreCard'] = async ({ id }) => {
   const existing = await db.card.findFirst({ where: { id, userId } })
   if (!existing) throw new Error('Card not found')
 
-  return db.card.update({
+  const card = await db.card.update({
     where: { id },
     data: { deletedAt: null },
   })
+  clearGraphCache(userId)
+  return card
 }
 
 export const bulkCardAction: MutationResolvers['bulkCardAction'] = async ({
