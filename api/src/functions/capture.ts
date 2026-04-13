@@ -1,6 +1,7 @@
 import { verifyApiToken } from 'src/services/apiTokens/apiTokens'
 import { createCardForUser } from 'src/services/cards/cards'
 import { logger } from 'src/lib/logger'
+import { uploadToR2 } from 'src/lib/r2'
 import { captureRateLimiter } from 'src/lib/rateLimit'
 
 // Unicode-aware hashtag extraction.
@@ -10,6 +11,8 @@ import { captureRateLimiter } from 'src/lib/rateLimit'
 // content the user actually wrote. The boundary ensures only start-of-string
 // or whitespace-preceded `#` tokens are treated as hashtags.
 const HASHTAG_RE = /(^|\s)#([\p{L}\p{N}_-]+)/gu
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 type CaptureEvent = {
   httpMethod?: string
@@ -69,6 +72,48 @@ function parseHashtags(note: string): { tags: string[]; stripped: string } {
   return { tags, stripped }
 }
 
+type DecodeResult =
+  | { ok: true; buffer: Buffer; contentType: string }
+  | { ok: false; error: string; status: number }
+
+function decodeImage(
+  imageBase64: unknown,
+  imageMimeType: unknown
+): DecodeResult {
+  if (typeof imageBase64 !== 'string') {
+    return { ok: false, error: 'invalid_image', status: 400 }
+  }
+  if (
+    typeof imageMimeType !== 'string' ||
+    !imageMimeType.toLowerCase().startsWith('image/')
+  ) {
+    return { ok: false, error: 'unsupported_image_type', status: 415 }
+  }
+
+  // Cheap size check before allocating the decoded buffer
+  const estimatedBytes = Math.floor((imageBase64.length * 3) / 4)
+  if (estimatedBytes > MAX_IMAGE_BYTES) {
+    return { ok: false, error: 'image_too_large', status: 413 }
+  }
+
+  // Validate characters before decoding — Buffer.from is lenient and
+  // silently drops garbage, which we don't want.
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(imageBase64) || imageBase64.length === 0) {
+    return { ok: false, error: 'invalid_image', status: 400 }
+  }
+
+  const buffer = Buffer.from(imageBase64, 'base64')
+  if (buffer.length === 0) {
+    return { ok: false, error: 'invalid_image', status: 400 }
+  }
+
+  if (buffer.length > MAX_IMAGE_BYTES) {
+    return { ok: false, error: 'image_too_large', status: 413 }
+  }
+
+  return { ok: true, buffer, contentType: imageMimeType.toLowerCase() }
+}
+
 export const handler = async (event: CaptureEvent): Promise<LambdaResponse> => {
   if ((event.httpMethod ?? 'POST').toUpperCase() !== 'POST') {
     return error(405, 'method_not_allowed')
@@ -98,8 +143,21 @@ export const handler = async (event: CaptureEvent): Promise<LambdaResponse> => {
   const text = typeof body.text === 'string' ? body.text.trim() : ''
   const note = typeof body.note === 'string' ? body.note : ''
 
-  // TODO(Task 6): decode body.imageBase64 + body.imageMimeType → upload to R2 → imageUrl
-  const imageUrl: string | null = null
+  let imageUrl: string | null = null
+  if (body.imageBase64 !== undefined) {
+    const decoded = decodeImage(body.imageBase64, body.imageMimeType)
+    if (!decoded.ok) {
+      return error(decoded.status, decoded.error)
+    }
+    const ext = decoded.contentType.split('/')[1] || 'bin'
+    const key = `captures/${token.id}/${Date.now()}_${Math.random().toString(16).slice(2, 10)}.${ext}`
+    try {
+      imageUrl = await uploadToR2(key, decoded.buffer, decoded.contentType)
+    } catch (err) {
+      logger.error({ err, tokenPrefix: token.prefix }, 'r2 upload failed')
+      return error(500, 'internal_error')
+    }
+  }
 
   if (!url && !text && !imageUrl) {
     return error(400, 'missing_input')
