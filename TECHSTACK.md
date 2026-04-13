@@ -4,6 +4,38 @@ Complete technology inventory for BYOA — Build Your Own Algorithm.
 
 ---
 
+## Table of Contents
+
+1. [Full-Stack Framework](#full-stack-framework)
+2. [Frontend](#frontend)
+   - [Core](#core)
+   - [Styling](#styling)
+   - [UI Components & Icons](#ui-components--icons)
+   - [Graph & Visualization](#graph--visualization)
+   - [Client-Side AI](#client-side-ai)
+   - [Platform & Device](#platform--device)
+   - [Analytics & Monitoring](#analytics--monitoring)
+   - [Data Processing](#data-processing)
+3. [Backend (API)](#backend-api)
+   - [Core](#core-1)
+   - [Database](#database)
+   - [Search](#search)
+   - [Content Extraction](#content-extraction)
+   - [AI Pipeline](#ai-pipeline)
+   - [Monitoring](#monitoring)
+4. [Infrastructure](#infrastructure)
+5. [Deployment](#deployment)
+6. [Testing](#testing)
+7. [Development Tools](#development-tools)
+8. [Custom Systems](#custom-systems)
+9. [Graph Renderer Architecture](#graph-renderer-architecture)
+
+**Purpose** — Single source of truth for *what* runs BYOA and *why* each piece is there. Onboarding engineers read this first. When a dependency is added, it lands here with a one-line purpose. When a capability shifts (e.g. a new renderer backend), this doc catches up inside the same commit.
+
+**How it works** — Tables list the public-facing name, version, and purpose. "Custom Systems" and "Graph Renderer Architecture" explain the in-house work that isn't captured by a package name — these sections exist because BYOA has several systems that are more design than library.
+
+---
+
 ## Full-Stack Framework
 
 | Technology | Version | Purpose |
@@ -47,12 +79,18 @@ Complete technology inventory for BYOA — Build Your Own Algorithm.
 
 ### Graph & Visualization
 
+BYOA ships three rendering backends for the knowledge graph, user-switchable via settings and persisted on the server (`UserPreferences.graphRenderer`). Each backend loads lazily — only the bytes for the user's selected renderer hit the wire.
+
 | Technology | Version | Purpose |
 |---|---|---|
-| react-force-graph-2d | 1.29.1 | Canvas-based force graph rendering |
-| D3.js (d3-force) | via graph-worker | Physics simulation engine |
+| react-force-graph-2d | 1.29.1 | **Canvas backend** — default 2D force graph with type initials + LOD |
+| Pixi.js | 8.x | **WebGL backend** — GPU-batched sprite renderer for larger graphs |
+| three | 0.170.x | **Three backend** — 3D graph with custom GLSL shader material |
+| d3-force-3d | 3.x | 3D physics simulation feeding the Three.js renderer |
+| D3.js (d3-force) | via graph-worker | 2D physics simulation engine (Canvas + Pixi backends) |
 | Web Worker | — | Off-main-thread D3 force simulation (`graph-worker.ts`) |
 | Canvas API | — | Custom node rendering with type initials + LOD |
+| GLSL (WebGL2) | — | Custom point-cloud shader: circle SDF + AA + rim glow |
 
 ### Client-Side AI
 
@@ -203,3 +241,40 @@ Analyzes queries to route between full-text (keyword) and semantic (vector) sear
 
 ### Haptics System
 Web Haptics API wrapper with four feedback levels mapped to interaction types: light (buttons), medium (card actions), heavy (destructive), selection (toggles).
+
+---
+
+## Graph Renderer Architecture
+
+BYOA's graph view is backed by a pluggable renderer interface — `GraphRendererProps` — implemented by three independent backends. `GraphClient.tsx` orchestrates state and data; each renderer consumes the same props and renders into its own canvas. The backend is selected by the user in Settings (`byoa_graph_renderer`), persisted server-side, and lazy-loaded at runtime.
+
+| Backend | File | Engine | Shipping Status |
+|---|---|---|---|
+| Canvas (default) | `GraphClient.tsx` (inline) | `react-force-graph-2d` + D3 Web Worker | ✅ Production |
+| WebGL | `WebGLGraphRenderer.tsx` | Pixi.js v8 GPU sprite batching + `d3-force` | ✅ Production (opt-in) |
+| Three (3D) | `ThreeGraphRenderer.tsx` | Three.js + `d3-force-3d` + GLSL ShaderMaterial | ✅ Production (opt-in) |
+
+### Three.js 3D renderer — details
+
+- **Camera** — perspective camera with `fov = 1 + tilt * 59`. At `tilt = 0` the FOV is 1° which is visually indistinguishable from orthographic: the graph reads flat. Dragging the single bottom-right handle interpolates tilt toward 1 (60° FOV), smoothly transitioning from "flat map" to "3D room." Tapping the handle snaps back.
+- **Z-stratification** — each card type has a target z offset (article=0, note=+20, image=−20, book=+40, video=−40, social=+10, product=−10, movie=−30). A weak `d3-force-3d` `forceZ` pulls each node toward its type layer with strength 0.3. Clusters naturally stratify when tilted.
+- **Node rendering** — a single `THREE.Points` cloud with a custom `ShaderMaterial`. The fragment shader computes a circle SDF (`smoothstep(0.45, 0.5, dist)`) for antialiased edges plus a rim-glow ring. Colors are indexed into a 128-slot uniform array, so even large graphs render in a single draw call.
+- **Edge rendering** — `THREE.LineSegments` with a single shared `LineBasicMaterial`. Positions update per frame from the `d3-force-3d` simulation.
+- **Simulation** — `d3-force-3d` with 3-dimensional `forceManyBody`, `forceLink`, `forceCenter`, and `forceZ`. Runs on the main thread (Three already owns the rAF loop).
+- **Input** — a single rotation handle is the entire UI. No orbit controls, no toolbar, no legend. This is a deliberate iA Writer / Things / Notion-influenced restraint: give the user one obvious control and nothing else.
+
+### Renderer selection flow
+
+1. User opens Settings → Graph Renderer → picks `Canvas | WebGL | 3D`.
+2. The picker writes `UserPreferences.graphRenderer` via GraphQL mutation.
+3. `GraphCell` fetches the preference alongside `graphData` in the same query.
+4. `GraphClient` reads `rendererBackend` and renders the matching component via `React.lazy` + `Suspense`.
+5. On first use of a non-default backend, the renderer chunk is fetched and cached.
+
+### Performance budget
+
+| Backend | Target FPS | Max nodes at target | Notes |
+|---|---|---|---|
+| Canvas | 60 (desktop), 30 (mobile) | ~1,500 | Viewport culling + LOD gating |
+| WebGL | 60 (desktop), 60 (mobile) | ~5,000 | Single GPU batch, no per-node draw calls |
+| Three | 60 (desktop), 60 (mobile) | ~3,000 | Points cloud + line segments, single draw call |

@@ -4,6 +4,28 @@
 
 ---
 
+## Table of Contents
+
+1. [Why BYOA Exists](#why-byoa-exists)
+2. [Design Pillars](#design-pillars)
+   1. [Asset-First](#1-asset-first)
+   2. [Native Feel](#2-native-feel)
+   3. [Connected Knowledge](#3-connected-knowledge)
+   4. [Speed as a Feature](#4-speed-as-a-feature)
+   5. [Zero Noise](#5-zero-noise)
+   6. [Your Algorithm](#6-your-algorithm)
+   7. [Dimensions — The 3D Graph](#7-dimensions--the-3d-graph)
+3. [Target User](#target-user)
+4. [What BYOA Is Not](#what-byoa-is-not)
+5. [North Star Metrics](#north-star-metrics)
+6. [Design Principles in Practice](#design-principles-in-practice)
+
+**Purpose** — This document is the *why* of BYOA. It's the creative brief every feature should trace back to. When an implementation decision feels arbitrary, re-read the relevant pillar. When a new surface is on the table, ask: does it strengthen an existing pillar, or invent a new one the team can defend?
+
+**How it works** — The pillars are ordered by load-bearing weight. Pillar 1 (Asset-First) overrides Pillar 7 (Dimensions) when they conflict, because the visual corpus is the product. New capabilities are judged by how many pillars they reinforce without violating the ones above them.
+
+---
+
 ## Why BYOA Exists
 
 The tools we use to save and organize inspiration should be as beautiful and tactile as the content itself. Bookmarking apps treat links as throwaway text. Social platforms bury what you saved under algorithmic noise. Your browser has 200 tabs open because nothing feels like a home for the things you find.
@@ -37,6 +59,16 @@ No error banners. No loading skeletons that flash and disappear. No "enrichment 
 ### 6. Your Algorithm
 
 There is no recommendation engine deciding what you see. Your feed is everything you saved, organized by you. Spaces are your rules. The graph is your connections. Search finds what you meant, not what an ad model thinks you want. You are the algorithm.
+
+### 7. Dimensions — The 3D Graph
+
+The flat graph is a map. The 3D graph is a room. Moving between them is a single tilt — no mode toggle, no orbit gizmo, no "enter 3D" button. The default state is orthographic (visually indistinguishable from 2D). A single handle in the bottom-right lets you drag the room upright, and tapping it snaps back to flat. This is the iA Writer principle applied to space: one control, one purpose, zero ceremony.
+
+The third dimension is not decoration. Each card type lives on a weak z-layer (articles at zero, notes above, images below, books higher, videos lower) so spatial position carries semantic meaning. When you tilt, the clusters don't shuffle — they stratify. You can *see* the shape of your knowledge: that your book collection sits above your articles because it's denser, that your videos form a floor of long-form content, that notes float as the glue tying everything together.
+
+All of this runs on custom GLSL: circle SDF shaders with signed-distance antialiasing and rim-glow rings, a `d3-force-3d` simulation feeding a single `THREE.Points` cloud, edges as `LineSegments`. Zero geometry per node. GPU-bound, not CPU-bound. 60fps on mid-range phones.
+
+The 3D graph is where you *annotate* your collection — mark clusters, name them, write notes that live in space next to the things they describe. The graph isn't just something you look at; it's something you inhabit and edit.
 
 ---
 

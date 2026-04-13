@@ -87,3 +87,39 @@ model ApiToken {
   @@index([prefix, revokedAt], map: "idx_api_tokens_lookup")
   @@map("api_tokens")
 }
+
+// ─── Graph Clusters ─────────────────────────────────────────────────────────
+// User-defined named subgraphs — persistent multi-selections in the 3D graph
+model GraphCluster {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  spaceId   String?  @map("space_id")
+  name      String   @db.VarChar(60)
+  note      String?  @db.VarChar(280)
+  nodeIds   String[] @map("node_ids")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([userId, createdAt], map: "idx_graph_clusters_user_created")
+  @@index([userId, spaceId], map: "idx_graph_clusters_user_space")
+  @@map("graph_clusters")
+}
+
+// ─── Graph Annotations ──────────────────────────────────────────────────────
+// Text notes anchored to nodes or clusters, rendered as billboards in 3D space
+model GraphAnnotation {
+  id         String  @id @default(cuid())
+  userId     String  @map("user_id")
+  anchorType String  @map("anchor_type") // 'node' | 'cluster'
+  anchorId   String  @map("anchor_id")
+  text       String  @db.VarChar(280)
+  offsetX    Float?  @map("offset_x")
+  offsetY    Float?  @map("offset_y")
+  offsetZ    Float?  @map("offset_z")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([userId, createdAt], map: "idx_graph_annotations_user_created")
+  @@index([userId, anchorType, anchorId], map: "idx_graph_annotations_user_anchor")
+  @@map("graph_annotations")
+}

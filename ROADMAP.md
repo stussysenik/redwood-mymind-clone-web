@@ -4,6 +4,30 @@ Development milestones for BYOA — Build Your Own Algorithm.
 
 ---
 
+## Table of Contents
+
+- [Completed](#completed)
+  - [v0.1 — Foundation](#v01--foundation)
+  - [v0.2 — Visual Identity](#v02--visual-identity)
+  - [v0.3 — Mobile Native Feel](#v03--mobile-native-feel)
+  - [v0.4 — Graph Intelligence](#v04--graph-intelligence)
+  - [v0.5 — Image Resilience](#v05--image-resilience)
+  - [v0.6 — Rendering Backends](#v06--rendering-backends)
+- [In Progress](#in-progress)
+  - [v0.7 — Dimensions & Clusters](#v07--dimensions--clusters)
+- [Planned](#planned)
+  - [v0.8 — Collaboration](#v08--collaboration)
+  - [v0.9 — Advanced AI](#v09--advanced-ai)
+  - [v1.0 — Platform](#v10--platform)
+  - [v1.1 — Launch](#v11--launch)
+- [Future Explorations](#future-explorations)
+
+**Purpose** — Track the shape of BYOA over time. Each completed version is a known-good reference point. In-progress versions are the current surface area. Planned versions are commitments the team is willing to defend this quarter.
+
+**How it works** — Versions are stable once they ship. New work lands under "In Progress" and moves to "Completed" only when it's live in `main` and verified. "Planned" is a soft queue — ordering can change, scope cannot grow without surfacing the change in this doc.
+
+---
+
 ## Completed
 
 ### v0.1 — Foundation
@@ -62,42 +86,64 @@ Development milestones for BYOA — Build Your Own Algorithm.
 - [x] Platform-specific card renderers (Twitter, Instagram, YouTube, Movie, Reddit, Letterboxd, Goodreads, Amazon, StoryGraph)
 - [x] Additional extractors: Letterboxd, IMDb, Goodreads, Amazon, Spotify, TikTok, GitHub, Wikipedia, Mastodon, StoryGraph
 
+### v0.6 — Rendering Backends
+> Pluggable graph renderer with three GPU-accelerated options
+
+- [x] Renderer interface (`GraphRendererProps`) as a stable contract between `GraphClient` and any backend
+- [x] WebGL backend — Pixi.js v8 GPU-batched sprite renderer with `d3-force` physics
+- [x] Three.js backend — 3D graph with `d3-force-3d`, custom GLSL circle SDF shader, z-stratification by card type
+- [x] Ortho-to-perspective tilt handle — one control, no orbit gizmo, no toolbar
+- [x] Settings UI to pick between Canvas / WebGL / 3D, persisted via `UserPreferences.graphRenderer`
+- [x] Lazy loading — each backend ships as its own chunk, fetched only when selected
+- [x] Playwright E2E coverage for the picker + per-backend canvas smoke tests
+- [x] Graph archive/delete mutations with in-place Apollo cache updates (no re-settle on mutation)
+- [x] `setState`-in-render warning removed by moving `currentZoom` to a ref
+- [x] `GraphFilterPanel` slider relabeled to "edges ≥ N" to end zoom-confusion
+
 ---
 
 ## In Progress
 
-### v0.6 — Performance + Polish
-> Rendering pipeline, offline support, and gesture expansion
+### v0.7 — Dimensions & Clusters
+> Annotate and save groups of connected cards inside the 3D graph
 
-- [ ] Custom graph rendering pipeline (replace react-force-graph-2d with direct Canvas API)
+- [ ] Long-press node → "select connected" flood-fill (N-hop neighborhood)
+- [ ] Multi-select: tap more nodes to grow / shrink the selection, haptic per step
+- [ ] Floating action: "Save as cluster" with name + note
+- [ ] Cluster persistence — new `GraphCluster` entity (id, name, note, nodeIds, createdAt)
+- [ ] Cluster list sheet — reopen any saved cluster, re-highlights its nodes in 3D
+- [ ] In-graph annotations — anchor a short note to a node or a cluster, rendered as a billboard sprite in 3D
+- [ ] Mobile-first interaction: radial menu on long-press, thumb-reach targets, 56px tap area
+- [ ] Accessibility: keyboard equivalent (focus node → Space to add to selection → Enter to save)
 - [ ] Image lazy loading with blur-hash placeholders
 - [ ] Service Worker for offline card browsing
 - [ ] Card swipe gestures (archive, delete, open)
-- [ ] Performance budget enforcement in CI
 - [ ] Core Web Vitals optimization (LCP, CLS, INP)
 
 ---
 
 ## Planned
 
-### v0.7 — Collaboration
+### v0.8 — Collaboration
 > Shared knowledge and public profiles
 
 - [ ] Shared spaces with invite links
 - [ ] Public card and space profiles
 - [ ] Activity feed for shared spaces
 - [ ] Collaborative tagging
+- [ ] Shared clusters — invite others to curate a named subgraph
 
-### v0.8 — Advanced AI
+### v0.9 — Advanced AI
 > Smarter search, auto-organization, and suggestions
 
 - [ ] Smart collections (auto-grouped by visual similarity clustering)
+- [ ] Auto-suggested clusters in 3D (Louvain / label propagation) rendered as ghosted hulls
 - [ ] Content summarization on save
 - [ ] Related card suggestions in detail view
 - [ ] Natural language search ("show me all blue architecture photos from last month")
 - [ ] Auto-generated space suggestions based on tag clusters
 
-### v0.9 — Platform
+### v1.0 — Platform
 > Extensions, imports, and ecosystem
 
 - [ ] Browser extension for one-click save (Chrome, Firefox, Safari)
@@ -107,7 +153,7 @@ Development milestones for BYOA — Build Your Own Algorithm.
 - [ ] Public API for third-party integrations
 - [ ] Webhook notifications on save
 
-### v1.0 — Launch
+### v1.1 — Launch
 > Production readiness and billing
 
 - [ ] Onboarding flow with sample content
@@ -129,3 +175,4 @@ Ideas under consideration, not yet scheduled:
 - **Elixir enrichment service** — OTP-supervised pipeline for concurrent URL processing and real-time tag updates
 - **Spatial audio** — Sonification of the knowledge graph for accessibility and ambient exploration
 - **AR view** — View your knowledge graph in 3D space via WebXR
+- **Time slider in 3D** — scrub backwards to see the graph as it grew

@@ -242,6 +242,14 @@ export const deleteCard: MutationResolvers['deleteCard'] = async ({
 
   let card
   if (permanent) {
+    // Cascade-delete annotations anchored to this card
+    await db.graphAnnotation.deleteMany({
+      where: {
+        userId,
+        anchorType: 'node',
+        anchorId: id,
+      },
+    })
     card = await db.card.delete({ where: { id } })
   } else {
     card = await db.card.update({
