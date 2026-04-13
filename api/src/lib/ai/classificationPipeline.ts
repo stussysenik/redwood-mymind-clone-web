@@ -189,7 +189,123 @@ function detectPlatformFromUrl(url: string | null): string {
 }
 
 // =============================================================================
-// STRATEGY 1: GLM CONTENT (PRIMARY)
+// STRATEGY 0: NIM CONTENT (PRIMARY — free tier via NVIDIA NIM)
+// =============================================================================
+
+/**
+ * NVIDIA NIM OpenAI-compatible endpoint. Hosts multiple models — we default
+ * to Deepseek V3.1 (~2s latency) and support Kimi K2.5 as an alternate via
+ * the NIM_CLASSIFICATION_MODEL env var.
+ *
+ * This strategy runs BEFORE glm-content so that Zhipu GLM billing exhaustion
+ * (error 1113 "Insufficient balance") no longer empties card metadata.
+ * GLM remains as a fallback for when NIM is slow or unreachable.
+ */
+const NIM_API_BASE = 'https://integrate.api.nvidia.com/v1';
+const DEFAULT_NIM_MODEL = 'deepseek-ai/deepseek-v3.1';
+const NIM_ATTEMPT_TIMEOUT_MS = 25000; // Deepseek ~2s, Kimi ~19s, margin for both
+
+/**
+ * Text-only classification via NVIDIA NIM. Returns null when NIM_API_KEY is
+ * unset or when there's no text to analyze (image-only cards flow through
+ * to glm-content for vision).
+ */
+function createNIMContentStrategy(
+	normalizeType: typeof import('./glmClient.js').normalizeType
+): ClassificationStrategy {
+	return async (input, _config) => {
+		const apiKey = process.env.NIM_API_KEY;
+		if (!apiKey) {
+			console.log('[Pipeline] No NIM_API_KEY — skipping NIM strategy');
+			return null;
+		}
+
+		const { url, content } = input;
+		if (!url && !content) {
+			// Image-only card — let glm-content handle vision
+			return null;
+		}
+
+		const model = process.env.NIM_CLASSIFICATION_MODEL || DEFAULT_NIM_MODEL;
+
+		// Platform-specific prompt (same selection as glm-text-only strategy)
+		const isInstagram = isInstagramUrl(url);
+		const isTwitter = isTwitterUrl(url);
+
+		let systemPrompt: string;
+		if (isInstagram) {
+			systemPrompt = getInstagramPrompt(input.imageCount || 1, content || undefined, false);
+		} else if (isTwitter) {
+			const tweetText = content || '';
+			const isThread = detectThreadIntent(tweetText);
+			systemPrompt = getTwitterPrompt(tweetText, undefined, isThread, undefined, false, false);
+		} else {
+			const platform = detectPlatformFromUrl(url);
+			systemPrompt = getPlatformAwarePrompt(platform);
+		}
+
+		const parts: string[] = [];
+		if (url) parts.push(`URL: ${url}`);
+		if (content) parts.push(`Content: ${content.slice(0, 4000)}`);
+		parts.push(
+			'Classify this content based on the text above. Include ONE visual style tag (e.g., "dark-mode", "film-grain", "editorial", "studio-lit", "matte") alongside specific subject tags.\n\nRESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation).'
+		);
+
+		const messages = [
+			{ role: 'system' as const, content: systemPrompt },
+			{ role: 'user' as const, content: parts.join('\n\n') },
+		];
+
+		console.log(`[Pipeline] Calling NIM (${model})`);
+
+		const response = await fetch(`${NIM_API_BASE}/chat/completions`, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+				// Kimi K2.5 is a reasoning model and burns tokens on its thinking
+				// step; Deepseek V3.1 uses far fewer. 8000 is safe for both.
+				max_tokens: 8000,
+				temperature: 0.3,
+			}),
+			signal: AbortSignal.timeout(NIM_ATTEMPT_TIMEOUT_MS),
+		});
+
+		if (!response.ok) {
+			const errBody = await response.text().catch(() => '');
+			throw new Error(`NIM API error: ${response.status} - ${errBody.slice(0, 200)}`);
+		}
+
+		const data = (await response.json()) as {
+			choices?: Array<{ message?: { content?: string | null } }>;
+		};
+		const responseContent = data.choices?.[0]?.message?.content;
+		if (!responseContent) {
+			throw new Error('Empty response from NIM');
+		}
+
+		console.log('[Pipeline] NIM response (first 300 chars):', responseContent.slice(0, 300));
+
+		const jsonMatch =
+			responseContent.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+			responseContent.match(/(\{[\s\S]*\})/);
+
+		if (!jsonMatch) {
+			throw new Error('No JSON found in NIM response');
+		}
+
+		return buildClassificationResult(JSON.parse(jsonMatch[1] || jsonMatch[0]), {
+			normalizeType,
+		});
+	};
+}
+
+// =============================================================================
+// STRATEGY 1: GLM CONTENT (FALLBACK when NIM is unavailable)
 // =============================================================================
 
 /**
@@ -732,6 +848,7 @@ export async function runClassificationPipeline(
 	const { callGLM, fetchImageAsBase64, normalizeType } = deps ?? await importGLMDeps();
 
 	const strategies: Array<{ name: string; fn: ClassificationStrategy; skipOnTimeout: boolean }> = [
+		{ name: 'nim-content', fn: createNIMContentStrategy(normalizeType), skipOnTimeout: true },
 		{ name: 'glm-content', fn: createGLMContentStrategy(callGLM, fetchImageAsBase64, normalizeType), skipOnTimeout: true },
 		{ name: 'glm-text-only', fn: createGLMTextOnlyStrategy(callGLM, normalizeType), skipOnTimeout: false },
 		{ name: 'rule-based', fn: ruleBasedStrategy, skipOnTimeout: false },
