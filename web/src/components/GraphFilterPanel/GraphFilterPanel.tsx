@@ -40,13 +40,23 @@ function GraphFilterPanelInner({
 				)}
 			</span>
 
-			{/* Weight slider */}
-			<label className="flex items-center gap-2 cursor-pointer">
+			{/*
+			 * Edge-strength filter — NOT a zoom control.
+			 *
+			 * Moving the slider right hides weaker connections (edges with
+			 * fewer shared tags), leaving only the strongest links. The label
+			 * deliberately says "edges ≥ N" to prevent the long-standing
+			 * confusion where this read as a zoom slider.
+			 */}
+			<label
+				className="flex items-center gap-2 cursor-pointer"
+				title="Hide weaker connections — show only edges with at least N shared tags"
+			>
 				<span
-					className="text-[11px] select-none whitespace-nowrap"
+					className="text-[11px] select-none whitespace-nowrap font-mono"
 					style={{ color: 'var(--foreground-muted)' }}
 				>
-					min {minWeight}
+					edges ≥ {minWeight}
 				</span>
 				<input
 					type="range"
@@ -54,6 +64,7 @@ function GraphFilterPanelInner({
 					max={5}
 					value={minWeight}
 					onChange={(e) => onMinWeightChange(Number(e.target.value))}
+					aria-label={`Minimum edge strength: show only connections with at least ${minWeight} shared tag${minWeight === 1 ? '' : 's'}`}
 					className="w-20 h-1 rounded-full appearance-none cursor-pointer accent-[var(--accent-primary)]"
 					style={{ background: 'var(--border-default)' }}
 				/>

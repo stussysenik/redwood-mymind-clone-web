@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type ComponentType } from 'react';
 
-import { useQuery } from '@redwoodjs/web';
+import { useMutation, useQuery } from '@redwoodjs/web';
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal';
 import { GraphFilterPanel } from 'src/components/GraphFilterPanel/GraphFilterPanel';
@@ -18,6 +18,7 @@ import { GraphDetailPanel } from 'src/components/GraphDetailPanel/GraphDetailPan
 import type { ConnectionItem } from 'src/components/GraphDetailPanel/GraphDetailPanel';
 import { GraphListView } from 'src/components/GraphListView/GraphListView';
 import { GraphTooltip } from 'src/components/GraphTooltip/GraphTooltip';
+import { useToast } from 'src/components/Toast/Toast';
 import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle';
 import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode';
 import { haptic } from 'src/lib/haptics';
@@ -47,6 +48,28 @@ const CARD_QUERY = gql`
 			archivedAt
 			deletedAt
 		}
+	}
+`;
+
+// =============================================================================
+// GRAPHQL — card mutations used by the detail modal (archive / unarchive / delete)
+// =============================================================================
+
+const ARCHIVE_CARD_MUTATION = gql`
+	mutation GraphArchiveCard($id: String!) {
+		archiveCard(id: $id) { id archivedAt }
+	}
+`;
+
+const UNARCHIVE_CARD_MUTATION = gql`
+	mutation GraphUnarchiveCard($id: String!) {
+		unarchiveCard(id: $id) { id archivedAt }
+	}
+`;
+
+const DELETE_CARD_MUTATION = gql`
+	mutation GraphDeleteCard($id: String!) {
+		deleteCard(id: $id, permanent: false) { id deletedAt }
 	}
 `;
 
@@ -248,7 +271,15 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 	);
 	const [ForceGraphCanvas, setForceGraphCanvas] = useState<ComponentType<any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 	const [graphLoadError, setGraphLoadError] = useState<string | null>(null);
-	const [currentZoom, setCurrentZoom] = useState(1);
+	// Zoom is stored in a ref — ForceGraph2D emits `onZoom` synchronously from
+	// its own adjustCanvasSize path, which runs *during* React's render phase.
+	// Using setState from that callback triggers React's
+	// "Cannot update a component while rendering a different component" warning.
+	// Since currentZoom is only read per-frame inside `nodeCanvasObject` (which
+	// ForceGraph calls from its own rAF), a ref is sufficient and actively better:
+	// it keeps `nodeCanvasObject` referentially stable, so ForceGraph's internal
+	// memoization isn't invalidated on every zoom tick.
+	const currentZoomRef = useRef(1);
 
 	// Card detail modal state
 	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -259,6 +290,115 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 		skip: !selectedCardId,
 	});
 	const selectedCard: Card | null = cardData?.card ?? null;
+
+	// Toast for archive/delete feedback
+	const { showToast } = useToast();
+
+	// ---------------------------------------------------------------------------
+	// CARD MUTATIONS — archive / unarchive / delete
+	//
+	// Each mutation passes an `update` fn that rewrites every cached variant of
+	// the `graphData` Query field, filtering out the affected node and any links
+	// that touch it. Because we mutate the cache IN PLACE (not via refetch),
+	// ForceGraph2D just diffs a single missing node — the remaining nodes keep
+	// their simulation state, so there's no camera reset or layout re-settle.
+	// ---------------------------------------------------------------------------
+	const removeCardFromGraphCache = useCallback(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(cache: any, cardId: string) => {
+			cache.modify({
+				fields: {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					graphData(existing: any, { readField }: { readField: (field: string, obj?: any) => unknown }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+						if (!existing || typeof existing !== 'object') return existing;
+						const nextNodes = Array.isArray(existing.nodes)
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							? existing.nodes.filter((n: any) => readField('id', n) !== cardId)
+							: existing.nodes;
+						const nextLinks = Array.isArray(existing.links)
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							? existing.links.filter((l: any) => {
+									const src = readField('source', l);
+									const tgt = readField('target', l);
+									return src !== cardId && tgt !== cardId;
+								})
+							: existing.links;
+						return { ...existing, nodes: nextNodes, links: nextLinks };
+					},
+				},
+			});
+			// Cascade into the normalized entity so any other query that points
+			// at this GraphNode stops rendering a ghost reference.
+			cache.evict({ id: `GraphNode:${cardId}` });
+			cache.gc();
+		},
+		[]
+	);
+
+	const [archiveCardMutation] = useMutation(ARCHIVE_CARD_MUTATION, {
+		update(cache, _result, options) {
+			const id = (options.variables as { id?: string } | undefined)?.id;
+			if (id) removeCardFromGraphCache(cache, id);
+		},
+	});
+
+	const [unarchiveCardMutation] = useMutation(UNARCHIVE_CARD_MUTATION);
+
+	const [deleteCardMutation] = useMutation(DELETE_CARD_MUTATION, {
+		update(cache, _result, options) {
+			const id = (options.variables as { id?: string } | undefined)?.id;
+			if (!id) return;
+			removeCardFromGraphCache(cache, id);
+			// Soft-delete the Card too so feed/search queries don't surface it
+			// until they refetch.
+			cache.evict({ id: `Card:${id}` });
+			cache.gc();
+		},
+	});
+
+	const handleArchiveFromGraph = useCallback(
+		(cardId: string) => {
+			// Close the modal + focus state optimistically so the user sees the
+			// node disappear immediately. The cache update then removes it from
+			// the underlying graph without a re-settle.
+			setSelectedCardId(null);
+			setFocusedNodeId(null);
+			archiveCardMutation({ variables: { id: cardId } })
+				.then(() => showToast('Card archived', 'success'))
+				.catch((err) => {
+					console.error('[GraphClient] archive failed', err);
+					showToast('Failed to archive card', 'error');
+				});
+		},
+		[archiveCardMutation, showToast]
+	);
+
+	const handleDeleteFromGraph = useCallback(
+		(cardId: string) => {
+			setSelectedCardId(null);
+			setFocusedNodeId(null);
+			deleteCardMutation({ variables: { id: cardId } })
+				.then(() => showToast('Card moved to trash', 'info'))
+				.catch((err) => {
+					console.error('[GraphClient] delete failed', err);
+					showToast('Failed to delete card', 'error');
+				});
+		},
+		[deleteCardMutation, showToast]
+	);
+
+	const handleRestoreFromGraph = useCallback(
+		(cardId: string) => {
+			setSelectedCardId(null);
+			unarchiveCardMutation({ variables: { id: cardId } })
+				.then(() => showToast('Card unarchived', 'success'))
+				.catch((err) => {
+					console.error('[GraphClient] unarchive failed', err);
+					showToast('Failed to unarchive card', 'error');
+				});
+		},
+		[unarchiveCardMutation, showToast]
+	);
 
 	// Tooltip
 	const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
@@ -671,7 +811,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 	}, [focusedNodeId, closeFocus]);
 
 	const handleZoom = useCallback(({ k }: { k: number }) => {
-		setCurrentZoom(k);
+		currentZoomRef.current = k;
 	}, []);
 
 	useEffect(() => {
@@ -719,9 +859,12 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 				return;
 			}
 
-			// LOD — hide text at far zoom levels to improve render perf
-			const showLabels = currentZoom > 1.0;
-			const showInitials = currentZoom > 0.5;
+			// LOD — hide text at far zoom levels to improve render perf.
+			// Read the ref live, so every frame picks up the current zoom without
+			// forcing React re-renders or invalidating this useCallback.
+			const zoom = currentZoomRef.current;
+			const showLabels = zoom > 1.0;
+			const showInitials = zoom > 0.5;
 
 			const connections = node.connections ?? 0;
 			const color = node.color ?? '#6B7280';
@@ -820,7 +963,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 				}
 			}
 		},
-		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds, currentZoom, darkModeRef]
+		[hoveredNode, focusedNodeId, focusedNeighbors, maxConnections, connectedNodeIds, darkModeRef]
 	);
 
 	const linkCanvasObject = useCallback(
@@ -1137,6 +1280,9 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 							card={selectedCard}
 							isOpen={true}
 							onClose={() => setSelectedCardId(null)}
+							onArchive={handleArchiveFromGraph}
+							onDelete={handleDeleteFromGraph}
+							onRestore={handleRestoreFromGraph}
 						/>
 					)}
 				</>
