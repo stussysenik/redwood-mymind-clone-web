@@ -25,3 +25,7 @@ api/src/lib/generateGraphiQLHeader.*
 .superpowers/
 playwright-report/
 test-results/
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
