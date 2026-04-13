@@ -100,6 +100,18 @@ const TYPE_INITIALS: Record<string, string> = {
 const EDGE_COLOR = '#B8AD9E';
 const DIM_ALPHA = 0.08;
 
+// Hard cap on rendered edges. Beyond a few thousand edges d3-force runs on the
+// main thread become unworkable (each tick = O(E)) and the visualization turns
+// into unreadable soup. When filtered links exceed this budget we keep the
+// top-weighted edges — those are the strongest knowledge connections — and
+// drop the long tail. Raise via the minWeight slider if users want more.
+const EDGE_BUDGET = 4000;
+
+// Safety net: if the simulation never fires onEngineStop (corrupt data,
+// pathological layout, slow device), reveal the canvas anyway after this long
+// so the user never sees a forever-spinner.
+const SETTLE_TIMEOUT_MS = 8000;
+
 // Module-level canvas font constants — hoisted out of the hot render path so
 // the browser can cache parsed font descriptors and we avoid string allocations
 // on every requestAnimationFrame.
@@ -156,6 +168,59 @@ function drawRoundedRect(
 }
 
 // =============================================================================
+// LAYOUT POSITION CACHE
+// Saves the fully-settled d3 node positions to localStorage after the first
+// simulation. On subsequent loads the positions are injected into graphData so
+// ForceGraph2D starts near its final state and needs only ~20 ticks to
+// fine-tune — making the graph appear instantly on repeat visits.
+//
+// Cache key: djb2 hash of sorted node IDs — invalidated automatically when the
+// graph topology changes (new cards added, deleted, etc.).
+// =============================================================================
+
+const LAYOUT_CACHE_PREFIX = 'byoa_gl_v1_';
+
+type LayoutPositions = Record<string, { x: number; y: number }>;
+
+/** djb2 hash of sorted, null-byte-delimited node IDs. */
+function graphLayoutKey(nodeIds: readonly string[]): string {
+	const sorted = [...nodeIds].sort().join('\x00');
+	let h = 5381;
+	for (let i = 0; i < sorted.length; i++) {
+		h = ((h << 5) + h + sorted.charCodeAt(i)) | 0;
+	}
+	return LAYOUT_CACHE_PREFIX + Math.abs(h).toString(36);
+}
+
+function loadLayout(key: string): LayoutPositions | null {
+	try {
+		const raw = localStorage.getItem(key);
+		if (!raw) return null;
+		return JSON.parse(raw) as LayoutPositions;
+	} catch {
+		return null;
+	}
+}
+
+function saveLayout(
+	key: string,
+	nodes: ReadonlyArray<{ id: string; x?: number; y?: number }>
+): void {
+	try {
+		const positions: LayoutPositions = {};
+		for (const n of nodes) {
+			if (n.x != null && n.y != null && isFinite(n.x) && isFinite(n.y)) {
+				// Round to 1 decimal place — saves ~30% space vs full float precision
+				positions[n.id] = { x: Math.round(n.x * 10) / 10, y: Math.round(n.y * 10) / 10 };
+			}
+		}
+		localStorage.setItem(key, JSON.stringify(positions));
+	} catch {
+		// localStorage full or unavailable — silently skip
+	}
+}
+
+// =============================================================================
 // COMPONENT
 // =============================================================================
 
@@ -186,11 +251,21 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 	const [connectedNames, setConnectedNames] = useState<string[]>([]);
 
+	// Last known cursor position — updated every mousemove regardless of hover
+	// state so the tooltip can pin to the cursor the instant a node enters
+	// hover, instead of flashing at (0,0) waiting for the next mousemove.
+	const cursorPosRef = useRef<{ x: number; y: number } | null>(null);
+
 	const containerRef = useRef<HTMLDivElement>(null);
 	const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-	const forcesConfigured = useRef(false);
 	const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 	const isMobile = dimensions.width < 768;
+
+	// Has the force simulation settled at least once for the current data?
+	// Used to keep the canvas hidden during the violent initial d3 layout
+	// so the user only ever sees the final, stable shape — no chaos → settle
+	// animation, no intermediate flickers.
+	const [graphSettled, setGraphSettled] = useState(false);
 
 	// Dark mode — computed once at mount, updated via MediaQueryList event.
 	// Never call window.matchMedia inside the canvas render loop (60 fps).
@@ -202,6 +277,10 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	// RAF handle for tooltip throttle
 	const tooltipRafRef = useRef<number | null>(null);
+
+	// Layout cache refs — set in graphData useMemo so they're ready before render
+	const layoutKeyRef = useRef<string>('');
+	const hasCachedLayout = useRef(false);
 
 	// Track double-tap for mobile "open detail" gesture
 	const lastTapRef = useRef<{ nodeId: string; time: number } | null>(null);
@@ -279,45 +358,122 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 	// CONFIGURE D3 FORCES
 	// -------------------------------------------------------------------------
 
-	// Reset force configuration when mobile breakpoint changes so forces re-apply
+	// Re-hide the canvas whenever the topology or breakpoint changes — the
+	// layout is about to re-run and we want one clean reveal, not chaos.
+	// Exception: when positions are pre-seeded from the cache the graph starts
+	// near its final state, so we skip the hide and show it immediately.
 	useEffect(() => {
-		forcesConfigured.current = false;
-	}, [isMobile]);
+		if (hasCachedLayout.current) {
+			setGraphSettled(true);
+		} else {
+			setGraphSettled(false);
+		}
+	}, [isMobile, nodes.length, links.length]);
 
-	const configureForces = useCallback(() => {
-		const fg = fgRef.current;
-		if (!fg || forcesConfigured.current) return;
-		forcesConfigured.current = true;
+	// Forever-spinner insurance: if the simulation never signals engineStop
+	// (corrupt data, pathological layout, very slow device) reveal the canvas
+	// anyway so the user can interact with whatever d3 has drawn so far.
+	useEffect(() => {
+		if (graphSettled) return;
+		const timeoutId = window.setTimeout(() => {
+			setGraphSettled(true);
+		}, SETTLE_TIMEOUT_MS);
+		return () => window.clearTimeout(timeoutId);
+	}, [graphSettled, nodes.length, links.length]);
 
-		// Stronger repulsion as graph grows to prevent overlap.
-		// Math.min picks the more-negative (stronger) of floor vs. scaled value.
-		const CHARGE_FLOOR = isMobile ? -200 : -300;
-		const CHARGE_PER_NODE = isMobile ? 0.5 : 0.8;
-		const CHARGE_BASE = isMobile ? -100 : -150;
-		const chargeStrength = Math.min(CHARGE_FLOOR, CHARGE_BASE - nodes.length * CHARGE_PER_NODE);
+	// Configure d3 forces as soon as the ForceGraph instance exists. Doing
+	// this BEFORE the simulation settles (instead of waiting for a first
+	// engineStop → reheat → second stop) cuts the total settle time in half
+	// on dense graphs. We poll via rAF because the ref populates after the
+	// first commit of the dynamically-loaded renderer.
+	useEffect(() => {
+		if (!ForceGraphCanvas) return;
 
-		fg.d3Force('charge')?.strength(chargeStrength).distanceMax(isMobile ? 400 : 600);
-		fg.d3Force('link')?.distance((link: FGLink) => {
-			const base = isMobile ? 50 : 80;
-			const spread = isMobile ? 100 : 150;
-			return base + (1 / (link.weight ?? 1)) * spread;
-		});
-		fg.d3Force('center')?.strength(0.05);
-		fg.d3ReheatSimulation();
-	}, [isMobile, nodes.length]);
+		let rafId = 0;
+		let cancelled = false;
+
+		const apply = () => {
+			if (cancelled) return;
+			const fg = fgRef.current;
+			if (!fg || typeof fg.d3Force !== 'function') {
+				rafId = requestAnimationFrame(apply);
+				return;
+			}
+
+			// Stronger repulsion as graph grows to prevent overlap.
+			// Math.min picks the more-negative (stronger) of floor vs. scaled value.
+			const CHARGE_FLOOR = isMobile ? -200 : -300;
+			const CHARGE_PER_NODE = isMobile ? 0.5 : 0.8;
+			const CHARGE_BASE = isMobile ? -100 : -150;
+			const chargeStrength = Math.min(
+				CHARGE_FLOOR,
+				CHARGE_BASE - nodes.length * CHARGE_PER_NODE
+			);
+
+			fg.d3Force('charge')?.strength(chargeStrength).distanceMax(isMobile ? 400 : 600);
+			fg.d3Force('link')?.distance((link: FGLink) => {
+				const base = isMobile ? 50 : 80;
+				const spread = isMobile ? 100 : 150;
+				return base + (1 / (link.weight ?? 1)) * spread;
+			});
+			fg.d3Force('center')?.strength(0.05);
+
+			// Reheat so the freshly-installed forces actually drive the layout
+			// from the current (pre-tick) state.
+			fg.d3ReheatSimulation?.();
+		};
+
+		rafId = requestAnimationFrame(apply);
+		return () => {
+			cancelled = true;
+			if (rafId) cancelAnimationFrame(rafId);
+		};
+	}, [ForceGraphCanvas, isMobile, nodes.length, links.length]);
+
+	const handleEngineStop = useCallback(() => {
+		setGraphSettled(true);
+		// Persist settled positions — makes repeat visits near-instant
+		if (layoutKeyRef.current && fgRef.current) {
+			const gd = fgRef.current.graphData?.() as { nodes?: Array<{ id: string; x?: number; y?: number }> } | undefined;
+			if (Array.isArray(gd?.nodes) && gd.nodes.length > 0) {
+				saveLayout(layoutKeyRef.current, gd.nodes);
+			}
+		}
+	}, []);
 
 	// -------------------------------------------------------------------------
 	// BUILD GRAPH DATA
 	// -------------------------------------------------------------------------
 
 	const graphData = useMemo(() => {
-		const colouredNodes = nodes.map((n) => ({
-			...n,
-			color: n.colors?.[0] ?? TYPE_COLORS[n.type] ?? '#6B7280',
-		}));
-		const filteredLinks = links
-			.filter((l) => l.weight >= minWeight)
-			.map((l) => ({ ...l }));
+		// Look up cached positions for this exact graph topology
+		const key = graphLayoutKey(nodes.map((n) => n.id));
+		layoutKeyRef.current = key;
+		const cached = typeof window !== 'undefined' ? loadLayout(key) : null;
+		hasCachedLayout.current = cached !== null;
+
+		const colouredNodes = nodes.map((n) => {
+			const pos = cached?.[n.id];
+			return {
+				...n,
+				color: n.colors?.[0] ?? TYPE_COLORS[n.type] ?? '#6B7280',
+				// Pre-seed x/y so d3 starts at the settled position — near-instant settle
+				...(pos ? { x: pos.x, y: pos.y } : {}),
+			};
+		});
+
+		// Filter by the user's minWeight slider, then enforce an edge budget.
+		// Sorting is O(E log E) but only runs when over budget, and only on
+		// minWeight changes — not per frame.
+		const afterMinWeight = links.filter((l) => l.weight >= minWeight);
+		const budgeted =
+			afterMinWeight.length > EDGE_BUDGET
+				? [...afterMinWeight]
+						.sort((a, b) => b.weight - a.weight)
+						.slice(0, EDGE_BUDGET)
+				: afterMinWeight;
+		const filteredLinks = budgeted.map((l) => ({ ...l }));
+
 		return { nodes: colouredNodes, links: filteredLinks };
 	}, [nodes, links, minWeight]);
 
@@ -423,7 +579,14 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		(node: FGNode | null, _prev: FGNode | null) => {
 			if (node) {
 				setHoveredNode(node as GraphNode);
-				setTooltipPos({ x: (node.__screenX ?? 0) as number, y: (node.__screenY ?? 0) as number });
+				// Pin to the last known cursor position so the tooltip never
+				// flashes in the top-left corner while waiting for a fresh
+				// mousemove. react-force-graph never populates __screenX/Y,
+				// so the old fallback-to-0 path was the source of the artifact.
+				const cursor = cursorPosRef.current;
+				if (cursor) {
+					setTooltipPos({ x: cursor.x, y: cursor.y });
+				}
 				setConnectedNames(getConnectedNames(node.id));
 			} else {
 				setHoveredNode(null);
@@ -436,6 +599,7 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 
 	useEffect(() => {
 		function handleMouseMove(e: MouseEvent) {
+			cursorPosRef.current = { x: e.clientX, y: e.clientY };
 			if (!hoveredNode) return;
 			if (tooltipRafRef.current !== null) return; // frame already pending
 			tooltipRafRef.current = requestAnimationFrame(() => {
@@ -809,35 +973,62 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					</div>
 				</div>
 			) : showGraphCanvas ? (
-				<ForceGraphCanvas
-					ref={fgRef}
-					graphData={graphData}
-					width={dimensions.width}
-					height={dimensions.height}
-					nodeCanvasObject={nodeCanvasObject}
-					nodePointerAreaPaint={(node: FGNode, color: string, ctx: CanvasRenderingContext2D) => {
-						const isOrphan = !connectedNodeIds.has(node.id);
-						const radius = isOrphan ? 8 : Math.sqrt(Math.max(1, node.connections ?? 1)) * 4 + 8;
-						ctx.beginPath();
-						ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI);
-						ctx.fillStyle = color;
-						ctx.fill();
-					}}
-					linkCanvasObject={linkCanvasObject}
-					linkPointerAreaPaint={() => {}}
-					enableNodeDrag={isMobile}
-					enableZoomInteraction={true}
-					enablePanInteraction={true}
-					onNodeHover={handleNodeHover}
-					onNodeClick={handleNodeClick}
-					onBackgroundClick={handleBackgroundClick}
-					onZoom={handleZoom}
-					onEngineStop={configureForces}
-					backgroundColor="#00000000"
-					cooldownTicks={isMobile ? 150 : 300}
-					d3AlphaDecay={isMobile ? 0.04 : 0.008}
-					d3VelocityDecay={0.3}
-				/>
+				<>
+					{/*
+					 * Keep the simulation running invisibly while d3 settles,
+					 * then cross-fade to the final layout once `graphSettled`
+					 * flips true. The user sees one clean reveal instead of
+					 * the violent initial burst of force-direction ticks.
+					 */}
+					<div
+						className="absolute inset-0"
+						style={{
+							opacity: graphSettled ? 1 : 0,
+							transition: graphSettled
+								? 'opacity 320ms ease'
+								: 'none',
+							pointerEvents: graphSettled ? 'auto' : 'none',
+						}}
+					>
+						<ForceGraphCanvas
+							ref={fgRef}
+							graphData={graphData}
+							width={dimensions.width}
+							height={dimensions.height}
+							nodeCanvasObject={nodeCanvasObject}
+							nodePointerAreaPaint={(node: FGNode, color: string, ctx: CanvasRenderingContext2D) => {
+								const isOrphan = !connectedNodeIds.has(node.id);
+								const radius = isOrphan ? 8 : Math.sqrt(Math.max(1, node.connections ?? 1)) * 4 + 8;
+								ctx.beginPath();
+								ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI);
+								ctx.fillStyle = color;
+								ctx.fill();
+							}}
+							linkCanvasObject={linkCanvasObject}
+							linkPointerAreaPaint={() => {}}
+							enableNodeDrag={isMobile}
+							enableZoomInteraction={true}
+							enablePanInteraction={true}
+							onNodeHover={handleNodeHover}
+							onNodeClick={handleNodeClick}
+							onBackgroundClick={handleBackgroundClick}
+							onZoom={handleZoom}
+							onEngineStop={handleEngineStop}
+							backgroundColor="#00000000"
+							cooldownTicks={hasCachedLayout.current ? 20 : (isMobile ? 100 : 180)}
+							d3AlphaDecay={hasCachedLayout.current ? 0.1 : (isMobile ? 0.04 : 0.012)}
+							d3VelocityDecay={0.3}
+						/>
+					</div>
+					{!graphSettled && (
+						<div
+							className="pointer-events-none absolute inset-0 flex items-center justify-center"
+							aria-hidden="true"
+						>
+							<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+						</div>
+					)}
+				</>
 			) : null}
 
 			{viewMode === 'graph' && (
@@ -851,10 +1042,10 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 				/>
 			)}
 
-			{/* Focus mode hint */}
+			{/* Focus mode hint — sits below the filter panel at the top */}
 			{viewMode === 'graph' && !focusedNodeId && hasFilteredLinks && (
 				<div
-					className="absolute top-4 left-1/2 -translate-x-1/2 text-[11px] select-none pointer-events-none"
+					className="absolute left-1/2 top-14 -translate-x-1/2 select-none text-[11px] pointer-events-none"
 					style={{ color: 'var(--foreground-muted)' }}
 				>
 					Click a node to explore its connections
