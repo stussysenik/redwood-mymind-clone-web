@@ -9,6 +9,7 @@ import { LOCAL_AI_RUNTIME } from 'src/lib/local-ai/config'
 import { Sun, Moon, Monitor, Brain, Download, LogOut, Type, Palette } from 'lucide-react'
 import ExportBuilder from 'src/components/ExportBuilder/ExportBuilder'
 import MobileCaptureSection from 'src/components/MobileCaptureSection/MobileCaptureSection'
+import { GraphRendererPicker } from 'src/components/GraphRendererPicker/GraphRendererPicker'
 import { useTheme } from 'src/lib/theme'
 
 import { useTypography, PAIRINGS } from 'src/lib/typography'
@@ -441,6 +442,19 @@ const SettingsPage = () => {
             style={{ backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-default)' }}
           >
             <ExportBuilder />
+          </div>
+        </section>
+
+        {/* Graph renderer */}
+        <section className="mb-8">
+          <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--foreground-muted)' }}>
+            Graph renderer
+          </h3>
+          <div
+            className="p-4 rounded-xl"
+            style={{ backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-default)' }}
+          >
+            <GraphRendererPicker />
           </div>
         </section>
 
