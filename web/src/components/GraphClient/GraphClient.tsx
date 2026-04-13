@@ -8,7 +8,7 @@
  * - Shared tag labels on focused edges
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, type ComponentType } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type ComponentType } from 'react';
 
 import { useQuery } from '@redwoodjs/web';
 
@@ -22,6 +22,7 @@ import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle';
 import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode';
 import { haptic } from 'src/lib/haptics';
 import type { GraphNode } from 'src/lib/graph';
+import type { RendererBackend } from 'src/lib/graph-renderer-types';
 import type { Card } from 'src/lib/types';
 import { Loader2, Network, Rows3 } from 'lucide-react';
 
@@ -74,6 +75,7 @@ interface GraphClientLink {
 interface GraphClientProps {
 	nodes: readonly GraphClientNode[];
 	links: readonly GraphClientLink[];
+	rendererBackend?: RendererBackend;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +113,18 @@ const EDGE_BUDGET = 4000;
 // pathological layout, slow device), reveal the canvas anyway after this long
 // so the user never sees a forever-spinner.
 const SETTLE_TIMEOUT_MS = 8000;
+
+// Lazy-loaded alternative renderers — only bundled when the user selects them
+const WebGLGraphRenderer = lazy(() =>
+  import('src/components/WebGLGraphRenderer/WebGLGraphRenderer').then((m) => ({
+    default: m.WebGLGraphRenderer,
+  }))
+)
+const ThreeGraphRenderer = lazy(() =>
+  import('src/components/ThreeGraphRenderer/ThreeGraphRenderer').then((m) => ({
+    default: m.ThreeGraphRenderer,
+  }))
+)
 
 // Module-level canvas font constants — hoisted out of the hot render path so
 // the browser can cache parsed font descriptors and we avoid string allocations
@@ -224,7 +238,7 @@ function saveLayout(
 // COMPONENT
 // =============================================================================
 
-export function GraphClient({ nodes, links }: GraphClientProps) {
+export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphClientProps) {
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 	const [viewMode, setViewMode] = usePersistedViewMode(
@@ -893,6 +907,17 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 		setFocusedNodeId(null);
 	}, []);
 
+	// Adapter: alternative renderers receive (id: string), canvas path receives FGNode
+	const handleNodeClickById = useCallback((id: string) => {
+		const node = graphData.nodes.find((n) => n.id === id);
+		if (node) handleNodeClick(node);
+	}, [graphData.nodes, handleNodeClick]);
+
+	// Adapter: alternative renderers call onNodeHover(node | null), canvas path has extra _prev arg
+	const handleNodeHoverById = useCallback((node: GraphNode | null) => {
+		handleNodeHover(node, null);
+	}, [handleNodeHover]);
+
 	// -------------------------------------------------------------------------
 	// RENDER
 	// -------------------------------------------------------------------------
@@ -957,6 +982,34 @@ export function GraphClient({ nodes, links }: GraphClientProps) {
 					links={graphData.links}
 					onCardOpen={setSelectedCardId}
 				/>
+			) : viewMode === 'graph' && rendererBackend === 'webgl' ? (
+				<Suspense fallback={<div className="flex items-center justify-center w-full h-full"><Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" /></div>}>
+					<WebGLGraphRenderer
+						nodes={graphData.nodes}
+						links={graphData.links}
+						dimensions={dimensions}
+						focusedNodeId={focusedNodeId}
+						minWeight={minWeight}
+						darkMode={darkModeRef.current}
+						onNodeClick={handleNodeClickById}
+						onNodeHover={handleNodeHoverById}
+						onEngineStop={handleEngineStop}
+					/>
+				</Suspense>
+			) : viewMode === 'graph' && rendererBackend === 'three' ? (
+				<Suspense fallback={<div className="flex items-center justify-center w-full h-full"><Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" /></div>}>
+					<ThreeGraphRenderer
+						nodes={graphData.nodes}
+						links={graphData.links}
+						dimensions={dimensions}
+						focusedNodeId={focusedNodeId}
+						minWeight={minWeight}
+						darkMode={darkModeRef.current}
+						onNodeClick={handleNodeClickById}
+						onNodeHover={handleNodeHoverById}
+						onEngineStop={handleEngineStop}
+					/>
+				</Suspense>
 			) : !isReady || !ForceGraphCanvas ? (
 				<div className="flex items-center justify-center" style={{ width: '100%', height: '100%' }}>
 					<Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
