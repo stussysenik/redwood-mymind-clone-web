@@ -8,6 +8,7 @@ import { useLocalAI } from 'src/lib/local-ai'
 import { LOCAL_AI_RUNTIME } from 'src/lib/local-ai/config'
 import { Sun, Moon, Monitor, Brain, Download, LogOut, Type, Palette } from 'lucide-react'
 import ExportBuilder from 'src/components/ExportBuilder/ExportBuilder'
+import MobileCaptureSection from 'src/components/MobileCaptureSection/MobileCaptureSection'
 import { useTheme } from 'src/lib/theme'
 
 import { useTypography, PAIRINGS } from 'src/lib/typography'
@@ -442,6 +443,8 @@ const SettingsPage = () => {
             <ExportBuilder />
           </div>
         </section>
+
+        <MobileCaptureSection />
 
         {/* Sign out */}
         <button
