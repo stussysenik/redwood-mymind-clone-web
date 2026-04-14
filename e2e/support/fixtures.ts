@@ -258,6 +258,85 @@ export async function getSpaceByName(
   return (data as SpaceRow | null) ?? null
 }
 
+/**
+ * Seed a card plus two pending enrichment review items (title + description)
+ * for the review surface tests. Returns the seeded card so callers can assert
+ * against it.
+ */
+export async function seedReviewItems(
+  testUser: TestUser
+): Promise<CardRow> {
+  if (!testUser.userId) {
+    throw new Error('seedReviewItems requires an ephemeral E2E user')
+  }
+  const client = requireAdminClient()
+
+  const card = await createCard(testUser, {
+    type: 'website',
+    title: 'Untitled Note',
+    content: 'Seeded for review-surface E2E — a card with a weak title.',
+    url: 'https://example.test/review-seed',
+    metadata: { summary: 'Seed summary with stale confidence.' },
+  })
+
+  const { error } = await client.from('enrichment_review_items').insert([
+    {
+      card_id: card.id,
+      user_id: testUser.userId,
+      kind: 'title',
+      proposed_value: 'Review Surface Seed Title',
+      current_value: card.title,
+      confidence: 0.72,
+      critique: 'Placeholder critic rationale for the seeded title.',
+    },
+    {
+      card_id: card.id,
+      user_id: testUser.userId,
+      kind: 'description',
+      proposed_value: 'A concise, neutral, two-sentence seeded description.',
+      current_value: 'Seed summary with stale confidence.',
+      confidence: 0.68,
+      critique: 'Placeholder critic rationale for the seeded description.',
+    },
+  ])
+
+  if (error) {
+    throw new Error(`Failed to seed review items: ${error.message}`)
+  }
+
+  return card
+}
+
+/**
+ * Seed `count` diverse cards for the graph page.
+ * Cards share tags so d3-force-link edges form (the graph needs connected nodes
+ * to visually render something useful in all three renderer backends).
+ */
+export async function seedGraphCards(
+  testUser: TestUser,
+  count = 8
+): Promise<CardRow[]> {
+  const CARD_TYPES = ['article', 'note', 'image', 'book', 'video', 'social', 'product', 'movie']
+  const SHARED_TAGS = ['design', 'tech', 'research', 'ideas']
+
+  const cards: CardRow[] = []
+  for (let i = 0; i < count; i++) {
+    const type = CARD_TYPES[i % CARD_TYPES.length]
+    // Each card gets 2 tags: one shared (cycling through SHARED_TAGS) and one
+    // unique. Adjacent cards share a tag, ensuring graph edges exist.
+    const tag1 = SHARED_TAGS[i % SHARED_TAGS.length]
+    const tag2 = SHARED_TAGS[(i + 1) % SHARED_TAGS.length]
+    const card = await createCard(testUser, {
+      type,
+      title: `Graph seed card ${i + 1} (${type})`,
+      content: `Seeded for graph renderer E2E test — card ${i + 1}`,
+      tags: [tag1, tag2],
+    })
+    cards.push(card)
+  }
+  return cards
+}
+
 export async function saveLink(page: Page, url: string) {
   const modalTextarea = page.locator('textarea[placeholder*="Save something"]')
 

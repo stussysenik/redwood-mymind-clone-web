@@ -14,7 +14,7 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: 'http://localhost:8913',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8913',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -40,11 +40,14 @@ export default defineConfig({
     },
   ],
 
-  // RedwoodJS dev server
-  webServer: {
-    command: 'yarn rw dev',
-    url: 'http://localhost:8913',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // RedwoodJS dev server — skipped when PLAYWRIGHT_BASE_URL points at a
+  // remote host (e.g. prod verification runs). Only boots locally.
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'yarn rw dev',
+        url: 'http://localhost:8913',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 })

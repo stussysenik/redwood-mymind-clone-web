@@ -23,6 +23,7 @@ const Routes = () => {
           <Route path="/trash" page={TrashPage} name="trash" />
           <Route path="/serendipity" page={SerendipityPage} name="serendipity" />
           <Route path="/graph" page={GraphPage} name="graph" />
+          <Route path="/review" page={ReviewPage} name="review" />
           <Route path="/settings" page={SettingsPage} name="settings" />
         </Set>
       </Private>

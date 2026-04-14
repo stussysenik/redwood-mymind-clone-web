@@ -17,20 +17,26 @@ generator client {
 // ─── Cards ──────────────────────────────────────────────────────────────────
 // Core entity: every saved item becomes a Card
 model Card {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String    @map("user_id")
-  type       String    // 'article'|'image'|'note'|'product'|'book'|'video'|'audio'|'social'|'movie'|'website'
-  title      String?
-  content    String?
-  url        String?
-  imageUrl   String?   @map("image_url")
-  embedding  Unsupported("vector(1536)")?
-  metadata   Json      @default("{}")
-  tags       String[]  @default([])
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz
-  archivedAt DateTime? @map("archived_at") @db.Timestamptz
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                 String    @map("user_id")
+  type                   String    // 'article'|'image'|'note'|'product'|'book'|'video'|'audio'|'social'|'movie'|'website'
+  title                  String?
+  content                String?
+  url                    String?
+  imageUrl               String?   @map("image_url")
+  embedding              Unsupported("vector(1536)")?
+  metadata               Json      @default("{}")
+  tags                   String[]  @default([])
+  titleConfidence        Float?    @map("title_confidence")
+  descriptionConfidence  Float?    @map("description_confidence")
+  titleEditedAt          DateTime? @map("title_edited_at") @db.Timestamptz
+  descriptionEditedAt    DateTime? @map("description_edited_at") @db.Timestamptz
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt              DateTime? @map("deleted_at") @db.Timestamptz
+  archivedAt             DateTime? @map("archived_at") @db.Timestamptz
+
+  enrichmentReviewItems  EnrichmentReviewItem[]
 
   @@index([userId], map: "idx_cards_user")
   @@index([type], map: "idx_cards_type")
@@ -39,6 +45,7 @@ model Card {
   @@index([createdAt(sort: Desc)], map: "idx_cards_created")
   @@index([deletedAt], map: "idx_cards_deleted_at")
   @@index([archivedAt], map: "idx_cards_archived_at")
+  @@index([titleConfidence], map: "idx_cards_title_confidence")
   @@map("cards")
 }
 
@@ -123,4 +130,45 @@ model GraphAnnotation {
   @@index([userId, createdAt], map: "idx_graph_annotations_user_created")
   @@index([userId, anchorType, anchorId], map: "idx_graph_annotations_user_anchor")
   @@map("graph_annotations")
+}
+
+// ─── Enrichment Review Items ────────────────────────────────────────────────
+// Queue of title/description proposals from the DSPy pipeline whose critic
+// confidence landed in the middle band [REVIEW_THRESHOLD, AUTO_APPLY_THRESHOLD).
+// Append-only log — resolution flips resolvedAt/resolution in place.
+model EnrichmentReviewItem {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cardId        String    @map("card_id") @db.Uuid
+  userId        String    @map("user_id")
+  kind          String    // 'title' | 'description'
+  proposedValue String    @map("proposed_value")
+  currentValue  String?   @map("current_value")
+  confidence    Float
+  critique      String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz
+  resolution    String?   // 'accept' | 'reject' | 'edit' | 'skip'
+  editedValue   String?   @map("edited_value")
+
+  card          Card      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([userId, resolvedAt, createdAt], map: "idx_enrichment_review_pending")
+  @@index([cardId], map: "idx_enrichment_review_card")
+  @@map("enrichment_review_items")
+}
+
+// ─── Enrichment Batch Stats ─────────────────────────────────────────────────
+// One row per worker batch — SQL-queryable history of the pipeline's work.
+model EnrichmentBatchStats {
+  batchId          String    @id @map("batch_id") @db.Uuid
+  startedAt        DateTime  @map("started_at") @db.Timestamptz
+  finishedAt       DateTime? @map("finished_at") @db.Timestamptz
+  cardsProcessed   Int       @default(0) @map("cards_processed")
+  autoApplied      Int       @default(0) @map("auto_applied")
+  queuedForReview  Int       @default(0) @map("queued_for_review")
+  dropped          Int       @default(0) @map("dropped")
+  errors           Int       @default(0) @map("errors")
+
+  @@index([startedAt(sort: Desc)], map: "idx_enrichment_batch_stats_started")
+  @@map("enrichment_batch_stats")
 }
