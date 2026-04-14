@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 
 import { useAuth } from 'src/auth'
 import type { FeedCardRecord } from 'src/components/FeedCellShared/FeedCellShared'
-import { getSupabaseBrowser } from 'src/lib/supabase'
+import { supabase } from 'src/lib/supabaseClient'
 import { rowToCard, type Card, type CardRow } from 'src/lib/types'
 
 export function cardToFeedCardRecord(card: Card): FeedCardRecord {
@@ -49,13 +49,11 @@ export function useRealtimeCardUpdates(
   const { currentUser } = useAuth()
 
   useEffect(() => {
-    const supabaseBrowser = getSupabaseBrowser()
-
-    if (!enabled || !supabaseBrowser || !currentUser?.id) {
+    if (!enabled || !currentUser?.id) {
       return
     }
 
-    const channel = supabaseBrowser
+    const channel = supabase
       .channel(`cards-live-${currentUser.id}`)
       .on(
         'postgres_changes',
@@ -76,7 +74,7 @@ export function useRealtimeCardUpdates(
       .subscribe()
 
     const pollRecentCards = async () => {
-      const { data, error } = await supabaseBrowser
+      const { data, error } = await supabase
         .from('cards')
         .select('*')
         .eq('user_id', currentUser.id)
@@ -99,7 +97,7 @@ export function useRealtimeCardUpdates(
 
     return () => {
       window.clearInterval(pollInterval)
-      supabaseBrowser.removeChannel(channel)
+      supabase.removeChannel(channel)
     }
   }, [currentUser?.id, enabled, onCardUpdate])
 }

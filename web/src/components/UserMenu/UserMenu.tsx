@@ -15,7 +15,7 @@
 import { useState, useEffect } from 'react';
 import { navigate, useLocation } from '@redwoodjs/router';
 import { LogOut, LogIn, Settings, Archive, Trash2, Sun, Moon, Monitor } from 'lucide-react';
-import { createClient } from 'src/lib/supabase-browser';
+import { supabase } from 'src/lib/supabaseClient';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { clearAuthTokenOnLogout } from 'src/lib/capacitor/keychain';
 import { useAtomicWeight, useBreakpoint } from 'src/hooks/useMediaQuery';
@@ -30,18 +30,11 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
 	const [loading, setLoading] = useState(true);
 	const [showMenu, setShowMenu] = useState(false);
 	const { pathname } = useLocation();
-	const supabase = createClient();
 	const { showExtended } = useAtomicWeight();
 	const { isMd } = useBreakpoint();
 	const { theme, setTheme } = useTheme();
 
 	useEffect(() => {
-		if (!supabase) {
-			setLoading(false);
-			setUser(null);
-			return;
-		}
-
 		const getUser = async () => {
 			const { data: { user } } = await supabase.auth.getUser();
 			setUser(user);
@@ -49,20 +42,14 @@ export function UserMenu({ onOpenSettings }: UserMenuProps) {
 		};
 		getUser();
 
-		// Listen for auth changes
 		const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
 			setUser(session?.user ?? null);
 		});
 
 		return () => subscription.unsubscribe();
-	}, [supabase]);
+	}, []);
 
 	const handleSignOut = async () => {
-		if (!supabase) {
-			navigate('/login');
-			return;
-		}
-
 		// Clear iOS Keychain token before signing out
 		await clearAuthTokenOnLogout();
 		await supabase.auth.signOut();
