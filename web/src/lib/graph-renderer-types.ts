@@ -39,5 +39,7 @@ export interface GraphRendererProps {
   onNodeClick: (id: string) => void
   onNodeHover: (node: GraphNode | null) => void
   onEngineStop: () => void
+  onLongPressNode?: (nodeId: string) => void
+  neighborSetsByNode?: Map<string, Set<string>>
   initialTilt?: number
 }

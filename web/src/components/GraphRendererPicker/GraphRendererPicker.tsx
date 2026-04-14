@@ -38,9 +38,9 @@ const SEGMENTS: {
   label: string
   sublabel: string
 }[] = [
-  { value: 'canvas', label: 'Canvas', sublabel: 'stable' },
-  { value: 'webgl',  label: 'WebGL',  sublabel: 'beta'   },
-  { value: 'three',  label: '3D',     sublabel: 'beta'   },
+  { value: 'canvas', label: '2D · Canvas',  sublabel: 'default' },
+  { value: 'webgl',  label: '2D · WebGL',   sublabel: 'GPU'     },
+  { value: 'three',  label: '3D · Three.js', sublabel: 'depth'  },
 ]
 
 export function GraphRendererPicker() {

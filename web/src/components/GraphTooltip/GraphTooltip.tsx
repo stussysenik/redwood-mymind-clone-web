@@ -79,7 +79,7 @@ function GraphTooltipInner({ node, position, connectedNames = [] }: GraphTooltip
 				)}
 
 				{/* Tags — compact */}
-				{node.tags.length > 0 && (
+				{(node.tags?.length ?? 0) > 0 && (
 					<div className="flex flex-wrap gap-1 mt-2">
 						{node.tags.slice(0, 4).map((tag) => (
 							<span
@@ -89,9 +89,9 @@ function GraphTooltipInner({ node, position, connectedNames = [] }: GraphTooltip
 								#{tag}
 							</span>
 						))}
-						{node.tags.length > 4 && (
+						{(node.tags?.length ?? 0) > 4 && (
 							<span className="text-[10px] text-[var(--foreground-muted)]">
-								+{node.tags.length - 4}
+								+{(node.tags?.length ?? 0) - 4}
 							</span>
 						)}
 					</div>

@@ -136,6 +136,21 @@ function extractDomain(url: string | null | undefined): string | null {
   }
 }
 
+/** Returns `domain/path?query` truncated to ~60 chars — the "exact link" form. */
+function formatCompactUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const { hostname, pathname, search } = new URL(url)
+    const host = hostname.replace('www.', '')
+    const path = pathname !== '/' ? pathname : ''
+    const qs = search && search !== '?' ? search : ''
+    const full = host + path + qs
+    return full.length > 58 ? full.slice(0, 55) + '…' : full
+  } catch {
+    return null
+  }
+}
+
 /** Check if a URL points to a supported video platform. */
 function isVideoUrl(url: string | null | undefined): boolean {
   if (!url) return false
@@ -1322,16 +1337,18 @@ export function CardDetailModal({
                       </span>
                     </div>
                   )}
-                  {/* Source domain */}
-                  {domain && (
+                  {/* Source URL — full path, not just domain */}
+                  {card.url && (
                     <a
-                      href={card.url || '#'}
+                      href={card.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1 inline-flex min-h-[44px] items-center gap-1.5 py-2 transition-colors hover:text-[var(--accent-primary)]"
+                      className="mt-1 inline-flex min-h-[44px] items-center gap-1.5 py-2 font-mono text-[11px] transition-colors hover:text-[var(--accent-primary)]"
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      {domain}
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                      <span className="break-all leading-snug">
+                        {formatCompactUrl(card.url)}
+                      </span>
                     </a>
                   )}
                 </div>
@@ -1476,52 +1493,45 @@ export function CardDetailModal({
                   ) : (
                     <button
                       onClick={() => setIsAddingTag(true)}
-                      className="flex min-h-[36px] items-center gap-1 rounded-full bg-[var(--accent-primary)] px-3.5 py-1.5 text-sm font-bold text-white shadow-sm shadow-orange-200 transition-opacity hover:opacity-90 active:opacity-80"
+                      className="flex min-h-[36px] items-center gap-1 rounded border border-[var(--border)] px-3.5 py-1.5 text-sm font-medium transition-colors hover:border-[var(--border-emphasis)]"
+                      style={{ color: 'var(--foreground-muted)' }}
                       data-testid="tag-start-button"
                     >
                       + Add Tag
                     </button>
                   )}
 
-                  {tags.map((tag) => {
-                    const color = getTagColor(tag)
-                    return (
-                      <div
-                        key={tag}
-                        className="group flex min-h-[36px] items-center rounded-full border pr-1 text-sm font-medium transition-colors hover:border-[var(--accent-primary)]"
-                        style={{
-                          backgroundColor: color.bg,
-                          borderColor: color.bg,
-                          color: color.text,
+                  {tags.map((tag) => (
+                    <div
+                      key={tag}
+                      className="group flex min-h-[36px] items-center rounded border border-[var(--border)] pr-1 text-sm font-medium transition-colors hover:border-[var(--border-emphasis)]"
+                    >
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams()
+                          params.set('q', `#${tag}`)
+                          navigate('/?' + params.toString())
+                          onClose()
                         }}
+                        className="px-3 py-1.5 text-left"
+                        type="button"
+                        style={{ color: 'var(--foreground-muted)' }}
                       >
-                        <button
-                          onClick={() => {
-                            const params = new URLSearchParams()
-                            params.set('q', `#${tag}`)
-                            navigate('/?' + params.toString())
-                            onClose()
-                          }}
-                          className="rounded-full px-3 py-1.5 text-left hover:opacity-80"
-                          type="button"
-                          style={{ color: color.text }}
-                        >
-                          {tag}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemoveTag(tag)
-                          }}
-                          className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
-                          style={{ color: color.text }}
-                          aria-label={`Remove tag ${tag}`}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )
-                  })}
+                        #{tag}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveTag(tag)
+                        }}
+                        className="inline-flex min-h-[28px] min-w-[28px] items-center justify-center rounded transition-colors hover:text-red-500 active:text-red-600 md:opacity-0 md:group-hover:opacity-100"
+                        style={{ color: 'var(--foreground-muted)' }}
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 

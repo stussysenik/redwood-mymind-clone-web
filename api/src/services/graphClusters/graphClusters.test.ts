@@ -55,7 +55,7 @@ describe('graphClusters service', () => {
         },
       ])
 
-      const result = await graphClusters({})
+      const result = (await graphClusters({})) as Array<{ name: string }>
 
       expect(graphClusterFindManyMock).toHaveBeenCalledWith({
         where: { userId: mockUserId },
@@ -89,7 +89,7 @@ describe('graphClusters service', () => {
         updatedAt: new Date(),
       })
 
-      const result = await graphCluster({ id: mockClusterId })
+      const result = (await graphCluster({ id: mockClusterId })) as { name: string } | null
 
       expect(graphClusterFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockClusterId, userId: mockUserId },
@@ -119,13 +119,13 @@ describe('graphClusters service', () => {
         updatedAt: new Date(),
       })
 
-      const result = await createGraphCluster({
+      const result = (await createGraphCluster({
         input: {
           name: 'New Cluster',
           note: 'A note',
           nodeIds: [mockCardId],
         },
-      })
+      })) as { name: string }
 
       expect(cardFindManyMock).toHaveBeenCalledWith({
         where: {
@@ -254,12 +254,12 @@ describe('graphClusters service', () => {
         nodeIds: [mockCardId],
       })
 
-      const result = await updateGraphCluster({
+      const result = (await updateGraphCluster({
         id: mockClusterId,
         input: {
           name: 'Updated Name',
         },
-      })
+      })) as { name: string }
 
       expect(graphClusterFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockClusterId, userId: mockUserId },

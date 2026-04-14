@@ -1,7 +1,9 @@
 import type { QueryResolvers, MutationResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
-import { validate as validateUuid } from 'uuid'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isUuid = (s: string) => UUID_RE.test(s)
 
 // Validate anchor exists and belongs to the user
 async function validateAnchor(
@@ -9,7 +11,7 @@ async function validateAnchor(
   anchorId: string,
   userId: string
 ): Promise<void> {
-  if (!validateUuid(anchorId)) {
+  if (!isUuid(anchorId)) {
     throw new Error('Invalid anchor ID format')
   }
 

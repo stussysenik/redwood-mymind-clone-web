@@ -61,7 +61,7 @@ describe('graphAnnotations service', () => {
         },
       ])
 
-      const result = await graphAnnotations({})
+      const result = (await graphAnnotations({})) as Array<{ text: string }>
 
       expect(graphAnnotationFindManyMock).toHaveBeenCalledWith({
         where: { userId: mockUserId },
@@ -106,7 +106,7 @@ describe('graphAnnotations service', () => {
         updatedAt: new Date(),
       })
 
-      const result = await graphAnnotation({ id: mockAnnotationId })
+      const result = (await graphAnnotation({ id: mockAnnotationId })) as { text: string } | null
 
       expect(graphAnnotationFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockAnnotationId, userId: mockUserId },
@@ -139,7 +139,7 @@ describe('graphAnnotations service', () => {
         updatedAt: new Date(),
       })
 
-      const result = await createGraphAnnotation({
+      const result = (await createGraphAnnotation({
         input: {
           anchorType: 'node',
           anchorId: mockCardId,
@@ -148,7 +148,7 @@ describe('graphAnnotations service', () => {
           offsetY: 2.0,
           offsetZ: 3.0,
         },
-      })
+      })) as { text: string; anchorType: string }
 
       expect(cardFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockCardId, userId: mockUserId, deletedAt: null },
@@ -180,13 +180,13 @@ describe('graphAnnotations service', () => {
         updatedAt: new Date(),
       })
 
-      const result = await createGraphAnnotation({
+      const result = (await createGraphAnnotation({
         input: {
           anchorType: 'cluster',
           anchorId: mockClusterId,
           text: 'Cluster annotation',
         },
-      })
+      })) as { anchorType: string }
 
       expect(graphClusterFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockClusterId, userId: mockUserId },
@@ -277,12 +277,12 @@ describe('graphAnnotations service', () => {
         text: 'Updated text',
       })
 
-      const result = await updateGraphAnnotation({
+      const result = (await updateGraphAnnotation({
         id: mockAnnotationId,
         input: {
           text: 'Updated text',
         },
-      })
+      })) as { text: string }
 
       expect(graphAnnotationFindFirstMock).toHaveBeenCalledWith({
         where: { id: mockAnnotationId, userId: mockUserId },

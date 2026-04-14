@@ -157,7 +157,9 @@ supabase
 **Default (always, 100% coverage):** d3-force-3d CPU simulation — current implementation, unchanged.
 
 **Experimental-Stable: Rust WASM Barnes-Hut (97% browser coverage)**  
-Rust compiled via `wasm-pack build --target web`. Exports a `ForceSimulation` struct with a `.tick()` method that runs one Barnes-Hut step on node positions. The WASM module is `~50KB` gzipped — smaller than the current d3-force-3d bundle. Near-native speed: 10,000 nodes at 60fps is achievable.
+Rust compiled via `wasm-pack build --target web`. Exports a `ForceSimulation` struct with a `.tick()` method that runs one Barnes-Hut step on node positions. The WASM module is `~100KB` gzipped (after `wasm-opt -Oz`). Near-native speed: 10,000 nodes at 60fps is achievable. Load via `WebAssembly.instantiateStreaming` with a loading state; fall back to d3 on any error. Pre-built `.wasm` committed to `web/public/wasm/byoa-physics/` (Option A); CI build step deferred.
+
+> **Note on gpu.js:** Removed from the engine roster. gpu.js is unmaintained since 2021, has no TypeScript types, and its O(n²) ceiling falls below where Rust WASM already operates. It is not included in the panel.
 
 ```rust
 // crates/byoa-physics/src/lib.rs
@@ -176,8 +178,8 @@ impl ForceSimulation {
 }
 ```
 
-**Experimental-Stable: gpu.js WebGL Compute (99% browser coverage)**  
-gpu.js compiles JS kernel functions to GLSL fragment shaders, running on WebGL — universally supported since 2015. N-body direct summation: O(n²) but GPU-parallelised. Fast for n < 5000. Above that, WASM Barnes-Hut wins.
+~~**Experimental-Stable: gpu.js WebGL Compute**~~  
+*(Removed — abandonware since 2021, no TS types, O(n²) ceiling below Rust WASM. Replaced by direct TypeGPU path below.)*
 
 **Experimental-Cutting-Edge: TypeGPU WebGPU (~70% browser coverage)**  
 WebGPU compute shader via TypeGPU. Labeled "Chrome/Edge only" in the experimental panel. Not a default path. Included for research and future readiness only. No degradation — if WebGPU is unavailable, the flag is disabled automatically and the panel shows a ⚠ next to the checkbox.

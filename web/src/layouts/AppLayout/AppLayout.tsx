@@ -13,8 +13,10 @@ import { ShuffleModal } from 'src/components/ShuffleModal/ShuffleModal'
 import { ToastProvider } from 'src/components/Toast/Toast'
 import { LocalAIProvider } from 'src/lib/local-ai'
 import { initTypography } from 'src/lib/typography'
+import { initCardLabelStyle } from 'src/lib/cardLabelStyle'
 
 initTypography()
+initCardLabelStyle()
 
 // Apply persisted accent color on load
 if (typeof window !== 'undefined') {

@@ -13,6 +13,8 @@ import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type
 import { useMutation, useQuery } from '@redwoodjs/web';
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal';
+import { ClusterListSheet } from 'src/components/ClusterListSheet/ClusterListSheet';
+import { ClusterSheet } from 'src/components/ClusterSheet/ClusterSheet';
 import { GraphDimensionToggle } from 'src/components/GraphDimensionToggle/GraphDimensionToggle';
 import { GraphFilterPanel } from 'src/components/GraphFilterPanel/GraphFilterPanel';
 import { GraphDetailPanel } from 'src/components/GraphDetailPanel/GraphDetailPanel';
@@ -26,7 +28,10 @@ import { haptic } from 'src/lib/haptics';
 import type { GraphNode } from 'src/lib/graph';
 import type { RendererBackend, GraphDimension } from 'src/lib/graph-renderer-types';
 import type { Card } from 'src/lib/types';
-import { Loader2, Network, Rows3 } from 'lucide-react';
+import { CREATE_GRAPH_CLUSTER_MUTATION } from 'src/components/GraphClient/graphClustersFragments';
+import { useClusterSelection } from 'src/components/GraphClient/useClusterSelection';
+import type { ThreeGraphRendererHandle } from 'src/components/ThreeGraphRenderer/ThreeGraphRenderer';
+import { Layers, Loader2, Network, Rows3 } from 'lucide-react';
 
 // =============================================================================
 // GRAPHQL — fetch a single card for the detail modal
@@ -296,6 +301,34 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 	const effectiveRenderer: RendererBackend = localDimension === '3d'
 		? 'three'
 		: (rendererBackend === 'three' ? 'canvas' : rendererBackend);
+
+	// -------------------------------------------------------------------------
+	// CLUSTER STATE — long-press → flood-fill selection → ClusterSheet save
+	// useClusterSelection hook is called after neighborIndex (later below).
+	// -------------------------------------------------------------------------
+	const [clusterSheetOpen, setClusterSheetOpen] = useState(false);
+	const [clusterListSheetOpen, setClusterListSheetOpen] = useState(false);
+	const [clusterSaving, setClusterSaving] = useState(false);
+	const [clusterError, setClusterError] = useState<string | null>(null);
+
+	// Ref to the Three.js renderer so we can call frameTo on cluster restore
+	const threeRendererRef = useRef<ThreeGraphRendererHandle>(null);
+
+	const [createClusterMutation] = useMutation(CREATE_GRAPH_CLUSTER_MUTATION, {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		update(cache, { data }: any) {
+			const newCluster = data?.createGraphCluster;
+			if (!newCluster) return;
+			cache.modify({
+				fields: {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					graphClusters(existing: any[] = []) {
+						return [newCluster, ...existing];
+					},
+				},
+			});
+		},
+	});
 
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
@@ -715,6 +748,15 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 		return { idx, titleMap, typeMap, colorMap, tagsMap, linkMeta };
 	}, [graphData]);
 
+	// Neighbor sets per node — passed to WebGL renderer for correct focus dimming
+	const neighborSetsByNode = useMemo(() => {
+		const m = new Map<string, Set<string>>();
+		for (const [id, s] of Object.entries(neighborIndex.idx)) {
+			m.set(id, s);
+		}
+		return m;
+	}, [neighborIndex]);
+
 	const focusedNeighbors = useMemo(() => {
 		if (!focusedNodeId) return null;
 		return neighborIndex.idx[focusedNodeId] ?? new Set<string>();
@@ -738,6 +780,66 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 			})
 			.sort((a, b) => b.weight - a.weight);
 	}, [focusedNodeId, focusedNeighbors, neighborIndex]);
+
+	// -------------------------------------------------------------------------
+	// CLUSTER SELECTION — uses existing hook (placed after neighborIndex)
+	// -------------------------------------------------------------------------
+	const {
+		selectedNodeIds: selectedClusterNodeIds,
+		startSelection,
+		clearSelection: clearClusterSelection,
+		setSelectedNodeIds: restoreClusterSelection,
+	} = useClusterSelection({ neighborIndex: neighborIndex.idx });
+
+	const handleLongPressNode = useCallback((nodeId: string) => {
+		startSelection(nodeId); // 2-hop flood-fill + haptic built into the hook
+		setClusterError(null);
+		setClusterSheetOpen(true);
+	}, [startSelection]);
+
+	const handleClusterSave = useCallback(async (name: string, note: string) => {
+		setClusterSaving(true);
+		setClusterError(null);
+		try {
+			await createClusterMutation({
+				variables: {
+					input: {
+						name,
+						note: note || null,
+						nodeIds: Array.from(selectedClusterNodeIds),
+					},
+				},
+			});
+			setClusterSheetOpen(false);
+			clearClusterSelection();
+			showToast('Cluster saved', 'success');
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Failed to save cluster';
+			setClusterError(msg);
+		} finally {
+			setClusterSaving(false);
+		}
+	}, [createClusterMutation, selectedClusterNodeIds, clearClusterSelection, showToast]);
+
+	// Restore a saved cluster: highlight its nodes + pan Three camera to centroid
+	const handleClusterRestore = useCallback((cluster: { nodeIds: string[] }) => {
+		restoreClusterSelection(new Set(cluster.nodeIds));
+		// In 3D mode, pan the camera to the centroid of the restored cluster
+		if (effectiveRenderer === 'three' && threeRendererRef.current) {
+			// Compute centroid from force-simulation positions stored on graph nodes
+			const positions = cluster.nodeIds
+				.map((id) => graphData.nodes.find((n) => n.id === id))
+				.filter(Boolean)
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				.map((n: any) => ({ x: n.x as number | undefined, y: n.y as number | undefined }))
+				.filter((p) => p.x != null && p.y != null) as { x: number; y: number }[];
+			if (positions.length > 0) {
+				const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+				const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+				threeRendererRef.current.frameTo({ x: cx, y: cy }, 200);
+			}
+		}
+	}, [effectiveRenderer, graphData.nodes, restoreClusterSelection]);
 
 	const maxWeight = useMemo(
 		() => graphData.links.reduce((m, l) => Math.max(m, l.weight), 1),
@@ -1179,11 +1281,14 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 						onNodeClick={handleNodeClickById}
 						onNodeHover={handleNodeHoverById}
 						onEngineStop={handleEngineStop}
+						neighborSetsByNode={neighborSetsByNode}
 					/>
 				</Suspense>
 			) : viewMode === 'graph' && effectiveRenderer === 'three' ? (
 				<Suspense fallback={<div className="flex items-center justify-center w-full h-full"><Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" /></div>}>
 					<ThreeGraphRenderer
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						ref={threeRendererRef as any}
 						nodes={graphData.nodes}
 						links={graphData.links}
 						dimensions={dimensions}
@@ -1194,6 +1299,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 						onNodeHover={handleNodeHoverById}
 						onEngineStop={handleEngineStop}
 						initialTilt={localDimension === '3d' ? 0.5 : 0}
+						onLongPressNode={handleLongPressNode}
 					/>
 				</Suspense>
 			) : !isReady || !ForceGraphCanvas ? (
@@ -1281,6 +1387,25 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 				/>
 			)}
 
+			{/* Clusters button — bottom-left floating pill, thumb-reach on mobile */}
+			{viewMode === 'graph' && (
+				<button
+					onClick={() => setClusterListSheetOpen(true)}
+					className="absolute bottom-6 left-4 z-40 flex items-center gap-1.5 sm:bottom-16
+						px-3 py-2 rounded-full text-sm font-medium select-none
+						bg-[var(--surface-floating)] border border-[var(--border-subtle)]
+						shadow-[var(--shadow-sm)]
+						text-[var(--foreground-muted)]
+						hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]
+						active:scale-95 transition-all"
+					style={{ minHeight: '44px' }}
+					aria-label="View saved clusters"
+				>
+					<Layers className="w-4 h-4 shrink-0" aria-hidden="true" />
+					<span>Clusters</span>
+				</button>
+			)}
+
 			{/* Focus mode hint — sits below the filter panel at the top */}
 			{viewMode === 'graph' && !focusedNodeId && hasFilteredLinks && (
 				<div
@@ -1330,6 +1455,23 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 					)}
 				</>
 			)}
+
+			{/* Cluster save sheet — opens on long-press in 3D mode */}
+			<ClusterSheet
+				isOpen={clusterSheetOpen}
+				onClose={() => { setClusterSheetOpen(false); clearClusterSelection(); setClusterError(null); }}
+				onSave={handleClusterSave}
+				nodeCount={selectedClusterNodeIds.size}
+				isSaving={clusterSaving}
+				error={clusterError}
+			/>
+
+			{/* Cluster list sheet — browse, restore, and delete saved clusters */}
+			<ClusterListSheet
+				isOpen={clusterListSheetOpen}
+				onClose={() => setClusterListSheetOpen(false)}
+				onRestore={handleClusterRestore}
+			/>
 		</div>
 	);
 }

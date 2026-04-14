@@ -1,7 +1,9 @@
 import type { QueryResolvers, MutationResolvers } from 'types/graphql'
 
 import { db } from 'src/lib/db'
-import { validate as validateUuid } from 'uuid'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isUuid = (s: string) => UUID_RE.test(s)
 
 // Validate node IDs exist and belong to the user
 async function validateNodeIds(nodeIds: string[], userId: string): Promise<string[]> {
@@ -10,7 +12,7 @@ async function validateNodeIds(nodeIds: string[], userId: string): Promise<strin
   }
 
   // Validate UUID format
-  const invalidIds = nodeIds.filter(id => !validateUuid(id))
+  const invalidIds = nodeIds.filter(id => !isUuid(id))
   if (invalidIds.length > 0) {
     throw new Error(`Invalid node IDs: ${invalidIds.join(', ')}`)
   }

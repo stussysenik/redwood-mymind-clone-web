@@ -55,6 +55,7 @@ export function WebGLGraphRenderer({
   onNodeHover,
   onEngineStop,
   darkMode,
+  neighborSetsByNode,
 }: GraphRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +170,8 @@ export function WebGLGraphRenderer({
     }
 
     // ── Render loop (Pixi ticker) ────────────────────────────────────────────
-    const focusedId = focusedNodeId  // captured at init; re-init on change
+    const focusedId        = focusedNodeId    // captured at init; re-init on change
+    const neighborSets     = neighborSetsByNode  // same capture pattern
 
     app.ticker.add(() => {
       // Redraw all edges in one Graphics call
@@ -198,7 +200,7 @@ export function WebGLGraphRenderer({
         g.y = sn.y ?? 0
 
         const isFocused    = sn.id === focusedId
-        const isNeighbor   = false  // neighbour index not yet wired
+        const isNeighbor   = focusedId ? (neighborSets?.get(focusedId)?.has(sn.id) ?? false) : false
         const inFocusMode  = focusedId !== null
         g.alpha = inFocusMode && !isFocused && !isNeighbor ? 0.12 : 1
       }
@@ -233,7 +235,7 @@ export function WebGLGraphRenderer({
       app.stage.scale.y *= scaleDelta
     }, { passive: false })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimensions.width, dimensions.height, nodes, links, focusedNodeId, darkMode])
+  }, [dimensions.width, dimensions.height, nodes, links, focusedNodeId, darkMode, neighborSetsByNode])
 
   useEffect(() => {
     let cancelled = false

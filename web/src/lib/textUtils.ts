@@ -22,22 +22,37 @@
 export function decodeHtmlEntities(text: string): string {
   if (!text) return ''
 
-  const entities: Record<string, string> = {
+  // Step 1: decimal numeric entities  &#064; → @
+  let decoded = text.replace(/&#(\d{1,6});/g, (_, num) => {
+    const code = parseInt(num, 10)
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : _
+  })
+
+  // Step 2: hex numeric entities  &#x40; → @
+  decoded = decoded.replace(/&#x([0-9a-f]{1,6});/gi, (_, hex) => {
+    const code = parseInt(hex, 16)
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : _
+  })
+
+  // Step 3: common named entities
+  const named: Record<string, string> = {
     '&amp;': '&',
     '&lt;': '<',
     '&gt;': '>',
     '&quot;': '"',
-    '&#39;': "'",
     '&apos;': "'",
-    '&nbsp;': ' ',
-    '&#x27;': "'",
-    '&#x2F;': '/',
-    '&#60;': '<',
-    '&#62;': '>',
+    '&nbsp;': '\u00a0',
+    '&mdash;': '—',
+    '&ndash;': '–',
+    '&lsquo;': '\u2018',
+    '&rsquo;': '\u2019',
+    '&ldquo;': '\u201c',
+    '&rdquo;': '\u201d',
+    '&hellip;': '…',
+    '&copy;': '©',
+    '&reg;': '®',
+    '&trade;': '™',
   }
 
-  return text.replace(
-    /&(?:amp|lt|gt|quot|apos|nbsp|#39|#x27|#x2F|#60|#62);/gi,
-    (match) => entities[match.toLowerCase()] || match
-  )
+  return decoded.replace(/&[a-z]+;/gi, (match) => named[match.toLowerCase()] ?? match)
 }

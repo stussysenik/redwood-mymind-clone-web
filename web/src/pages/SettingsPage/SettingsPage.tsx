@@ -13,6 +13,7 @@ import { GraphRendererPicker } from 'src/components/GraphRendererPicker/GraphRen
 import { useTheme } from 'src/lib/theme'
 
 import { useTypography, PAIRINGS } from 'src/lib/typography'
+import { useCardLabelStyle, CARD_LABEL_STYLES } from 'src/lib/cardLabelStyle'
 
 const ACCENT_STORAGE_KEY = 'byoa-accent-color'
 const SAVED_COLORS_KEY = 'byoa-saved-colors'
@@ -67,6 +68,7 @@ const SettingsPage = () => {
   const localAI = useLocalAI()
   const { theme, setTheme } = useTheme()
   const { pairing, setPairing } = useTypography()
+  const { style: cardLabelStyle, setStyle: setCardLabelStyle } = useCardLabelStyle()
   const [savedAccent, setSavedAccent] = useState(getStoredAccent) // committed color
   const [previewColor, setPreviewColor] = useState(getStoredAccent) // live picker color
   const [hexInput, setHexInput] = useState(getStoredAccent)
@@ -209,6 +211,41 @@ const SettingsPage = () => {
                         {p.specimen}
                       </p>
                     </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Card labels — source pill style over card images */}
+            <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+              <p className="text-sm mb-3" style={{ color: 'var(--foreground)' }}>Card labels</p>
+              <div className="grid grid-cols-2 gap-2">
+                {CARD_LABEL_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setCardLabelStyle(s.id)}
+                    className="rounded-lg px-3 py-3 text-left transition-all"
+                    style={{
+                      backgroundColor:
+                        cardLabelStyle === s.id ? 'var(--accent-light)' : 'var(--surface-soft)',
+                      border:
+                        cardLabelStyle === s.id
+                          ? '1.5px solid var(--accent-primary)'
+                          : '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--foreground)' }}
+                    >
+                      {s.label}
+                    </p>
+                    <p
+                      className="text-[11px] leading-snug mt-0.5"
+                      style={{ color: 'var(--foreground-muted)' }}
+                    >
+                      {s.description}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -445,11 +482,14 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        {/* Graph renderer */}
+        {/* Graph renderer — 2D backend picker (advanced) */}
         <section className="mb-8">
-          <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--foreground-muted)' }}>
+          <h3 className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--foreground-muted)' }}>
             Graph renderer
           </h3>
+          <p className="text-xs mb-3" style={{ color: 'var(--foreground-muted)', opacity: 0.7 }}>
+            Advanced: when 2D is active, pick which 2D backend renders your graph.
+          </p>
           <div
             className="p-4 rounded-xl"
             style={{ backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-default)' }}

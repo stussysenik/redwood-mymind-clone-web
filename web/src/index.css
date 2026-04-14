@@ -550,6 +550,84 @@ h1, h2, h3 {
 }
 
 /* =============================================================================
+   FEED CARD LABELS — domain/source pill over the card visual
+   Two variants, switched via [data-card-label-style] on <html>:
+     • blend  (default) — pure typography with tone-aware contrast
+     • glass            — frosted pill with backdrop blur
+   ============================================================================= */
+.feed-card-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Blend variant — default. Fallback uses a tight dark halo (stroke + shadow)
+   that stays legible on any image. The React layer augments this by sampling
+   the image and applying .label-on-dark / .label-on-light for crisp contrast
+   against flat-colored imagery. */
+:root:not([data-card-label-style]) .feed-card-label,
+[data-card-label-style='blend'] .feed-card-label {
+  color: #ffffff;
+  -webkit-text-stroke: 0.75px rgba(0, 0, 0, 0.78);
+  paint-order: stroke fill;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+[data-card-label-style='blend'] .feed-card-label.label-on-dark {
+  color: rgba(255, 255, 255, 0.96);
+  -webkit-text-stroke: 0 transparent;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+[data-card-label-style='blend'] .feed-card-label.label-on-light {
+  color: rgba(0, 0, 0, 0.88);
+  -webkit-text-stroke: 0 transparent;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* Glass variant — same regardless of backdrop. */
+[data-card-label-style='glass'] .feed-card-label {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.96);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08)
+  );
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 4px 16px -4px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Glass variant with dark-tone override uses darker fill so the frosted
+   look still reads over very bright imagery. */
+[data-card-label-style='glass'] .feed-card-label.label-on-light {
+  color: rgba(0, 0, 0, 0.92);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0.38)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 4px 16px -4px rgba(0, 0, 0, 0.18);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* =============================================================================
    MASONRY LAYOUT (CSS Columns, mobile-first)
    ============================================================================= */
 

@@ -9,7 +9,7 @@
  *   5. No JS console errors on any backend
  */
 
-import { expect, login, test } from './support/fixtures'
+import { expect, login, seedGraphCards, test } from './support/fixtures'
 
 const BACKENDS = ['Canvas', 'WebGL', '3D'] as const
 type Backend = (typeof BACKENDS)[number]
@@ -114,6 +114,8 @@ test.describe('Graph Renderer Picker — Settings UI', () => {
 test.describe('Graph Renderer Picker — Graph page integration', () => {
   test.beforeEach(async ({ page, testUser }) => {
     await login(page, testUser)
+    // Seed cards so the graph has visible connected nodes across all backends
+    await seedGraphCards(testUser)
   })
 
   // Parametrised: each backend should mount a canvas without console errors

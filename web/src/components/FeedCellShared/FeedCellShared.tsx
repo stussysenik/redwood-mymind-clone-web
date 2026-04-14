@@ -18,12 +18,18 @@ import { navigate } from '@redwoodjs/router'
 
 import { AnalyzingIndicator } from 'src/components/AnalyzingIndicator'
 import { getTagColor } from 'src/components/TagDisplay/TagDisplay'
+import { decodeHtmlEntities } from 'src/lib/text-utils'
 import {
   formatRemainingTime,
   getEnrichmentProgress,
   getProcessingState,
 } from 'src/lib/enrichment-timing'
 import { getTrustedCardVisualSources } from 'src/lib/imageProxy'
+import {
+  pickLabelPlacement,
+  getCachedLabelPlacement,
+  type LabelPlacement,
+} from 'src/lib/labelCorner'
 import {
   ENRICHMENT_PROGRESS_STAGES,
   toProgressEnrichmentStage,
@@ -127,6 +133,26 @@ function getHumanSourceLabel(url: string | null | undefined): string | null {
   return root.replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
+function getCornerPositionClass(corner: LabelPlacement['corner'] | undefined) {
+  switch (corner) {
+    case 'tl':
+      return 'top-2.5 left-3'
+    case 'tr':
+      return 'top-2.5 right-3'
+    case 'br':
+      return 'bottom-2.5 right-3'
+    case 'bl':
+    default:
+      return 'bottom-2.5 left-3'
+  }
+}
+
+function getToneClass(tone: LabelPlacement['tone'] | undefined) {
+  if (tone === 'light') return 'label-on-light'
+  if (tone === 'dark') return 'label-on-dark'
+  return ''
+}
+
 function getVisualBadges(card: FeedCardRecord): string[] {
   const badges: string[] = []
   const domainLabel = getDomainLabel(card.url)
@@ -151,7 +177,7 @@ function getVisualSources(
 function getDisplayTitle(card: FeedCardRecord): string {
   const title = card.title?.trim()
   if (title) {
-    return title
+    return decodeHtmlEntities(title)
   }
 
   if (getProcessingState(card.metadata) !== 'idle') {
@@ -294,6 +320,29 @@ export function FeedCardVisual({
 
   const activeSource = sources.find(({ src }) => !failedSources.includes(src))
 
+  const [labelPlacement, setLabelPlacement] = useState<LabelPlacement | null>(
+    () => (activeSource ? getCachedLabelPlacement(activeSource.src) : null)
+  )
+
+  useEffect(() => {
+    if (!activeSource || !showBadges || visualBadges.length === 0) {
+      setLabelPlacement(null)
+      return
+    }
+    const cached = getCachedLabelPlacement(activeSource.src)
+    if (cached) {
+      setLabelPlacement(cached)
+      return
+    }
+    let cancelled = false
+    pickLabelPlacement(activeSource.src).then((placement) => {
+      if (!cancelled) setLabelPlacement(placement)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeSource?.src, showBadges, visualBadges.length])
+
   const visual = activeSource ? (
     <div
       className="overflow-hidden"
@@ -336,23 +385,17 @@ export function FeedCardVisual({
   )
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ isolation: 'isolate' }}>
       {visual}
       {showBadges && visualBadges.length > 0 && (
         <div
-          className="absolute bottom-2 left-2 z-[1] flex flex-wrap gap-1.5"
+          className={`pointer-events-none absolute z-[1] flex flex-wrap gap-2 ${getCornerPositionClass(labelPlacement?.corner)}`}
           aria-hidden="true"
         >
           {visualBadges.map((badge) => (
             <span
               key={badge}
-              className="rounded-full px-2.5 py-1 text-[10px] font-medium"
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.88)',
-                color: 'var(--foreground)',
-                backdropFilter: 'blur(10px)',
-                boxShadow: 'var(--shadow-sm)',
-              }}
+              className={`feed-card-label ${getToneClass(labelPlacement?.tone)}`}
             >
               {badge}
             </span>
@@ -571,7 +614,7 @@ export function FeedCardDenseRow({
         className="min-w-0 flex-1 truncate text-[13px] tracking-tight font-medium"
         style={{ color: 'var(--foreground)' }}
       >
-        {card.title || 'Untitled'}
+        {decodeHtmlEntities(card.title || 'Untitled')}
       </span>
       {domain && (
         <span
@@ -668,15 +711,15 @@ export function FeedCardListItem({
             )}
 
             <h3
-              className="font-display leading-[1.3]"
+              className="font-display font-semibold leading-[1.25]"
               style={{
                 color: 'var(--foreground)',
-                fontSize: '1.05rem',
+                fontSize: '1.15rem',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
-                letterSpacing: '-0.02em',
+                letterSpacing: '-0.025em',
               }}
             >
               {displayTitle}
@@ -684,9 +727,10 @@ export function FeedCardListItem({
 
             {showSummary && (summary || fallbackSummary) && (
               <p
-                className="mt-1.5 text-[12px] leading-[1.6]"
+                className="mt-1.5 leading-[1.55]"
                 style={{
                   color: 'var(--foreground-muted)',
+                  fontSize: '11px',
                   display: '-webkit-box',
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
@@ -694,7 +738,7 @@ export function FeedCardListItem({
                   wordBreak: 'break-word',
                 }}
               >
-                {summary || fallbackSummary}
+                {decodeHtmlEntities(summary || fallbackSummary || '')}
               </p>
             )}
           </div>
