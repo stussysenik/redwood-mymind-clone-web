@@ -4,7 +4,12 @@
 FROM node:22-slim AS base
 
 RUN corepack enable && corepack prepare yarn@4.6.0 --activate
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Python 3 + pip are needed by the enrichment worker service (scripts/enrich/).
+# Both the web service and the worker service build from this same image;
+# Railway selects which service to run via startCommand in railway.toml.
+RUN apt-get update \
+  && apt-get install -y openssl python3 python3-pip \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -21,6 +26,11 @@ COPY redwood.toml .
 COPY graphql.config.js .
 COPY api api
 COPY web web
+COPY scripts scripts
+
+# Install Python deps for the enrichment worker. System-level because the
+# worker container has no project venv.
+RUN pip3 install --no-cache-dir --break-system-packages dspy-ai python-dotenv
 
 # Generate Prisma client + GraphQL types
 RUN yarn rw prisma generate
@@ -39,7 +49,9 @@ RUN yarn rw build
 FROM node:22-slim AS production
 
 RUN corepack enable && corepack prepare yarn@4.6.0 --activate
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+  && apt-get install -y openssl python3 python3-pip \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

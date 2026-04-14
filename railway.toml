@@ -7,3 +7,20 @@ startCommand = "/app/docker-entrypoint.sh"
 healthcheckPath = "/"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# ── Enrichment Worker ───────────────────────────────────────────────────────
+# Second Railway service — same image, different entrypoint. The worker polls
+# Supabase for weak/long-titled cards, runs the DSPy pipeline, and routes
+# decisions through the three-band confidence gate. See design.md §D5 for the
+# loop architecture and §D6 for failure modes.
+[[services]]
+name = "enrichment-worker"
+
+  [services.build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile"
+
+  [services.deploy]
+  startCommand = "python3 -m scripts.enrich.worker"
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 5

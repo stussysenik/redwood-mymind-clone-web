@@ -6,6 +6,9 @@
 .netlify
 .redwood/*
 !.redwood/README.md
+.claude/
+**/__pycache__/
+**/.redwood/
 dev.db*
 dist
 dist-babel
