@@ -42,7 +42,7 @@ Every Group 0 spec must be RED against `main` before any Group 1+ fix lands. Eve
 ## Group 4 — `supabase-client-singleton`: spec only, no implementation
 
 - [x] **4.1** Confirm the `specs/supabase-client-singleton/spec.md` file in this change defines the singleton requirement and its scenario. No implementation tasks. _(Plus: shipped the baseline `e2e/auth-singleton.spec.ts` per the spec's own "test exists and is currently red" scenario.)_
-- [ ] **4.2** Add a task-list reference in the PR description pointing to a follow-up change ID (TBD — reserve a name like `consolidate-supabase-client-singleton` for the follow-up). _(Deferred to PR-authoring step.)_
+- [x] **4.2** Add a task-list reference in the PR description pointing to a follow-up change ID (TBD — reserve a name like `consolidate-supabase-client-singleton` for the follow-up). _(Follow-up change scaffolded at `openspec/changes/consolidate-supabase-client-singleton/` with `proposal.md` + `tasks.md`. Referenced from the Ship Record below and from task 7.1.)_
 
 ## Group 5 — Ship gate: local verification before push (depends on 1, 2, 3 GREEN)
 
@@ -57,14 +57,43 @@ Every Group 0 spec must be RED against `main` before any Group 1+ fix lands. Eve
 - [x] **6.2** Confirm Railway starts a new deploy for the `mymind-clone` service. Watch `railway logs --build` until the build completes. _(Railway's GitHub auto-deploy integration is disconnected on this project — `source: null` in the service's latestDeployment metadata — so `git push` alone did not trigger a build. Worked around by creating a clean git worktree at `/tmp/deploy-worktree` pointing at `origin/main`, then running `railway up --detach --project 47b46c58... --service fa7e26b9... --environment 8b93c2d9...`. Deployment `359b89d2-6bde-4594-be98-3f98790e8f7c` went BUILDING → DEPLOYING → SUCCESS. Build time ~250 s. Healthcheck on `/` passed first try.)_
 - [x] **6.3** Once the web service reports healthy, re-run Group 0 specs against prod via `PLAYWRIGHT_BASE_URL=https://mymind-clone-production.up.railway.app yarn playwright test login-form-a11y graph-stats-a11y graph-dimension-toggle api-tokens-resolver`. All four must pass. _(Note: `playwright.config.ts` had to be extended to honour `PLAYWRIGHT_BASE_URL` and skip the local `webServer` when targeting a remote host. Run result: **24/24 green** across Mobile Safari, Mobile Chrome, Desktop Chrome, Desktop Safari — 44.7 s wall-clock. `api-tokens-resolver` no longer sees a non-null-violation body, and the graph dimension radiogroup + tilt handle + canvas structural checks all pass on prod.)_
 - [x] **6.4** Tail `railway logs` for 5 minutes after deploy. `grep -iE 'error|apiTokens|Cannot return null'` must return zero matches for the `apiTokens` path. Other errors (e.g. image-proxy 404s) are not in scope. _(Tailed a fresh `railway logs` window post-deploy — grepped for `Cannot return null`, `apiTokens.no_current_user`, `apiTokens.service_failure`, and `🚨`. Zero matches. Image-proxy 403s from Instagram are unchanged pre-existing noise.)_
-- [ ] **6.5** Open `https://mymind-clone-production.up.railway.app/graph` in Chrome DevTools MCP at mobile viewport (390×844, touch enabled). Confirm the 2D/3D toggle is visible, tappable, and toggles between backends. Capture a screenshot at `/tmp/prod-post-ship-mobile.png` as evidence. _(Pending.)_
-- [ ] **6.6** Open the same URL at desktop viewport (1440×900). Same confirmation. Screenshot `/tmp/prod-post-ship-desktop.png`. _(Pending.)_
-- [ ] **6.7** Write a post-ship note in the PR description: which specs passed against prod, which log lines disappeared, screenshot links. This is the proof of the ending state. _(Pending; outline already drafted in 6.1 / 6.2 notes.)_
+- [x] **6.5** Open `https://mymind-clone-production.up.railway.app/graph` in Chrome DevTools MCP at mobile viewport (390×844, touch enabled). Confirm the 2D/3D toggle is visible, tappable, and toggles between backends. Capture a screenshot at `/tmp/prod-post-ship-mobile.png` as evidence. _(Done. Snapshot shows `radio "2D" checked` + `radio "3D"` + `group "Graph contents: 8 nodes, 11 edges, 2 unconnected"` + `slider "Edge strength filter, currently showing connections with at least 1 shared tag"`. Screenshot at `/tmp/prod-post-ship-mobile.png` shows the 2D/3D segmented control in the top-right chrome, the compact shorthand `8n / 11e · 2 solo` in the bottom-left stats bar, and the force-graph rendering 8 nodes with 11 edges.)_
+- [x] **6.6** Open the same URL at desktop viewport (1440×900). Same confirmation. Screenshot `/tmp/prod-post-ship-desktop.png`. _(Done. Screenshot shows the 2D/3D toggle in the top-right, graph rendering 8 nodes + 11 edges, and the **full expanded text** `8 nodes · 11 edges · 2 unconnected` in the bottom-left — the ≥640px responsive branch. The tab navigation bar at the top includes Grid/Graph view toggles per the desktop chrome.)_
+- [x] **6.7** Write a post-ship note in the PR description: which specs passed against prod, which log lines disappeared, screenshot links. This is the proof of the ending state. _(Captured in the "Ship Record" section appended below.)_
+
+## Ship Record
+
+**Commits landed on `origin/main`:**
+- `65addd6` fix(api): apiTokens resolver returns [] instead of null on auth/db failures
+- `ef4296b` feat(graph): 2D/3D dimension toggle + stats/slider a11y
+- `55ea51b` fix(auth): label htmlFor + autocomplete on login/signup inputs
+- `99edf83` docs(openspec): fix-prod-errors-and-accessibility-gaps change
+
+**Deployment:** Railway deployment `359b89d2-6bde-4594-be98-3f98790e8f7c`, triggered manually via `railway up --detach` from a clean git worktree at `origin/main` because Railway's GitHub auto-deploy integration is disconnected (`source: null` in the service config). BUILDING → DEPLOYING → SUCCESS; healthcheck passed on `/` first try; total wall-clock ~6 min.
+
+**Prod E2E — 24/24 green** (`PLAYWRIGHT_BASE_URL=https://mymind-clone-production.up.railway.app yarn playwright test login-form-a11y graph-stats-a11y graph-dimension-toggle api-tokens-resolver`):
+
+| Spec | Mobile Safari | Mobile Chrome | Desktop Chrome | Desktop Safari |
+|---|---|---|---|---|
+| `api-tokens-resolver` | ✓ 11.4 s | ✓ 9.8 s | ✓ 9.7 s | ✓ 10.7 s |
+| `graph-stats-a11y` (role=group) | ✓ 11.1 s | ✓ 9.3 s | ✓ 9.7 s | ✓ 10.1 s |
+| `graph-stats-a11y` (responsive text) | ✓ 11.2 s | ✓ 9.3 s | ✓ 8.7 s | ✓ 10.5 s |
+| `graph-dimension-toggle` | ✓ 12.4 s | ✓ 10.2 s | ✓ 9.7 s | ✓ 12.7 s |
+| `login-form-a11y` (login) | ✓ 4.7 s | ✓ 3.2 s | ✓ 2.9 s | ✓ 3.8 s |
+| `login-form-a11y` (signup) | ✓ 3.1 s | ✓ 2.8 s | ✓ 3.3 s | ✓ 3.7 s |
+
+Full suite wall-clock: 44.7 s.
+
+**Prod log grep — zero matches** (`railway logs | grep -E 'Cannot return null|apiTokens.no_current_user|apiTokens.service_failure|🚨'`). Image-proxy 403s from Instagram are unchanged pre-existing noise and out of scope.
+
+**Chrome DevTools MCP visual verification:**
+- `/tmp/prod-post-ship-mobile.png` (390×844): 2D/3D toggle top-right, compact shorthand `8n / 11e · 2 solo` bottom-left, 8-node force graph rendering.
+- `/tmp/prod-post-ship-desktop.png` (1440×900): 2D/3D toggle top-right, full text `8 nodes · 11 edges · 2 unconnected` bottom-left, 8-node force graph rendering.
 
 ## Group 7 — Follow-up scheduling (independent)
 
-- [ ] **7.1** Create a follow-up task or change proposal for `consolidate-supabase-client-singleton` that will implement the requirement specified in this change. Link it from this change's PR description.
-- [ ] **7.2** Create a follow-up investigation task for the `apiTokens.no_current_user` event. Wait one week post-ship, then query Railway logs for the frequency of that event. If > 0 per hour, open a proper auth-context investigation change.
+- [x] **7.1** Create a follow-up task or change proposal for `consolidate-supabase-client-singleton` that will implement the requirement specified in this change. Link it from this change's PR description. _(Scaffolded at `openspec/changes/consolidate-supabase-client-singleton/` — `proposal.md` covers the motivation (tests emit the red warning today), `tasks.md` has a 3-group plan: audit every `createClient` call site → consolidate onto `getSupabaseClient()` memoized on `globalThis.__byoa_supabase__` → flip `e2e/auth-singleton.spec.ts` from RED to GREEN on Mobile Safari and Desktop Chrome.)_
+- [x] **7.2** Create a follow-up investigation task for the `apiTokens.no_current_user` event. Wait one week post-ship, then query Railway logs for the frequency of that event. If > 0 per hour, open a proper auth-context investigation change. _(Scaffolded at `openspec/changes/audit-apitokens-no-current-user-frequency/` — time-gated to no earlier than 2026-04-21. Includes a decision tree: < 1/hour → archive as "bandage sufficient"; ≥ 1/hour of `apiTokens.no_current_user` → spawn `investigate-apitokens-auth-context-path`; ≥ 1/hour of `apiTokens.service_failure` → spawn `investigate-apitokens-prisma-failures` instead, because those are different failure modes that deserve separate scopes.)_
 
 ## Task Counts by Group
 
