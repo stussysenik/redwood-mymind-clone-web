@@ -44,11 +44,17 @@ const LoginPage = () => {
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium mb-1"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
             Email
           </label>
           <input
+            id="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -63,11 +69,17 @@ const LoginPage = () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium mb-1"
+            style={{ color: 'var(--foreground-muted)' }}
+          >
             Password
           </label>
           <input
+            id="password"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

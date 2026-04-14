@@ -34,9 +34,11 @@ const SignupPage = () => {
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>Email</label>
+          <label htmlFor="email" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>Email</label>
           <input
+            id="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -46,9 +48,11 @@ const SignupPage = () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>Password</label>
+          <label htmlFor="password" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground-muted)' }}>Password</label>
           <input
+            id="password"
             type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
