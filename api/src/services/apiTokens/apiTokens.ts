@@ -13,6 +13,7 @@ import crypto from 'crypto'
 import type { ApiToken } from '@prisma/client'
 
 import { db } from 'src/lib/db'
+import { logger } from 'src/lib/logger'
 
 const TOKEN_REGEX = /^byoa_([a-f0-9]{8})_([a-f0-9]{32})$/
 
@@ -109,4 +110,29 @@ export async function listApiTokens({ userId }: ListApiTokensArgs): Promise<ApiT
     where: { userId, revokedAt: null },
     orderBy: { createdAt: 'desc' },
   })
+}
+
+// Redwood auto-wires the `Query.apiTokens` field to this exported name.
+// The null-check and try/catch are the `graphql-resolver-robustness`
+// contract: the Settings page must never render a non-null-field error,
+// even if the request arrives before `context.currentUser` is populated
+// or if the Prisma query throws.
+export const apiTokens = async (): Promise<ApiToken[]> => {
+  const currentUser = context.currentUser
+  if (!currentUser) {
+    logger.error(
+      { event: 'apiTokens.no_current_user' },
+      'apiTokens resolver hit with no current user'
+    )
+    return []
+  }
+  try {
+    return await listApiTokens({ userId: currentUser.id })
+  } catch (err) {
+    logger.error(
+      { err, event: 'apiTokens.service_failure' },
+      'apiTokens service threw'
+    )
+    return []
+  }
 }
