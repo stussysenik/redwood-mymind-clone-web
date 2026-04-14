@@ -2,6 +2,7 @@ export const schema = gql`
   type UserPreferences {
     userId: String!
     graphRenderer: String!
+    graphDimension: String!
   }
 
   type Query {
@@ -9,6 +10,9 @@ export const schema = gql`
   }
 
   type Mutation {
-    updateUserPreferences(graphRenderer: String!): UserPreferences! @requireAuth
+    updateUserPreferences(
+      graphRenderer: String
+      graphDimension: String
+    ): UserPreferences! @requireAuth
   }
 `

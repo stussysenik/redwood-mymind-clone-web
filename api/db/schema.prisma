@@ -60,9 +60,10 @@ model Space {
 // Synced user preferences — one row per user, upserted on first save.
 // Default values in code mean the table can be empty for existing users.
 model UserPreferences {
-  userId        String   @id @map("user_id")
-  graphRenderer String   @default("canvas") @map("graph_renderer")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  userId         String   @id @map("user_id")
+  graphRenderer  String   @default("canvas") @map("graph_renderer")
+  graphDimension String   @default("2d") @map("graph_dimension")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("user_preferences")
 }

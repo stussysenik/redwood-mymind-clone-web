@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type
 import { useMutation, useQuery } from '@redwoodjs/web';
 
 import { CardDetailModal } from 'src/components/CardDetailModal/CardDetailModal';
+import { GraphDimensionToggle } from 'src/components/GraphDimensionToggle/GraphDimensionToggle';
 import { GraphFilterPanel } from 'src/components/GraphFilterPanel/GraphFilterPanel';
 import { GraphDetailPanel } from 'src/components/GraphDetailPanel/GraphDetailPanel';
 import type { ConnectionItem } from 'src/components/GraphDetailPanel/GraphDetailPanel';
@@ -23,7 +24,7 @@ import { ViewModeToggle } from 'src/components/ViewModeToggle/ViewModeToggle';
 import { usePersistedViewMode } from 'src/hooks/usePersistedViewMode';
 import { haptic } from 'src/lib/haptics';
 import type { GraphNode } from 'src/lib/graph';
-import type { RendererBackend } from 'src/lib/graph-renderer-types';
+import type { RendererBackend, GraphDimension } from 'src/lib/graph-renderer-types';
 import type { Card } from 'src/lib/types';
 import { Loader2, Network, Rows3 } from 'lucide-react';
 
@@ -73,6 +74,15 @@ const DELETE_CARD_MUTATION = gql`
 	}
 `;
 
+const SET_GRAPH_DIMENSION = gql`
+	mutation GraphSetDimension($graphDimension: String!) {
+		updateUserPreferences(graphDimension: $graphDimension) {
+			userId
+			graphDimension
+		}
+	}
+`;
+
 // =============================================================================
 // TYPES & CONSTANTS
 // =============================================================================
@@ -99,6 +109,7 @@ interface GraphClientProps {
 	nodes: readonly GraphClientNode[];
 	links: readonly GraphClientLink[];
 	rendererBackend?: RendererBackend;
+	graphDimension?: GraphDimension;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,7 +272,31 @@ function saveLayout(
 // COMPONENT
 // =============================================================================
 
-export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphClientProps) {
+export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDimension: serverDimension = '2d' }: GraphClientProps) {
+	// -------------------------------------------------------------------------
+	// DIMENSIONALITY STATE — 2D / 3D toggle with optimistic local state
+	// -------------------------------------------------------------------------
+	const [localDimension, setLocalDimension] = useState<GraphDimension>(serverDimension);
+
+	// Sync when the server value changes (e.g., loaded from cache on another device)
+	useEffect(() => { setLocalDimension(serverDimension); }, [serverDimension]);
+
+	const [setDimensionMutation] = useMutation(SET_GRAPH_DIMENSION, {
+		onError: () => setLocalDimension(serverDimension), // rollback on failure
+	});
+
+	const handleDimensionChange = useCallback((next: GraphDimension) => {
+		if (next === localDimension) return;
+		setLocalDimension(next);
+		setDimensionMutation({ variables: { graphDimension: next } });
+	}, [localDimension, setDimensionMutation]);
+
+	// When 3D is active, always use Three; when 2D, fall back to the user's 2D
+	// backend preference (canvas or webgl — but never 'three' in 2D mode).
+	const effectiveRenderer: RendererBackend = localDimension === '3d'
+		? 'three'
+		: (rendererBackend === 'three' ? 'canvas' : rendererBackend);
+
 	const [minWeight, setMinWeight] = useState(1);
 	const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 	const [viewMode, setViewMode] = usePersistedViewMode(
@@ -1087,7 +1122,14 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 
 	return (
 		<div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: viewMode === 'list' ? 'auto' : (isMobile ? 'manipulation' : 'none') }}>
-			<div className="absolute right-4 top-4 z-50">
+			{/* Top-right chrome: 2D/3D toggle + view mode switcher */}
+			<div className="absolute right-4 top-4 z-50 flex items-center gap-2">
+				{viewMode === 'graph' && (
+					<GraphDimensionToggle
+						value={localDimension}
+						onChange={handleDimensionChange}
+					/>
+				)}
 				<ViewModeToggle
 					value={viewMode}
 					onChange={setViewMode}
@@ -1125,7 +1167,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 					links={graphData.links}
 					onCardOpen={setSelectedCardId}
 				/>
-			) : viewMode === 'graph' && rendererBackend === 'webgl' ? (
+			) : viewMode === 'graph' && effectiveRenderer === 'webgl' ? (
 				<Suspense fallback={<div className="flex items-center justify-center w-full h-full"><Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" /></div>}>
 					<WebGLGraphRenderer
 						nodes={graphData.nodes}
@@ -1139,7 +1181,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 						onEngineStop={handleEngineStop}
 					/>
 				</Suspense>
-			) : viewMode === 'graph' && rendererBackend === 'three' ? (
+			) : viewMode === 'graph' && effectiveRenderer === 'three' ? (
 				<Suspense fallback={<div className="flex items-center justify-center w-full h-full"><Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" /></div>}>
 					<ThreeGraphRenderer
 						nodes={graphData.nodes}
@@ -1151,6 +1193,7 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas' }: GraphC
 						onNodeClick={handleNodeClickById}
 						onNodeHover={handleNodeHoverById}
 						onEngineStop={handleEngineStop}
+						initialTilt={localDimension === '3d' ? 0.5 : 0}
 					/>
 				</Suspense>
 			) : !isReady || !ForceGraphCanvas ? (

@@ -2,7 +2,7 @@ import type { GraphDataQuery, GraphDataQueryVariables } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
 import { GraphClient } from 'src/components/GraphClient/GraphClient'
-import type { RendererBackend } from 'src/lib/graph-renderer-types'
+import type { RendererBackend, GraphDimension } from 'src/lib/graph-renderer-types'
 
 export const QUERY = gql`
   query GraphDataQuery($spaceId: String, $tag: String, $minWeight: Int) {
@@ -26,6 +26,7 @@ export const QUERY = gql`
     userPreferences {
       userId
       graphRenderer
+      graphDimension
     }
   }
 `
@@ -73,6 +74,8 @@ export const Success = ({
   const { nodes, links } = graphData
   const rendererBackend =
     (userPreferences?.graphRenderer as RendererBackend | undefined) ?? 'canvas'
+  const graphDimension =
+    (userPreferences?.graphDimension as GraphDimension | undefined) ?? '2d'
 
   if (nodes.length === 0) return <Empty />
 
@@ -84,7 +87,12 @@ export const Success = ({
         backgroundColor: 'var(--background)',
       }}
     >
-      <GraphClient nodes={nodes} links={links} rendererBackend={rendererBackend} />
+      <GraphClient
+        nodes={nodes}
+        links={links}
+        rendererBackend={rendererBackend}
+        graphDimension={graphDimension}
+      />
     </div>
   )
 }

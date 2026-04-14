@@ -9,6 +9,7 @@
 import type { GraphNode } from 'src/lib/graph'
 
 export type RendererBackend = 'canvas' | 'webgl' | 'three'
+export type GraphDimension = '2d' | '3d'
 
 export interface GraphClientNode {
   id: string
@@ -38,4 +39,5 @@ export interface GraphRendererProps {
   onNodeClick: (id: string) => void
   onNodeHover: (node: GraphNode | null) => void
   onEngineStop: () => void
+  initialTilt?: number
 }
