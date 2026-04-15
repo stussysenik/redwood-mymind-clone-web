@@ -768,6 +768,11 @@ interface CacheEntry {
 const GRAPH_CACHE_TTL_MS = 120_000
 const GRAPH_CACHE_MAX = 50
 
+// Hard ceiling on the enrichment pipeline. If scrape/classify/DSPy hangs for
+// longer than this, the pipeline throws and the fallback catch flips the card
+// to `processing: false` so the UI never stays stuck on "retrieving tags".
+const ENRICHMENT_PIPELINE_TIMEOUT_MS = 3 * 60 * 1000
+
 const _graphCache = new Map<string, CacheEntry>()
 const _graphCacheOrder: string[] = []
 
@@ -1013,8 +1018,23 @@ export const enrichCard: MutationResolvers['enrichCard'] = async ({
 
 export async function enrichCardPipeline(cardId: string): Promise<void> {
   let card: any
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
 
-  try {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Enrichment pipeline timed out after ${Math.round(
+              ENRICHMENT_PIPELINE_TIMEOUT_MS / 1000
+            )}s`
+          )
+        ),
+      ENRICHMENT_PIPELINE_TIMEOUT_MS
+    )
+  })
+
+  const runPipeline = async () => {
     // 1. Fetch card from DB
     card = await db.card.findUnique({ where: { id: cardId } })
     if (!card) {
@@ -1603,6 +1623,10 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
       { cardId, totalMs, scrapeMs, classifyMs, enrichmentSource },
       'Enrichment pipeline complete'
     )
+  }
+
+  try {
+    await Promise.race([runPipeline(), timeoutPromise])
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown enrichment error'
@@ -1701,6 +1725,8 @@ export async function enrichCardPipeline(cardId: string): Promise<void> {
         /* truly nothing left to do */
       }
     }
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
   }
 }
 

@@ -366,14 +366,27 @@ export function ClusterListSheet({
               </p>
             </div>
           ) : clusters.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-6 gap-3">
+            <div className="flex flex-col items-center justify-center py-16 px-6 gap-4">
               <Layers
-                className="w-10 h-10 text-[var(--foreground-muted)] opacity-30"
+                className="w-12 h-12 text-[var(--foreground-muted)] opacity-30"
                 aria-hidden="true"
               />
-              <p className="text-sm text-[var(--foreground-muted)] text-center">
-                No clusters saved yet
-              </p>
+              <div className="flex flex-col items-center gap-2 text-center max-w-[280px]">
+                <p className="text-base font-semibold text-[var(--foreground)]">
+                  No clusters yet
+                </p>
+                <p className="text-sm text-[var(--foreground-muted)] leading-relaxed">
+                  Clusters group related cards. Switch to{' '}
+                  <span className="font-medium text-[var(--foreground)]">
+                    3D view
+                  </span>
+                  , then{' '}
+                  <span className="font-medium text-[var(--foreground)]">
+                    long-press any node
+                  </span>
+                  {' '}— nearby connections flood-fill so you can name and save the group.
+                </p>
+              </div>
             </div>
           ) : (
             clusters.map((cluster) => (

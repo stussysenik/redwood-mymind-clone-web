@@ -111,9 +111,16 @@ export function ImageLightbox({
     setIsDragging(false)
   }, [])
 
-  // Scroll to zoom
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Scroll to zoom. React attaches onWheel as a *passive* listener, so
+  // calling e.preventDefault() there logs a console warning and doesn't stop
+  // the page from scrolling. Bind the native wheel listener imperatively with
+  // passive:false so we can block the scroll and actually zoom.
+  useEffect(() => {
+    if (!isOpen) return
+    const node = containerRef.current
+    if (!node) return
+
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       setScale((s) => {
@@ -121,9 +128,11 @@ export function ImageLightbox({
         if (newScale === 1) setTranslate({ x: 0, y: 0 })
         return newScale
       })
-    },
-    []
-  )
+    }
+
+    node.addEventListener('wheel', onWheel, { passive: false })
+    return () => node.removeEventListener('wheel', onWheel)
+  }, [isOpen])
 
   // Touch: pinch-to-zoom + pan
   const handleTouchMove = useCallback(
@@ -247,7 +256,6 @@ export function ImageLightbox({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

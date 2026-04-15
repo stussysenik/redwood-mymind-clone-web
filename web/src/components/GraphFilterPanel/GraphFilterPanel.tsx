@@ -27,8 +27,15 @@ function GraphFilterPanelInner({
 
 	return (
 		<div
-			className="absolute bottom-20 left-4 z-40 flex items-center gap-3 sm:bottom-4"
-			style={{ pointerEvents: 'auto' }}
+			className="absolute left-1/2 top-4 z-40 flex -translate-x-1/2 flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-full px-3.5 py-1.5"
+			style={{
+				pointerEvents: 'auto',
+				backgroundColor: 'var(--surface-floating)',
+				border: '1px solid var(--border-subtle)',
+				boxShadow: 'var(--shadow-sm)',
+				backdropFilter: 'blur(12px)',
+				WebkitBackdropFilter: 'blur(12px)',
+			}}
 		>
 			{/* Stats — responsive: full words ≥640px, compact shorthand below */}
 			<div

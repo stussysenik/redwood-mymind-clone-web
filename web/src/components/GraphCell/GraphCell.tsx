@@ -1,8 +1,11 @@
+import { useMemo } from 'react'
+
 import type { GraphDataQuery, GraphDataQueryVariables } from 'types/graphql'
 import type { CellSuccessProps, CellFailureProps } from '@redwoodjs/web'
 
 import { GraphClient } from 'src/components/GraphClient/GraphClient'
 import type { RendererBackend, GraphDimension } from 'src/lib/graph-renderer-types'
+import { decodeHtmlEntities } from 'src/lib/textUtils'
 
 export const QUERY = gql`
   query GraphDataQuery($spaceId: String, $tag: String, $minWeight: Int) {
@@ -77,7 +80,19 @@ export const Success = ({
   const graphDimension =
     (userPreferences?.graphDimension as GraphDimension | undefined) ?? '2d'
 
-  if (nodes.length === 0) return <Empty />
+  // Scraped titles can arrive HTML-encoded (e.g. `&#064;timberland`).
+  // Decode once here so every downstream consumer — canvas labels, detail
+  // panel, list view, tooltip — reads human text.
+  const decodedNodes = useMemo(
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        title: n.title ? decodeHtmlEntities(n.title) : n.title,
+      })),
+    [nodes]
+  )
+
+  if (decodedNodes.length === 0) return <Empty />
 
   return (
     <div
@@ -88,7 +103,7 @@ export const Success = ({
       }}
     >
       <GraphClient
-        nodes={nodes}
+        nodes={decodedNodes}
         links={links}
         rendererBackend={rendererBackend}
         graphDimension={graphDimension}

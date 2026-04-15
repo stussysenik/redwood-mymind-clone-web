@@ -48,11 +48,29 @@ function parseAllowedTarget(rawUrl: string): URL | null {
   }
 }
 
-function imageRequestHeaders(): HeadersInit {
+// Instagram / Facebook CDNs reject requests whose Referer/Origin is not
+// an instagram.com or facebook.com origin — that's the cause of the 403s
+// we see on cdninstagram.com and fbcdn.net. Sending a plausible browser
+// referer fixes the fetch. Signed-URL expiry (`oe=...`) still returns 403
+// after ~24h and is not recoverable without re-resolving the card.
+function imageRequestHeaders(hostname: string): HeadersInit {
+  const normalizedHost = hostname.toLowerCase()
+  const isFacebookOrigin =
+    normalizedHost.endsWith('fbcdn.net') ||
+    normalizedHost.endsWith('facebook.com')
+  const referer = isFacebookOrigin
+    ? 'https://www.facebook.com/'
+    : 'https://www.instagram.com/'
+
   return {
     Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    Referer: referer,
+    'Sec-Fetch-Dest': 'image',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site',
   }
 }
 
@@ -60,7 +78,7 @@ async function fetchAllowedImage(target: URL, redirectCount = 0): Promise<Respon
   const response = await fetch(target.toString(), {
     signal: AbortSignal.timeout(15000),
     redirect: 'manual',
-    headers: imageRequestHeaders(),
+    headers: imageRequestHeaders(target.hostname),
   })
 
   if (!REDIRECT_STATUS_CODES.has(response.status)) {

@@ -16,9 +16,16 @@
  *   progressGlow    — progress bar leading-edge glow
  */
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 
-import { ChevronLeft, ChevronRight, Dices, Shuffle, X } from 'lucide-react'
+import {
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  Dices,
+  Shuffle,
+  X,
+} from 'lucide-react'
 
 import { useQuery } from '@redwoodjs/web'
 
@@ -61,13 +68,18 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
   const [cardDirection, setCardDirection] = useState<'right' | 'left'>('right')
   const [selectedCard, setSelectedCard] = useState<FeedCardRecord | null>(null)
   const [isLaunching, setIsLaunching] = useState(false)
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => new Set())
 
   const { data, loading, refetch } = useQuery(RANDOM_CARDS_QUERY, {
     variables: { limit: confirmedCount ?? 10 },
     skip: confirmedCount === null,
   })
 
-  const cards: FeedCardRecord[] = data?.randomCards ?? []
+  const rawCards: FeedCardRecord[] = data?.randomCards ?? []
+  const cards = useMemo(
+    () => rawCards.filter((c) => !archivedIds.has(c.id)),
+    [rawCards, archivedIds]
+  )
 
   // Pixel-perfect slider fill:
   // Browser places thumb center at: thumbRadius + fraction × (trackWidth − thumbDiameter)
@@ -97,38 +109,66 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
     haptic('medium')
     setIndex(0)
     setCardDirection('right')
+    setArchivedIds(new Set())
     refetch({ limit: confirmedCount ?? count })
   }
 
+  // Session-only hide: the archive button in shuffle mode doesn't touch
+  // the DB. It just removes the card from the current draw so you can
+  // skip past it — cards re-appear on the next shuffle or reshuffle.
+  const handleArchive = useCallback((cardId: string) => {
+    haptic('medium')
+    setArchivedIds((prev) => {
+      if (prev.has(cardId)) return prev
+      const next = new Set(prev)
+      next.add(cardId)
+      return next
+    })
+  }, [])
+
+  // Clamp index to a valid position in the (possibly shrinking) cards array.
+  // Using a derived safeIndex avoids an off-by-one render crash between the
+  // archive mutation and the clamp effect below.
+  const safeIndex = cards.length === 0 ? 0 : Math.min(index, cards.length - 1)
+  const currentCard = cards[safeIndex]
+
   const prev = useCallback(() => {
-    if (index > 0) {
+    if (safeIndex > 0) {
       haptic('light')
       setCardDirection('left')
-      setIndex(index - 1)
+      setIndex(safeIndex - 1)
     }
-  }, [index])
+  }, [safeIndex])
 
   const next = useCallback(() => {
-    if (index < cards.length - 1) {
+    if (safeIndex < cards.length - 1) {
       haptic('light')
       setCardDirection('right')
-      setIndex(index + 1)
+      setIndex(safeIndex + 1)
     }
-  }, [index, cards.length])
+  }, [safeIndex, cards.length])
+
+  useEffect(() => {
+    if (cards.length === 0) return
+    if (index > cards.length - 1) {
+      setIndex(cards.length - 1)
+    }
+  }, [cards.length, index])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (confirmedCount !== null) {
         if (e.key === 'ArrowLeft') prev()
         if (e.key === 'ArrowRight') next()
+        if ((e.key === 'e' || e.key === 'E') && currentCard) {
+          handleArchive(currentCard.id)
+        }
       }
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [confirmedCount, prev, next, onClose])
-
-  const currentCard = cards[index]
+  }, [confirmedCount, prev, next, onClose, currentCard, handleArchive])
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
@@ -201,10 +241,10 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
               <Dices size={18} style={{ color: 'var(--accent-primary)' }} />
             </div>
             <h2
-              className="text-sm font-semibold uppercase tracking-widest"
-              style={{ color: 'var(--foreground-muted)', fontSize: '11px' }}
+              className="text-sm font-medium"
+              style={{ color: 'var(--foreground-muted)' }}
             >
-              Shuffle Mode
+              Shuffle mode
             </h2>
             {confirmedCount !== null && cards.length > 0 && (
               <div
@@ -214,9 +254,9 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
                   color: 'var(--foreground)',
                   animation: 'shuffleCountPop 280ms var(--ease-spring)',
                 }}
-                key={`${index + 1}-${cards.length}`}
+                key={`${safeIndex + 1}-${cards.length}`}
               >
-                {index + 1} / {cards.length}
+                {safeIndex + 1} / {cards.length}
               </div>
             )}
           </div>
@@ -389,16 +429,23 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
 
             /* ── Card display ─────────────────────────────────────── */
             <div
-              className="flex flex-1 flex-col overflow-hidden px-4 pb-8 sm:px-8"
+              className="flex flex-1 flex-col overflow-hidden px-3 pb-8 sm:px-8"
               style={{ animation: 'shuffleFadeSlideIn 300ms ease' }}
             >
-              <div className="relative flex flex-1 items-center justify-center overflow-hidden py-4">
+              {/*
+               * Card row — flex layout so nav buttons reserve their own
+               * space and can never overlap the card (even on hover/active
+               * scale-up). Nav buttons live at the thumb-reachable edges
+               * on every viewport.
+               */}
+              <div className="relative flex flex-1 items-center gap-2 overflow-hidden py-4 sm:gap-4">
 
-                {/* Nav ← (desktop) */}
-                <div className="absolute inset-y-0 left-0 hidden w-16 items-center justify-start sm:flex">
+                {/* Nav ← */}
+                <div className="flex shrink-0 items-center">
                   <button
                     onClick={prev}
                     disabled={index === 0}
+                    aria-label="Previous card"
                     className="shuffle-nav-btn flex h-12 w-12 items-center justify-center rounded-full shadow-lg disabled:pointer-events-none disabled:opacity-0"
                     style={{
                       backgroundColor: 'var(--surface-elevated)',
@@ -410,11 +457,56 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
                   </button>
                 </div>
 
-                {/* Nav → (desktop) */}
-                <div className="absolute inset-y-0 right-0 hidden w-16 items-center justify-end sm:flex">
+                {/* Card — flex-1 centered container so card stays clear of nav columns */}
+                <div className="flex h-full min-w-0 flex-1 justify-center">
+                  <div
+                    key={`${currentCard.id}-${index}`}
+                    className="shuffle-card flex h-full w-full max-w-lg cursor-pointer flex-col overflow-hidden rounded-2xl shadow-xl"
+                    onClick={() => { haptic('medium'); setSelectedCard(currentCard) }}
+                    style={{
+                      backgroundColor: 'var(--background)',
+                      border: '1px solid var(--border-default)',
+                      animation:
+                        cardDirection === 'right'
+                          ? 'shuffleCardEnterRight 420ms var(--ease-spring)'
+                          : 'shuffleCardEnterLeft 420ms var(--ease-spring)',
+                    }}
+                  >
+                    <div
+                      className="flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: 'var(--surface-soft)' }}
+                    >
+                      <FeedCardVisual card={currentCard} fill />
+                    </div>
+                    <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                      <h3
+                        className="line-clamp-2 text-base font-semibold"
+                        style={{ color: 'var(--foreground)' }}
+                      >
+                        {currentCard.title || 'Untitled Card'}
+                      </h3>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span
+                          className="text-xs"
+                          style={{ color: 'var(--foreground-muted)' }}
+                        >
+                          {new Date(parseInt(currentCard.createdAt)).toLocaleDateString()}
+                        </span>
+                        <div
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: 'var(--accent-primary)' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nav → */}
+                <div className="flex shrink-0 items-center">
                   <button
                     onClick={next}
-                    disabled={index === cards.length - 1}
+                    disabled={safeIndex >= cards.length - 1}
+                    aria-label="Next card"
                     className="shuffle-nav-btn flex h-12 w-12 items-center justify-center rounded-full shadow-lg disabled:pointer-events-none disabled:opacity-0"
                     style={{
                       backgroundColor: 'var(--surface-elevated)',
@@ -425,93 +517,68 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
                     <ChevronRight size={24} />
                   </button>
                 </div>
-
-                {/* Card — key includes index so direction always re-fires */}
-                <div
-                  key={`${currentCard.id}-${index}`}
-                  className="shuffle-card flex h-full w-full max-w-lg cursor-pointer flex-col overflow-hidden rounded-2xl shadow-xl"
-                  onClick={() => { haptic('medium'); setSelectedCard(currentCard) }}
-                  style={{
-                    backgroundColor: 'var(--background)',
-                    border: '1px solid var(--border-default)',
-                    animation:
-                      cardDirection === 'right'
-                        ? 'shuffleCardEnterRight 420ms var(--ease-spring)'
-                        : 'shuffleCardEnterLeft 420ms var(--ease-spring)',
-                  }}
-                >
-                  <div className="flex-1 overflow-hidden">
-                    <FeedCardVisual card={currentCard} />
-                  </div>
-                  <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                    <h3
-                      className="line-clamp-2 text-base font-semibold"
-                      style={{ color: 'var(--foreground)' }}
-                    >
-                      {currentCard.title || 'Untitled Card'}
-                    </h3>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span
-                        className="text-xs uppercase tracking-wider"
-                        style={{ color: 'var(--foreground-muted)' }}
-                      >
-                        {new Date(parseInt(currentCard.createdAt)).toLocaleDateString()}
-                      </span>
-                      <div
-                        className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: 'var(--accent-primary)' }}
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Progress + controls */}
               <div className="mt-6 shrink-0 space-y-4">
 
-                {/* Progress bar with leading-edge glow */}
+                {/*
+                 * Discrete progress segments — one notch per card in the
+                 * current shuffle set, so you can read it as 7/15 at a
+                 * glance. Current is glowing, past is filled, future is soft.
+                 */}
                 <div
-                  className="relative h-1.5 w-full overflow-hidden rounded-full"
-                  style={{ backgroundColor: 'var(--surface-soft)' }}
+                  className="flex h-1.5 w-full items-stretch gap-1"
+                  role="progressbar"
+                  aria-valuenow={safeIndex + 1}
+                  aria-valuemin={1}
+                  aria-valuemax={cards.length}
+                  aria-label={`Card ${safeIndex + 1} of ${cards.length}`}
                 >
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full"
-                    style={{
-                      width: `${((index + 1) / cards.length) * 100}%`,
-                      backgroundColor: 'var(--accent-primary)',
-                      transition: 'width 400ms var(--ease-spring)',
-                      boxShadow: '3px 0 10px rgba(255, 107, 74, 0.45)',
-                    }}
-                  />
+                  {cards.map((card, i) => {
+                    const passed = i <= safeIndex
+                    const current = i === safeIndex
+                    return (
+                      <div
+                        key={card.id}
+                        className="h-full flex-1 rounded-full"
+                        style={{
+                          backgroundColor: passed
+                            ? 'var(--accent-primary)'
+                            : 'var(--surface-soft)',
+                          boxShadow: current
+                            ? '0 0 10px rgba(255, 107, 74, 0.55)'
+                            : 'none',
+                          transition:
+                            'background-color 280ms ease, box-shadow 280ms ease',
+                        }}
+                      />
+                    )
+                  })}
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <button
-                    onClick={handleReshuffle}
-                    className="shuffle-reshuffle-btn flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold"
-                    style={{ color: 'var(--foreground-muted)' }}
-                  >
-                    <Shuffle size={14} />
-                    Reshuffle
-                  </button>
-
-                  {/* Mobile nav */}
-                  <div className="flex gap-4 sm:hidden">
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={prev}
-                      disabled={index === 0}
-                      className="flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
-                      style={{ backgroundColor: 'var(--surface-soft)', color: 'var(--foreground)' }}
+                      onClick={handleReshuffle}
+                      className="shuffle-reshuffle-btn flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold"
+                      style={{ color: 'var(--foreground-muted)' }}
                     >
-                      <ChevronLeft size={20} />
+                      <Shuffle size={14} />
+                      Reshuffle
                     </button>
                     <button
-                      onClick={next}
-                      disabled={index === cards.length - 1}
-                      className="flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
-                      style={{ backgroundColor: 'var(--surface-soft)', color: 'var(--foreground)' }}
+                      onClick={() =>
+                        currentCard && handleArchive(currentCard.id)
+                      }
+                      disabled={!currentCard}
+                      title="Hide card from this shuffle (E)"
+                      aria-label="Hide card from this shuffle"
+                      className="shuffle-archive-btn flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold disabled:opacity-40"
+                      style={{ color: 'var(--foreground-muted)' }}
                     >
-                      <ChevronRight size={20} />
+                      <Archive size={14} />
+                      Archive
                     </button>
                   </div>
 
@@ -534,6 +601,7 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
           isOpen={true}
           onClose={() => setSelectedCard(null)}
           card={toFeedCard(selectedCard)}
+          onArchive={handleArchive}
         />
       )}
 
@@ -657,6 +725,18 @@ export function ShuffleModal({ onClose }: ShuffleModalProps) {
           transform: scale(1.04);
         }
         .shuffle-reshuffle-btn:active {
+          transform: scale(0.94);
+        }
+
+        .shuffle-archive-btn {
+          transition: background-color 180ms ease, color 180ms ease, transform 200ms var(--ease-spring), opacity 180ms ease;
+        }
+        .shuffle-archive-btn:not(:disabled):hover {
+          background-color: var(--surface-soft);
+          color: var(--foreground);
+          transform: scale(1.04);
+        }
+        .shuffle-archive-btn:not(:disabled):active {
           transform: scale(0.94);
         }
 

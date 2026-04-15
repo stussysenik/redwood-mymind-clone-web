@@ -160,7 +160,7 @@ export const Success = ({
           aria-live="polite"
         >
           <span
-            className="text-[10px] uppercase tracking-[0.12em] font-medium sm:text-xs"
+            className="text-xs font-medium sm:text-sm"
             style={{ color: 'var(--foreground-muted)' }}
           >
             Search
@@ -175,7 +175,7 @@ export const Success = ({
             {visibleTotalLabel}
           </strong>
           <span
-            className="text-[10px] sm:text-xs"
+            className="text-xs sm:text-sm"
             style={{ color: 'var(--foreground-muted)' }}
           >
             results

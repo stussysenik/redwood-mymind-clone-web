@@ -301,11 +301,20 @@ export function FeedCardVisual({
   variant = 'stacked',
   showBadges = true,
   showProcessingIndicator = true,
+  fill = false,
 }: {
   card: FeedCardRecord
   variant?: 'stacked' | 'row'
   showBadges?: boolean
   showProcessingIndicator?: boolean
+  /**
+   * Fill the parent container instead of letting the image define its own
+   * height. When true, the visual spans 100% of its parent's width and height
+   * and uses `object-fit: contain` so the image keeps its intrinsic aspect
+   * ratio (are.na-style visual fidelity). The parent must provide a bounded
+   * height (e.g. `flex-1` inside a flex column).
+   */
+  fill?: boolean
 }) {
   const [failedSources, setFailedSources] = useState<string[]>([])
   const isNote = isNoteCard(card)
@@ -347,10 +356,15 @@ export function FeedCardVisual({
     <div
       className="overflow-hidden"
       style={{
-        borderRadius: variant === 'row' ? '14px' : '12px 12px 0 0',
+        borderRadius: fill
+          ? 0
+          : variant === 'row'
+            ? '14px'
+            : '12px 12px 0 0',
         aspectRatio: 'auto',
         backgroundColor: 'var(--shimmer-base)',
         width: '100%',
+        height: fill ? '100%' : undefined,
       }}
     >
       <img
@@ -363,7 +377,7 @@ export function FeedCardVisual({
           width: '100%',
           height: '100%',
           display: 'block',
-          objectFit: 'cover',
+          objectFit: fill ? 'contain' : 'cover',
         }}
         onError={() => {
           setFailedSources((current) =>
@@ -385,7 +399,10 @@ export function FeedCardVisual({
   )
 
   return (
-    <div className="relative" style={{ isolation: 'isolate' }}>
+    <div
+      className={fill ? 'relative h-full w-full' : 'relative'}
+      style={{ isolation: 'isolate' }}
+    >
       {visual}
       {showBadges && visualBadges.length > 0 && (
         <div

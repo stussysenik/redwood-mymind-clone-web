@@ -5,7 +5,7 @@ import {
   useState,
 } from 'react'
 
-import { AlignJustify, LayoutGrid, Rows3 } from 'lucide-react'
+import { AlignJustify, ImageIcon, LayoutGrid, Rows3 } from 'lucide-react'
 import type { CardsQuery, CardsQueryVariables } from 'types/graphql'
 
 import {
@@ -105,6 +105,16 @@ export const Empty = () => (
   </div>
 )
 
+// A card "has an image" when it ships a primary imageUrl or its metadata
+// lists one or more image URLs (carousels, slideshows). Notes and URL-only
+// cards without imagery get filtered out when the Images-only toggle is on.
+function cardHasImage(card: FeedCardRecord): boolean {
+  if (card.imageUrl) return true
+  const meta = (card.metadata ?? {}) as Record<string, unknown>
+  const images = meta.images
+  return Array.isArray(images) && images.length > 0
+}
+
 export const Failure = ({ error }: CellFailureProps) => (
   <div
     className="px-4 py-20 text-center"
@@ -135,6 +145,17 @@ export const Success = ({
     ['grid', 'list', 'dense'] as const,
     'grid'
   )
+  const [imagesOnly, setImagesOnly] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('byoa_library_images_only') === '1'
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(
+      'byoa_library_images_only',
+      imagesOnly ? '1' : '0'
+    )
+  }, [imagesOnly])
   const mergedCards = useMemo(
     () => [
       ...optimisticCards
@@ -160,6 +181,7 @@ export const Success = ({
   const visibleTotalLabel = new Intl.NumberFormat().format(visibleTotal)
   const visibleCards = mergedCards.filter((card) => {
     if (hiddenCardIds.has(card.id)) return false
+    if (imagesOnly && !cardHasImage(card)) return false
     if (mode === 'ARCHIVE') return !card.deletedAt
     if (mode === 'TRASH') return true
     return !card.archivedAt && !card.deletedAt
@@ -254,58 +276,170 @@ export const Success = ({
 
   return (
     <div className="px-4 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
-      {/* Library header */}
-      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
-        <div
-          className="inline-flex items-baseline gap-1.5"
-          role="status"
-          aria-live="polite"
-        >
-          <span
-            className="text-[10px] uppercase tracking-[0.12em] font-medium sm:text-xs"
-            style={{ color: 'var(--foreground-muted)' }}
+      {/*
+       * Header — single-row information architecture.
+       * Left cluster answers "where am I in the data?" (identity + count + page position).
+       * Right cluster answers "how do I want to see it?" (filters + view mode).
+       * flex-wrap lets the two clusters stack cleanly on narrow viewports.
+       */}
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 sm:mb-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div
+            className="inline-flex items-baseline gap-1.5"
+            role="status"
+            aria-live="polite"
           >
-            {headerLabel}
-          </span>
-          <strong
-            className="text-sm font-semibold"
+            <span
+              className="text-xs font-medium sm:text-sm"
+              style={{ color: 'var(--foreground-muted)' }}
+            >
+              {headerLabel}
+            </span>
+            <strong
+              className="text-sm font-semibold"
+              style={{
+                color: 'var(--foreground)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {visibleTotalLabel}
+            </strong>
+            <span
+              className="text-xs sm:text-sm"
+              style={{ color: 'var(--foreground-muted)' }}
+            >
+              cards
+            </span>
+          </div>
+
+          {totalPages > 1 && onPageChange && (
+            <>
+              <span
+                aria-hidden="true"
+                className="hidden h-3.5 w-px sm:block"
+                style={{ backgroundColor: 'var(--border-subtle)' }}
+              />
+              <nav
+                aria-label="Pagination"
+                className="inline-flex items-center gap-0.5"
+              >
+                <button
+                  type="button"
+                  onClick={() => onPageChange(Math.max(1, page - 1))}
+                  disabled={page <= 1}
+                  aria-label="Previous page"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-sm transition-colors hover:bg-[var(--surface-soft)] disabled:opacity-25 sm:h-8 sm:w-8"
+                  style={{ color: 'var(--foreground)' }}
+                >
+                  &lsaquo;
+                </button>
+                <div
+                  className="inline-flex items-baseline gap-1 px-1.5 text-xs font-medium sm:text-sm"
+                  style={{
+                    color: 'var(--foreground-muted)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={page}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10)
+                      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                        onPageChange(val)
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value, 10)
+                      if (isNaN(val) || val < 1) onPageChange(1)
+                      else if (val > totalPages) onPageChange(totalPages)
+                    }}
+                    className="w-6 bg-transparent text-center font-semibold outline-none"
+                    style={{ color: 'var(--foreground)' }}
+                    aria-label="Current page"
+                  />
+                  <span>/</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={totalPages}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10)
+                      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                        onPageChange(val)
+                      }
+                    }}
+                    className="w-6 bg-transparent text-center outline-none"
+                    aria-label="Total pages — type to jump"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                  disabled={page >= totalPages}
+                  aria-label="Next page"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-sm transition-colors hover:bg-[var(--surface-soft)] disabled:opacity-25 sm:h-8 sm:w-8"
+                  style={{ color: 'var(--foreground)' }}
+                >
+                  &rsaquo;
+                </button>
+              </nav>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setImagesOnly((v) => !v)}
+            aria-pressed={imagesOnly}
+            aria-label={
+              imagesOnly
+                ? 'Show all cards'
+                : 'Show only cards that have an image'
+            }
+            title={imagesOnly ? 'Showing images only' : 'Images only'}
+            className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors sm:h-9 sm:px-3"
             style={{
-              color: 'var(--foreground)',
-              fontVariantNumeric: 'tabular-nums',
+              backgroundColor: imagesOnly
+                ? 'var(--accent-light)'
+                : 'var(--surface-soft)',
+              borderColor: imagesOnly
+                ? 'var(--accent-primary)'
+                : 'var(--border-subtle)',
+              color: imagesOnly
+                ? 'var(--accent-primary)'
+                : 'var(--foreground-muted)',
             }}
           >
-            {visibleTotalLabel}
-          </strong>
-          <span
-            className="text-[10px] sm:text-xs"
-            style={{ color: 'var(--foreground-muted)' }}
-          >
-            cards
-          </span>
+            <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Images</span>
+          </button>
+          <ViewModeToggle
+            value={viewMode}
+            onChange={setViewMode}
+            ariaLabel="Library view"
+            options={[
+              {
+                value: 'grid',
+                label: 'Grid',
+                icon: <LayoutGrid className="h-4 w-4" />,
+              },
+              {
+                value: 'list',
+                label: 'List',
+                icon: <Rows3 className="h-4 w-4" />,
+              },
+              {
+                value: 'dense',
+                label: 'Dense',
+                icon: <AlignJustify className="h-4 w-4" />,
+              },
+            ]}
+          />
         </div>
-        <ViewModeToggle
-          value={viewMode}
-          onChange={setViewMode}
-          ariaLabel="Library view"
-          options={[
-            {
-              value: 'grid',
-              label: 'Grid',
-              icon: <LayoutGrid className="h-4 w-4" />,
-            },
-            {
-              value: 'list',
-              label: 'List',
-              icon: <Rows3 className="h-4 w-4" />,
-            },
-            {
-              value: 'dense',
-              label: 'Dense',
-              icon: <AlignJustify className="h-4 w-4" />,
-            },
-          ]}
-        />
-      </div>
+      </header>
 
       {/* Masonry grid — 2 cols mobile, 3 cols desktop (CSS columns) */}
       {visibleCards.length === 0 ? (
@@ -316,82 +450,6 @@ export const Success = ({
           viewMode={viewMode}
           onOpenCard={(card) => setSelectedCard(toFeedCard(card))}
         />
-      )}
-
-      {/* Pagination — editable page X of Y */}
-      {totalPages > 1 && onPageChange && (
-        <div className="mt-6 flex items-center justify-center gap-1.5 pb-4">
-          <button
-            onClick={() => onPageChange(Math.max(1, page - 1))}
-            disabled={page <= 1}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors disabled:opacity-25"
-            style={{
-              backgroundColor: 'var(--surface-soft)',
-              color: 'var(--foreground)',
-            }}
-            aria-label="Previous page"
-          >
-            &lsaquo;
-          </button>
-
-          <div
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5"
-            style={{
-              backgroundColor: 'var(--surface-card)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <input
-              type="text"
-              inputMode="numeric"
-              value={page}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10)
-                if (!isNaN(val) && val >= 1 && val <= totalPages) {
-                  onPageChange(val)
-                }
-              }}
-              onBlur={(e) => {
-                const val = parseInt(e.target.value, 10)
-                if (isNaN(val) || val < 1) onPageChange(1)
-                else if (val > totalPages) onPageChange(totalPages)
-              }}
-              className="w-8 bg-transparent text-center font-mono text-sm font-medium outline-none"
-              style={{ color: 'var(--foreground)' }}
-              aria-label="Current page"
-            />
-            <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-              /
-            </span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={totalPages}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10)
-                if (!isNaN(val) && val >= 1 && val <= totalPages) {
-                  onPageChange(val)
-                }
-              }}
-              className="w-8 bg-transparent text-center font-mono text-sm outline-none"
-              style={{ color: 'var(--foreground-muted)' }}
-              aria-label="Total pages — type to jump"
-            />
-          </div>
-
-          <button
-            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={page >= totalPages}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors disabled:opacity-25"
-            style={{
-              backgroundColor: 'var(--surface-soft)',
-              color: 'var(--foreground)',
-            }}
-            aria-label="Next page"
-          >
-            &rsaquo;
-          </button>
-        </div>
       )}
 
       {/* Detail modal — opens when a card is clicked */}
