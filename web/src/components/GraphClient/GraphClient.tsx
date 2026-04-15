@@ -505,7 +505,6 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 	const hasCachedLayout = useRef(false);
 
 	// Track double-tap for mobile "open detail" gesture
-	const lastTapRef = useRef<{ nodeId: string; time: number } | null>(null);
 
 	// -------------------------------------------------------------------------
 	// RESPONSIVE SIZING
@@ -910,25 +909,21 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 
 	const handleNodeClick = useCallback(
 		(node: FGNode) => {
-			const now = Date.now();
-			const last = lastTapRef.current;
-
-			// Double-tap / double-click detection: same node within 400ms
-			const isDoubleTap = last && last.nodeId === node.id && now - last.time < 400;
-			lastTapRef.current = { nodeId: node.id, time: now };
-
-			if (focusedNodeId === node.id || isDoubleTap) {
-				// Second click on the focused node OR double-tap — open card detail modal
+			// Single-click semantics:
+			//   - Click an unfocused node → focus it (panel opens to its connections)
+			//   - Click the already-focused node → open its card detail modal
+			// Both are one-click actions distinguished by current focus state.
+			if (focusedNodeId === node.id) {
 				haptic('medium');
 				setSelectedCardId(node.id);
-			} else {
-				haptic('light');
-				setFocusedNodeId(node.id);
-				const fg = fgRef.current;
-				if (fg) {
-					fg.centerAt(node.x, node.y, 600);
-					fg.zoom(isMobile ? 2 : 2.5, 600);
-				}
+				return;
+			}
+			haptic('light');
+			setFocusedNodeId(node.id);
+			const fg = fgRef.current;
+			if (fg) {
+				fg.centerAt(node.x, node.y, 600);
+				fg.zoom(isMobile ? 2 : 2.5, 600);
 			}
 		},
 		[focusedNodeId, isMobile]
@@ -1212,13 +1207,17 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 		}
 	}, [graphLoadError, setViewMode, viewMode]);
 
-	// Focused node metadata for the detail panel
-	const focusedNodeMeta = focusedNodeId
+	// Focused node as a ConnectionItem — row 0 of the unified panel list.
+	// `sharedTags` is empty (N/A for the subject); `weight` doubles as the
+	// node's connection count on the head row's weight indicator.
+	const focusedHeadItem: ConnectionItem | null = focusedNodeId
 		? {
+				id: focusedNodeId,
 				title: neighborIndex.titleMap[focusedNodeId] || 'Untitled',
 				type: neighborIndex.typeMap[focusedNodeId] || 'article',
 				color: neighborIndex.colorMap[focusedNodeId] || '#6B7280',
-				tags: [...(neighborIndex.tagsMap[focusedNodeId] || [])],
+				sharedTags: [],
+				weight: focusedConnections.length,
 			}
 		: null;
 
@@ -1417,12 +1416,9 @@ export function GraphClient({ nodes, links, rendererBackend = 'canvas', graphDim
 			)}
 
 			{/* Detail panel — bottom sheet on mobile, right panel on desktop */}
-			{viewMode === 'graph' && focusedNodeId && focusedNodeMeta && (
+			{viewMode === 'graph' && focusedNodeId && focusedHeadItem && (
 				<GraphDetailPanel
-					nodeTitle={focusedNodeMeta.title}
-					nodeType={focusedNodeMeta.type}
-					nodeColor={focusedNodeMeta.color}
-					nodeTags={focusedNodeMeta.tags}
+					headItem={focusedHeadItem}
 					connections={focusedConnections}
 					onClose={closeFocus}
 					onCardClick={setSelectedCardId}
